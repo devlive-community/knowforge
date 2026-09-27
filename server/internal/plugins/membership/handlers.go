@@ -29,6 +29,7 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	api.GET("/membership/plans", core.OptionalAuth(), feat, b.PublicPlans)
 	// 本人
 	api.GET("/users/me/membership", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyMembership)
+	api.GET("/users/me/membership/gifts", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyGifts)
 	api.POST("/membership/redeem", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.Redeem)
 	// 管理员
 	adminGuard := []gin.HandlerFunc{core.RequireAuth(), core.RequireAdmin(), feat, core.RequirePermissionMiddleware(PermManage)}

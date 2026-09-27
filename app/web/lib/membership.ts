@@ -47,6 +47,19 @@ export interface MyMembership {
   days_left: number
 }
 
+/** 我购买的礼品卡（status：unused 未兑换 | redeemed 已兑换 | void 已作废，作废时不返回兑换码） */
+export interface MembershipGift {
+  id: number
+  code: string
+  plan_name: string
+  days: number
+  order_no: string
+  status: 'unused' | 'redeemed' | 'void'
+  redeemed_at?: string
+  redeemed_by_me: boolean
+  created_at: string
+}
+
 // centsFromInput / inputFromCents 价格输入框（货币单位，两位小数）与分之间的换算。
 export function centsFromInput(value: string): number {
   const n = Number(value)

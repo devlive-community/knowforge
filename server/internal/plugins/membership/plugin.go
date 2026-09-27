@@ -43,8 +43,8 @@ func init() {
 		Kind:        plugins.KindFeature,
 		Builtin:     true,
 		EnabledKey:  cfgEnabled,
-		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}},
-		Tables:      []string{"membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
+		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}},
+		Tables:      []string{"membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
 		AdminPerms:  []authz.Permission{PermManage},
 		UserPerms:   []authz.Permission{PermRead},
 	})
@@ -58,5 +58,7 @@ func init() {
 	i18ntext.Register("notify.membership.updated", map[string]string{"zh-CN": "你的「{plan}」会员有效期已更新至 {date}", "en": "Your {plan} membership now runs until {date}"})
 	i18ntext.Register("notify.membership.expiring", map[string]string{"zh-CN": "你的「{plan}」会员将于 {date} 到期", "en": "Your {plan} membership expires on {date}"})
 	i18ntext.Register("notify.membership.expired", map[string]string{"zh-CN": "你的「{plan}」会员已到期", "en": "Your {plan} membership has expired"})
+	i18ntext.Register("notify.membership.giftReady", map[string]string{"zh-CN": "你购买的「{plan}」礼品卡已生成，可在「我的会员」复制兑换码送给他人", "en": "Your {plan} gift card is ready. Copy its code from My membership to give it away"})
+	i18ntext.Register("notify.membership.giftRedeemed", map[string]string{"zh-CN": "你送出的「{plan}」礼品卡已被兑换", "en": "Your {plan} gift card has been redeemed"})
 	i18ntext.Register("notify.membership.revoked", map[string]string{"zh-CN": "你的「{plan}」会员已被取消", "en": "Your {plan} membership has been cancelled"})
 }

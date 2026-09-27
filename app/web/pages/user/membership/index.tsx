@@ -4,6 +4,7 @@ import Container from '@/components/Container'
 import FeatureGate from '@/components/FeatureGate'
 import ResourceIcon from '@/components/ResourceIcon'
 import MyEntitlementsCard from '@/components/MyEntitlementsCard'
+import GiftsCard from '@/components/membership/GiftsCard'
 import Seo from '@/components/Seo'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
@@ -159,6 +160,7 @@ function MyMembershipInner() {
                             {pr.original_price_cents > pr.price_cents && <span className="text-xs text-slate-400 line-through">{formatPrice(pr.original_price_cents, mine.currency, locale)}</span>}
                             <span className="font-bold tabular-nums text-slate-900">{formatPrice(pr.price_cents, mine.currency, locale)}</span>
                             {canBuy && <Button size="sm" variant={currentPlanID === p.id ? 'outline' : 'primary'} onClick={() => buy(p, pr.id)}>{currentPlanID === p.id ? t('membership.renew') : t('membership.buy')}</Button>}
+                            {canBuy && <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => router.push(checkoutHref('membership_gift', pr.id))}><i className="fa-solid fa-gift mr-1 text-rose-500" aria-hidden="true" />{t('membership.gift.buy')}</Button>}
                           </span>
                         </div>
                       ))}
@@ -168,6 +170,8 @@ function MyMembershipInner() {
               ))}
             </div>
           )}
+
+          <GiftsCard />
 
           <MyEntitlementsCard />
 

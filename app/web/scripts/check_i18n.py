@@ -93,6 +93,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     # 会员：tab / 状态 / 流水动作（Record.Action 取值域）/ 时长单位
     'admin.membership.tab.': ['plans', 'members', 'redeem', 'records', 'settings'],
     'admin.membership.redeem.kind.': ['cards', 'promo'],
+    'membership.gift.status.': ['unused', 'redeemed', 'void'],
     'admin.membership.redeem.kindHint.': ['cards', 'promo'],
     'admin.membership.status.': ['active', 'archived'],
     'admin.membership.action.': ['grant', 'extend', 'switch', 'adjust', 'revoke'],

@@ -108,51 +108,74 @@ func refundOrder(core plugincore.Core, ev plugincore.RefundEvent) error {
 	if !ev.Revoke || ev.TotalCents <= 0 {
 		return nil
 	}
-	var (
-		plan    Plan
-		prev    time.Time
-		expires time.Time
-		ended   bool
-		done    bool
-	)
-	now := time.Now()
+	var d deduction
 	err := core.Gorm().Transaction(func(tx *gorm.DB) error {
 		var n int64
 		tx.Model(&Record{}).Where("source = ? AND source_ref = ?", refundSource, ev.RefundNo).Count(&n)
 		var granted Record
 		if n > 0 || tx.Where("source = ? AND source_ref = ?", orderSource, ev.OrderNo).First(&granted).Error != nil {
-			done = true // 已处理，或该订单从未开通（无需扣回）
-			return nil
+			return nil // 已处理，或该订单从未开通（无需扣回）
 		}
-		days := int(math.Round(float64(granted.Days) * float64(ev.AmountCents) / float64(ev.TotalCents)))
-		var m UserMembership
-		if days <= 0 || tx.Where("user_id = ?", ev.UserID).First(&m).Error != nil {
-			done = true
-			return nil
-		}
-		tx.First(&plan, m.PlanID)
-		prev, expires = m.ExpiresAt, addDays(m.ExpiresAt, -days)
-		action := ActionAdjust
-		if !expires.After(now) {
-			ended, action, expires = true, ActionRevoke, now
-			if err := tx.Where("user_id = ?", ev.UserID).Delete(&UserMembership{}).Error; err != nil {
-				return err
-			}
-		} else if err := tx.Model(&UserMembership{}).Where("user_id = ?", ev.UserID).
-			Updates(map[string]any{"expires_at": expires, "reminded_at": nil, "expired_notice_at": nil, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		return tx.Create(&Record{UserID: ev.UserID, PlanID: m.PlanID, PlanName: plan.Name, Action: action, Days: days,
-			PrevExpiresAt: &prev, ExpiresAt: &expires, Source: refundSource, SourceRef: ev.RefundNo,
-			Reason: truncate(fmt.Sprintf("订单 %s 退款，扣回 %d 天", ev.OrderNo, days), 255)}).Error
+		var err error
+		d, err = deductDays(tx, ev.UserID, proportionalDays(granted.Days, ev), ev.RefundNo, "订单 %s 退款，扣回 %d 天", ev.OrderNo, time.Now())
+		return err
 	})
-	if err != nil || done {
+	if err != nil {
 		return err
 	}
-	if ended {
-		core.NotifyI18n(ev.UserID, notificationType, "notify.membership.revoked", map[string]string{"plan": plan.Name}, map[string]any{"link": notificationLink})
-	} else {
-		(&behavior{core: core}).notifyChange(ev.UserID, plan, ActionAdjust, expires)
-	}
+	d.notify(core)
 	return nil
+}
+
+// proportionalDays 按退款金额占订单金额的比例折算天数。
+func proportionalDays(days int, ev plugincore.RefundEvent) int {
+	return int(math.Round(float64(days) * float64(ev.AmountCents) / float64(ev.TotalCents)))
+}
+
+// deduction 一次扣回会员天数的结果（用于事务提交后通知）。
+type deduction struct {
+	userID  uint
+	plan    Plan
+	expires time.Time
+	ended   bool
+	done    bool // 确实扣回了
+}
+
+// deductDays 在事务内从用户的会员中扣回 days 天（流水来源 refund，关联退款单号），扣完则会员结束；
+// 用户没有会员或 days ≤ 0 时不处理。reason 为格式串，参数为 ref 与天数。
+func deductDays(tx *gorm.DB, userID uint, days int, refundNo, reason, ref string, now time.Time) (deduction, error) {
+	d := deduction{userID: userID}
+	var m UserMembership
+	if days <= 0 || tx.Where("user_id = ?", userID).First(&m).Error != nil {
+		return d, nil
+	}
+	tx.First(&d.plan, m.PlanID)
+	prev := m.ExpiresAt
+	d.expires = addDays(m.ExpiresAt, -days)
+	action := ActionAdjust
+	if !d.expires.After(now) {
+		d.ended, action, d.expires = true, ActionRevoke, now
+		if err := tx.Where("user_id = ?", userID).Delete(&UserMembership{}).Error; err != nil {
+			return d, err
+		}
+	} else if err := tx.Model(&UserMembership{}).Where("user_id = ?", userID).
+		Updates(map[string]any{"expires_at": d.expires, "reminded_at": nil, "expired_notice_at": nil, "updated_at": now}).Error; err != nil {
+		return d, err
+	}
+	d.done = true
+	return d, tx.Create(&Record{UserID: userID, PlanID: m.PlanID, PlanName: d.plan.Name, Action: action, Days: days,
+		PrevExpiresAt: &prev, ExpiresAt: &d.expires, Source: refundSource, SourceRef: refundNo,
+		Reason: truncate(fmt.Sprintf(reason, ref, days), 255)}).Error
+}
+
+// notify 通知用户会员被扣回（结束或有效期调整）。
+func (d deduction) notify(core plugincore.Core) {
+	if !d.done {
+		return
+	}
+	if d.ended {
+		core.NotifyI18n(d.userID, notificationType, "notify.membership.revoked", map[string]string{"plan": d.plan.Name}, map[string]any{"link": notificationLink})
+	} else {
+		(&behavior{core: core}).notifyChange(d.userID, d.plan, ActionAdjust, d.expires)
+	}
 }

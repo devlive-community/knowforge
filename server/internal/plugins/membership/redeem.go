@@ -41,6 +41,7 @@ type RedeemBatch struct {
 	ExpiresAt *time.Time `json:"expires_at"`          // 兑换截止时间（空为不限）
 	Status    string     `gorm:"size:10;index" json:"status"`
 	CreatedBy uint       `json:"created_by"`
+	OrderNo   string     `gorm:"size:64;index" json:"order_no,omitempty"` // 礼品卡的购买订单
 	CreatedAt time.Time  `json:"created_at"`
 }
 
@@ -164,16 +165,20 @@ var (
 	errCodeRedeemed = errors.New("你已兑换过这一批兑换码")
 )
 
+// redeemed 一次兑换的结果。
+type redeemed struct {
+	m         UserMembership
+	plan      Plan
+	action    string
+	giftOwner uint // 兑换的是他人送出的礼品卡时为购买者
+}
+
 // redeem 兑换（在事务内原子地占用一次使用次数并开通会员）。
-func (b *behavior) redeem(userID uint, raw string, now time.Time) (UserMembership, Plan, string, error) {
+func (b *behavior) redeem(userID uint, raw string, now time.Time) (redeemed, error) {
 	code := normalizeCode(raw)
-	var (
-		m      UserMembership
-		plan   Plan
-		action string
-	)
+	var r redeemed
 	if code == "" || utf8.RuneCountInString(code) > 40 {
-		return m, plan, "", errCodeInvalid
+		return r, errCodeInvalid
 	}
 	err := b.core.Gorm().Transaction(func(tx *gorm.DB) error {
 		var rc RedeemCode
@@ -199,12 +204,15 @@ func (b *behavior) redeem(userID uint, raw string, now time.Time) (UserMembershi
 		if res := tx.Model(&RedeemCode{}).Where("id = ? AND used_count < max_uses", rc.ID).Update("used_count", gorm.Expr("used_count + 1")); res.RowsAffected == 0 {
 			return errCodeUsedUp
 		}
+		if batch.Kind == kindGift && rc.OwnerID != userID {
+			r.giftOwner = rc.OwnerID
+		}
 		var err error
-		m, plan, action, err = applyGrant(tx, grant{UserID: userID, PlanID: batch.PlanID, Days: batch.Days, Source: sourceRedeem,
-			SourceRef: formatCode(rc.Code), Reason: batch.Name, AllowArchived: batch.Kind == "gift"}, now)
+		r.m, r.plan, r.action, err = applyGrant(tx, grant{UserID: userID, PlanID: batch.PlanID, Days: batch.Days, Source: sourceRedeem,
+			SourceRef: formatCode(rc.Code), Reason: batch.Name, AllowArchived: batch.Kind == kindGift}, now)
 		return err
 	})
-	return m, plan, action, err
+	return r, err
 }
 
 // Redeem POST /membership/redeem {code} 兑换会员。
@@ -222,7 +230,7 @@ func (b *behavior) Redeem(c *gin.Context) {
 		b.core.Fail(c, http.StatusTooManyRequests, "输错次数过多，请一小时后再试")
 		return
 	}
-	m, plan, action, err := b.redeem(u.ID, req.Code, now)
+	r, err := b.redeem(u.ID, req.Code, now)
 	if err != nil {
 		if errors.Is(err, errCodeInvalid) {
 			recordFail(u.ID, now)
@@ -230,8 +238,11 @@ func (b *behavior) Redeem(c *gin.Context) {
 		b.core.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	b.notifyChange(u.ID, plan, action, m.ExpiresAt)
-	b.core.OK(c, gin.H{"action": action, "plan": gin.H{"id": plan.ID, "name": plan.Name}, "expires_at": m.ExpiresAt})
+	b.notifyChange(u.ID, r.plan, r.action, r.m.ExpiresAt)
+	if r.giftOwner != 0 {
+		b.core.NotifyI18n(r.giftOwner, notificationType, "notify.membership.giftRedeemed", map[string]string{"plan": r.plan.Name}, map[string]any{"link": notificationLink})
+	}
+	b.core.OK(c, gin.H{"action": r.action, "plan": gin.H{"id": r.plan.ID, "name": r.plan.Name}, "expires_at": r.m.ExpiresAt})
 }
 
 // —— 管理员 ——
@@ -269,7 +280,7 @@ func (b *behavior) batchViews(rows []RedeemBatch) []batchView {
 // AdminListBatches GET /admin/membership/redeem/batches?page=
 func (b *behavior) AdminListBatches(c *gin.Context) {
 	page, pageSize := b.core.Paginate(c)
-	q := b.core.Gorm().Model(&RedeemBatch{}).Where("kind <> ?", "gift")
+	q := b.core.Gorm().Model(&RedeemBatch{}).Where("kind <> ?", kindGift)
 	var total int64
 	q.Count(&total)
 	var rows []RedeemBatch

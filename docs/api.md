@@ -476,6 +476,7 @@ Authorization: Bearer <token>
 | GET | `/admin/membership/records?user_id=&page=&page_size=` | 会员流水 `items:[{record{action,plan_name,days,prev_expires_at,expires_at,source,source_ref,reason,created_at},user,operator?}]` | `membership:manage` |
 | GET/PUT | `/admin/membership/settings` | `{currency(ISO 4217), reminder_days(0–30)}`，PUT 可只传部分字段 | `membership:manage` |
 | POST | `/membership/redeem` | `{code}` 兑换码开通/续期会员（不区分大小写，可省略 `-`）；同一批次每人限用一次，失败过多（每小时 10 次）返回 429；返回 `{action: grant\|extend\|switch, plan{id,name}, expires_at}`，流水来源 `redeem` | `membership:read` |
+| GET | `/users/me/membership/gifts?page=&page_size=` | 我购买的礼品卡 `items:[{id,code(作废时为空),plan_name,days,order_no,status:unused\|redeemed\|void,redeemed_at?,redeemed_by_me,created_at}]`。礼品卡经支付插件购买（商品 `kind=membership_gift`，`sku`=价格 ID），支付成功后生成属于购买者的一次性兑换码，被他人兑换时通知购买者；退款并撤销时未兑换的按比例缩短天数（退完作废），已兑换的从兑换者的会员中按比例扣回 | `membership:read` |
 | GET | `/admin/membership/redeem/batches?page=&page_size=` | 兑换码批次 `items:[{id,name,plan_id,plan_name,days,kind:cards\|promo,max_uses,expires_at?,status,codes,redeemed,promo_code?}]`（不含礼品卡） | `membership:manage` |
 | POST | `/admin/membership/redeem/batches` | `{name, plan_id, days(1–3650), kind, count?(cards，1–10000), code?(promo，4–40 位字母数字下划线，缺省随机), max_uses?(promo，1–1000000), expires_at?}` 生成一批卡密或一个多人可用的推广码，返回批次 | `membership:manage` |
 | PUT | `/admin/membership/redeem/batches/:id` | `{status: active\|disabled}` 停用/启用整批 | `membership:manage` |
