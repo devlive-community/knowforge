@@ -70,6 +70,7 @@ export interface QAStatus {
   index?: { chunks: number; embedded: number; indexed_at: string; embed_error: string }
   quota?: QAQuota
   can_reindex?: boolean
+  insights_share?: boolean // 提问会匿名汇总给作者（作者洞察）
 }
 
 export interface QAUser {

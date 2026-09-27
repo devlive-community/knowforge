@@ -46,8 +46,8 @@ func init() {
 		Kind:        plugins.KindFeature,
 		Builtin:     true,
 		EnabledKey:  cfgEnabled,
-		Models:      []any{&Chunk{}, &IndexState{}, &Ask{}, &Question{}, &Answer{}, &BookVector{}, &DocVector{}},
-		Tables:      []string{"qa_doc_vectors", "qa_book_vectors", "qa_answers", "qa_questions", "qa_asks", "qa_index_states", "qa_chunks"},
+		Models:      []any{&Chunk{}, &IndexState{}, &Ask{}, &Question{}, &Answer{}, &BookVector{}, &DocVector{}, &InsightDigest{}},
+		Tables:      []string{"qa_insight_digests", "qa_doc_vectors", "qa_book_vectors", "qa_answers", "qa_questions", "qa_asks", "qa_index_states", "qa_chunks"},
 		AdminPerms:  []authz.Permission{PermManage},
 		UserPerms:   []authz.Permission{PermUse},
 	})
@@ -57,6 +57,7 @@ func init() {
 		if core.PluginEnabled(plugins.KeyQA) {
 			sweepInterruptedAsks(core)
 			purgeExpiredTraces(core)
+			sweepInsights(core)
 			if b := (&behavior{core: core}); b.semanticAvailable() {
 				b.enqueueStaleIndexes(context.Background())
 			}
@@ -95,6 +96,24 @@ func init() {
 		},
 	})
 
+	// 作者洞察：能否查看为权益（基础为开，可设为会员专享）
+	plugincore.RegisterEntitlement(plugincore.EntitlementDef{
+		Key: entInsights, Kind: plugincore.EntitlementFlag, Order: 82,
+		Available: func(core plugincore.Core) bool { return core.PluginEnabled(plugins.KeyQA) },
+		Base: func(core plugincore.Core) int64 {
+			if core.GetSetting("qa_insights_base") == "0" {
+				return 0
+			}
+			return 1
+		},
+		SetBase: func(core plugincore.Core, v int64) error {
+			return core.SetSetting("qa_insights_base", strconv.FormatInt(v, 10), "问答：读者问题洞察（基础）")
+		},
+	})
+	i18ntext.Register("notify.qa.weeklyInsights", map[string]string{
+		"zh-CN": "《{book}》本周读者提问：AI 提问 {asks} 个，社区新提问 {questions} 个，尚未回答 {open} 个",
+		"en":    `This week in "{book}": {asks} AI questions, {questions} new community questions, {open} still unanswered`,
+	})
 	i18ntext.Register("notify.qa.answered", map[string]string{"zh-CN": "你的提问「{title}」有了新回答", "en": `Your question "{title}" has a new answer`})
 	i18ntext.Register("notify.qa.accepted", map[string]string{"zh-CN": "你的回答被采纳：{title}", "en": `Your answer was accepted: {title}`})
 	i18ntext.Register("notify.qa.asked", map[string]string{"zh-CN": "《{book}》有新的读者提问：{title}", "en": `New reader question in "{book}": {title}`})

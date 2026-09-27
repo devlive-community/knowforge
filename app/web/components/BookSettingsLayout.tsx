@@ -9,7 +9,7 @@ import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import type { Book } from '@/lib/types'
 
-export type BookSettingsTab = 'basic' | 'info' | 'paid' | 'localization' | 'chapters' | 'analytics' | 'collaborators' | 'export' | 'data' | 'cleanup' | 'danger' | 'crawl-history' | 'watermark' | 'ai-translate' | 'chapter-guides'
+export type BookSettingsTab = 'basic' | 'info' | 'paid' | 'localization' | 'chapters' | 'analytics' | 'collaborators' | 'export' | 'data' | 'cleanup' | 'danger' | 'crawl-history' | 'watermark' | 'ai-translate' | 'chapter-guides' | 'reader-questions'
 
 interface BookSettingsLayoutProps {
   book: Book
@@ -38,6 +38,7 @@ export default function BookSettingsLayout({ book, active, children }: BookSetti
     ...(features.includes('paid-content') ? [{ key: 'paid' as BookSettingsTab, labelKey: 'bookSettings.nav.paid', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-coins ${className || ''}`} aria-hidden="true" />, sub: 'paid' }] : []),
     ...(localizationEnabled ? [{ key: 'localization' as BookSettingsTab, labelKey: 'bookSettings.nav.localization', label: localizationLabel, icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-language ${className || ''}`} aria-hidden="true" />, sub: 'localization' }] : []),
     { key: 'chapters', labelKey: 'bookSettings.nav.chapters', icon: ListIcon, sub: 'chapters' },
+    ...(features.includes('qa') ? [{ key: 'reader-questions' as BookSettingsTab, labelKey: 'bookSettings.nav.readerQuestions', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-circle-question ${className || ''}`} aria-hidden="true" />, sub: 'reader-questions' }] : []),
     ...(features.includes('chapter-guide') ? [{ key: 'chapter-guides' as BookSettingsTab, labelKey: 'bookSettings.nav.chapterGuides', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-compass ${className || ''}`} aria-hidden="true" />, sub: 'chapter-guides' }] : []),
     ...(transEnabled ? [{ key: 'ai-translate' as BookSettingsTab, labelKey: 'bookSettings.nav.aiTranslate', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-wand-magic-sparkles ${className || ''}`} aria-hidden="true" />, sub: 'ai-translate' }] : []),
     { key: 'analytics', labelKey: 'bookSettings.nav.analytics', icon: ({ className }) => <i className={`fa-solid fa-chart-line ${className || ''}`} aria-hidden="true" />, sub: 'analytics' },

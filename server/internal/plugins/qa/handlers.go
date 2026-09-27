@@ -43,6 +43,7 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	api.POST("/qa/asks/:id/cancel", with(b.CancelAsk)...)
 	api.GET("/qa/me/questions", with(b.MyQuestions)...)
 	api.GET("/qa/me/quota", with(b.MyQuota)...)
+	api.GET("/qa/books/:id/insights", with(b.Insights)...)
 	api.POST("/qa/books/:id/reindex", with(b.Reindex)...)
 	api.POST("/qa/books/:id/questions", with(b.CreateQuestion)...)
 	api.DELETE("/qa/questions/:id", with(b.DeleteQuestion)...)
@@ -66,11 +67,13 @@ type settings struct {
 	TopK               int  `json:"top_k"`
 	TraceRetentionDays int  `json:"trace_retention_days"` // 调用链明细保留天数（0 为永久）
 	SemanticSearch     bool `json:"semantic_search"`      // 全站语义搜索与相关推荐（为公开书籍建立向量索引）
+	InsightsAsks       bool `json:"insights_asks"`        // 把读者的 AI 提问（匿名）汇总给作者
+	InsightsDigest     bool `json:"insights_digest"`      // 每周给作者发送读者提问摘要
 }
 
 func (b *behavior) settings() settings {
 	s := settings{AIEnabled: b.core.GetSetting("qa_ai_enabled") != "false", AgentEnabled: b.core.GetSetting("qa_agent_enabled") != "false", TopK: 6,
-		SemanticSearch: b.core.GetSetting(cfgSemantic) == "true"}
+		SemanticSearch: b.core.GetSetting(cfgSemantic) == "true", InsightsAsks: b.insightsShareAsks(), InsightsDigest: b.core.GetSetting(cfgInsightsDigest) != "false"}
 	if v := b.core.AtoiDefault(b.core.GetSetting("qa_top_k"), 6); v >= 3 && v <= 12 {
 		s.TopK = v
 	}
@@ -94,6 +97,8 @@ func (b *behavior) AdminUpdateSettings(c *gin.Context) {
 		TopK         *int  `json:"top_k"`
 		TraceDays    *int  `json:"trace_retention_days"`
 		Semantic     *bool `json:"semantic_search"`
+		Asks         *bool `json:"insights_asks"`
+		Digest       *bool `json:"insights_digest"`
 	}
 	if c.ShouldBindJSON(&req) != nil {
 		b.core.Fail(c, http.StatusBadRequest, "参数错误")
@@ -131,6 +136,14 @@ func (b *behavior) AdminUpdateSettings(c *gin.Context) {
 		if *req.Semantic {
 			go b.enqueueStaleIndexes(context.Background()) // 开启后立即为公开书籍建立索引
 		}
+	}
+	if req.Asks != nil && *req.Asks != old.InsightsAsks {
+		_ = b.core.SetSetting(cfgInsightsAsks, strconv.FormatBool(*req.Asks), "问答：把读者的 AI 提问（匿名）汇总给作者")
+		fields = append(fields, "insights_asks")
+	}
+	if req.Digest != nil && *req.Digest != old.InsightsDigest {
+		_ = b.core.SetSetting(cfgInsightsDigest, strconv.FormatBool(*req.Digest), "问答：每周给作者发送读者提问摘要")
+		fields = append(fields, "insights_digest")
 	}
 	if len(fields) > 0 {
 		b.core.RecordAudit(c, "qa.settings_updated", "qa", "settings", "问答设置", map[string]any{"changed_fields": fields})
@@ -201,7 +214,7 @@ func (b *behavior) Status(c *gin.Context) {
 	s := b.settings()
 	u := b.core.CurrentUser(c)
 	agentOK := chat && s.AIEnabled && s.AgentEnabled
-	out := gin.H{"ai_available": chat && s.AIEnabled, "agent_available": agentOK, "vector_search": embed}
+	out := gin.H{"ai_available": chat && s.AIEnabled, "agent_available": agentOK, "vector_search": embed, "insights_share": s.InsightsAsks}
 	var state IndexState
 	if b.core.Gorm().First(&state, book.ID).Error == nil {
 		out["index"] = state

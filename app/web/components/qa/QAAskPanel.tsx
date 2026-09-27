@@ -158,6 +158,11 @@ export default function QAAskPanel({ user, book, docId, selection, onClearSelect
         {status.quota && status.agent_available && status.quota.agent_limit >= 0 && (
           <span>· {t('qa.ask.agentQuota', { used: status.quota.agent_used, limit: status.quota.agent_limit })}</span>
         )}
+        {status.insights_share && (
+          <Tooltip content={t('qa.ask.insightsSharedHint')}>
+            <span className="flex items-center gap-1 text-slate-400"><i className="fa-solid fa-user-shield" aria-hidden="true" />{t('qa.ask.insightsShared')}</span>
+          </Tooltip>
+        )}
         {status.can_reindex && (
           <Tooltip content={t('qa.ask.reindexHint')}>
             <Button size="sm" variant="ghost" className="ml-auto" loading={reindexing} onClick={() => void reindex()}>

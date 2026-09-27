@@ -568,6 +568,7 @@ Authorization: Bearer <token>
 | DELETE | `/qa/asks/:id` | 删除自己的一条 AI 问答记录（进行中的先取消；不退还当日次数） | 登录 + `qa:use` |
 | GET | `/qa/me/questions?page=` | 我在社区的提问 `items[]{question, book, book_available}` | 登录 + `qa:use` |
 | GET | `/qa/me/quota` | 今日额度 `{used, limit, agent_used, agent_limit}` | 登录 + `qa:use` |
+| GET | `/qa/books/:id/insights?days=7\|30\|90` | 作者洞察（默认 30 天）：`{days, include_asks, semantic, stats{ai_asks?, askers?, gaps?, community, open}, topics[], gaps[], chapters[]{id,title,slug,count}, unanswered[]{id,title,created_at}}`；`topics[]`/`gaps[]` 为相近问题的归类 `{question（代表问题）, count, asks, community, gaps, samples[], chapters[], last_at}`。相近问题按问题向量余弦相似度 ≥ 0.82 归类（没有向量时按关键词重合度 ≥ 0.5）；AI 提问没有出处即视为书中答不上来（`gaps`），答不上来的占一半及以上的类列入内容缺口。读者的 AI 提问只以匿名文字出现，作者与协作者自己的提问不计入；`insights_asks` 关闭时只统计社区提问。问题向量由巡检与打开本页时在后台补算（系统调用，功能 `qa.insights`），提问流程本身不增加模型调用。每周有新提问时给书籍作者发一次站内通知（`notify.qa.weeklyInsights`，可由 `insights_digest` 关闭） | 作者/协作者 + 权益 `qa.insights` |
 | POST | `/qa/books/:id/reindex` | 作者/协作者/管理员立即重建索引（向量在后台计算） | 登录 + `qa:use` |
 | GET | `/qa/books/:id/questions?filter=all\|open\|resolved&q=&page=` | 社区问题列表（已解决在前，按更新时间排序），含提问者 `user` | 书籍可读 |
 | POST | `/qa/books/:id/questions` | `{title(≤200), body?, doc_id?, selection?, ask_id?}` 提问（先审查，返回 `{question, held, message}`）；`ask_id` 附上自己的 AI 回答作参考；公开后通知作者 | 登录 + `qa:use` |
@@ -576,7 +577,7 @@ Authorization: Bearer <token>
 | POST | `/qa/questions/:id/answers` | `{body(≤10000)}` 回答（问题须已公开；先审查，返回 `{answer, held, message}`）；公开后通知提问者 | 登录 + `qa:use` |
 | POST | `/qa/answers/:id/accept` | 提问者或作者采纳（再次调用取消），问题变为已解决；通知回答者 | 登录 + `qa:use` |
 | DELETE | `/qa/answers/:id` | 回答者、作者/协作者或管理员删除回答（删除被采纳的回答时问题回到待解决） | 登录 + `qa:use` |
-| GET/PUT | `/admin/qa/settings` | `{ai_enabled, agent_enabled, top_k(3–12), trace_retention_days(0 永久或 7–3650), semantic_search}`（GET 另返回 `semantic{public_books, indexed_books}`），PUT 可只传部分字段；超过保留天数的已结束问答由巡检清空调用链详情（`trace`），问题、回答与用量合计保留；另返回 `ai_chat_available`、`ai_embed_available` | 管理员 + `qa:manage` |
+| GET/PUT | `/admin/qa/settings` | `{ai_enabled, agent_enabled, top_k(3–12), trace_retention_days(0 永久或 7–3650), semantic_search, insights_asks, insights_digest}`（GET 另返回 `semantic{public_books, indexed_books}`），PUT 可只传部分字段；超过保留天数的已结束问答由巡检清空调用链详情（`trace`），问题、回答与用量合计保留；另返回 `ai_chat_available`、`ai_embed_available` | 管理员 + `qa:manage` |
 | POST | `/admin/qa/semantic/reindex` | 立即为索引缺失或内容已变化的公开书籍排队重建（任务 `qa.reindex`）→ `{queued}`；未开启或未配置嵌入模型时 400 | 管理员 + `qa:manage` |
 
 ## 整本 AI 翻译（「书籍多语言」插件）

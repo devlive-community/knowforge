@@ -63,6 +63,7 @@ type Ask struct {
 	TraceID      string    `gorm:"size:40;index" json:"trace_id"` // 与核心 AI 用量记录的调用链 ID 一致
 	Trace        string    `gorm:"type:text" json:"-"`            // JSON []TraceStep 调用链
 	DurationMs   int64     `json:"duration_ms"`
+	QEmbedding   []byte    `json:"-"` // 问题向量（作者洞察归类用，后台计算）
 	CreatedAt    time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -91,6 +92,7 @@ type Question struct {
 	AnswerCount      int       `json:"answer_count"`
 	Status           string    `gorm:"size:10;index" json:"status"`                         // open | resolved
 	Visibility       string    `gorm:"size:10;index;not null;default:''" json:"visibility"` // ""（公开）| held（待审核）| hidden（驳回/下架）
+	QEmbedding       []byte    `json:"-"`                                                   // 问题向量（作者洞察归类用）
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }

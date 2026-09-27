@@ -12,6 +12,8 @@ interface QASettings {
   top_k: number
   trace_retention_days: number
   semantic_search: boolean
+  insights_asks: boolean
+  insights_digest: boolean
 }
 
 interface QASettingsResponse {
@@ -30,7 +32,7 @@ function AdminQAInner() {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
   const [data, setData] = useState<QASettingsResponse | null>(null)
-  const [form, setForm] = useState<QASettings>({ ai_enabled: true, agent_enabled: true, top_k: 6, trace_retention_days: 0, semantic_search: false })
+  const [form, setForm] = useState<QASettings>({ ai_enabled: true, agent_enabled: true, top_k: 6, trace_retention_days: 0, semantic_search: false, insights_asks: true, insights_digest: true })
   const [saving, setSaving] = useState(false)
   const [reindexing, setReindexing] = useState(false)
 
@@ -109,6 +111,20 @@ function AdminQAInner() {
                 )}
               </div>
               <Switch checked={form.semantic_search} disabled={!data.ai_embed_available && !form.semantic_search} onChange={(v) => setForm({ ...form, semantic_search: v })} ariaLabel={t('admin.qa.semantic')} />
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium text-slate-900">{t('admin.qa.insightsAsks')}</div>
+                <p className="mt-1 text-sm text-slate-500">{t('admin.qa.insightsAsksHint')}</p>
+              </div>
+              <Switch checked={form.insights_asks} onChange={(v) => setForm({ ...form, insights_asks: v })} ariaLabel={t('admin.qa.insightsAsks')} />
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-medium text-slate-900">{t('admin.qa.insightsDigest')}</div>
+                <p className="mt-1 text-sm text-slate-500">{t('admin.qa.insightsDigestHint')}</p>
+              </div>
+              <Switch checked={form.insights_digest} onChange={(v) => setForm({ ...form, insights_digest: v })} ariaLabel={t('admin.qa.insightsDigest')} />
             </div>
             <Field label={t('admin.qa.topK')} hint={t('admin.qa.topKHint')}>
               <Input type="number" min={3} max={12} value={form.top_k} onChange={(e) => setForm({ ...form, top_k: Number(e.target.value) || 0 })} className="w-32" />
