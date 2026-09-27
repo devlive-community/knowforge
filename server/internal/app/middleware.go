@@ -40,6 +40,9 @@ func currentUser(c *gin.Context) *models.User {
 func (a *App) RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		u := a.resolveUser(c)
+		if abortTokenDenied(c) {
+			return
+		}
 		if u == nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "message": "请先登录"})
 			return
@@ -66,11 +69,24 @@ func (a *App) RequireAuthStream() gin.HandlerFunc {
 // OptionalAuth 尝试解析登录态但不强制
 func (a *App) OptionalAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if u := a.resolveUser(c); u != nil {
+		u := a.resolveUser(c)
+		if abortTokenDenied(c) { // 显式带了访问令牌但不允许本次请求：拒绝而不是按游客处理
+			return
+		}
+		if u != nil {
 			c.Set("user", u)
 		}
 		c.Next()
 	}
+}
+
+// abortTokenDenied 访问令牌有效但不允许本次请求时返回 403。
+func abortTokenDenied(c *gin.Context) bool {
+	if reason := c.GetString("access_token_denied"); reason != "" {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "TOKEN_FORBIDDEN", "message": reason})
+		return true
+	}
+	return false
 }
 
 func (a *App) resolveUser(c *gin.Context) *models.User {
@@ -86,6 +102,16 @@ func (a *App) resolveUser(c *gin.Context) *models.User {
 	}
 	if token == "" || a.Config.Secret == "" {
 		return nil
+	}
+	if strings.HasPrefix(token, accessTokenPrefix) { // 个人访问令牌（只接受请求头，Cookie 中只会是登录令牌）
+		if c.GetHeader("Authorization") == "" {
+			return nil
+		}
+		u, denied := a.resolveAccessToken(c, token)
+		if denied != "" {
+			c.Set("access_token_denied", denied)
+		}
+		return u
 	}
 	claims, err := auth.ParseToken(a.Config.Secret, token)
 	if err != nil {

@@ -124,6 +124,10 @@ func (a *App) Router() *gin.Engine {
 				authed.PUT("/export-settings", a.RequirePermission(authz.UserUpdate), a.UpdateExportSettings)
 				// 主题设置
 				authed.GET("/theme-settings", a.RequirePermission(authz.UserRead), a.GetThemeSettings)
+				// 个人访问令牌（令牌本身不能访问这些接口）
+				authed.GET("/tokens", a.MyAccessTokens)
+				authed.POST("/tokens", a.CreateAccessToken)
+				authed.DELETE("/tokens/:id", a.RevokeAccessToken)
 				authed.PUT("/theme-settings", a.RequirePermission(authz.UserUpdate), a.UpdateThemeSettings)
 			}
 		}

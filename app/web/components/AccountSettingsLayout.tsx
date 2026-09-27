@@ -9,7 +9,7 @@ import { useTranslation } from '@/lib/i18n'
 
 interface AccountSettingsLayoutProps {
   user: User
-  active: 'profile' | 'security' | 'invite' | 'notify' | 'export' | 'oauth' | 'theme' | 'danger'
+  active: 'profile' | 'security' | 'invite' | 'notify' | 'export' | 'oauth' | 'theme' | 'tokens' | 'danger'
   /** 头像上传后回调（个人资料页用） */
   onAvatarChange?: (url: string) => void
   children: ReactNode
@@ -51,6 +51,7 @@ export default function AccountSettingsLayout({ user, active, onAvatarChange, ch
     { key: 'notify' as const, label: t('account.nav.notify'), icon: <i className="fa-solid fa-bell w-4 text-center text-[13px]" aria-hidden="true" />, href: '/user/notify' },
     { key: 'theme' as const, label: t('account.nav.theme'), icon: <PaletteIcon className="h-4 w-4" />, href: '/user/theme' },
     { key: 'export' as const, label: t('account.nav.export'), icon: <DownloadIcon className="h-4 w-4" />, href: '/user/export' },
+    { key: 'tokens' as const, label: t('account.nav.tokens'), icon: <i className="fa-solid fa-key w-4 text-center text-[13px]" aria-hidden="true" />, href: '/user/tokens' },
     { key: 'danger' as const, label: t('account.nav.danger'), icon: <TrashIcon className="h-4 w-4" />, href: '/user/danger' },
   ]
 
