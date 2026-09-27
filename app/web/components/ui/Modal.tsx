@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from 'react'
+import { ReactNode, useEffect, useId, useRef } from 'react'
 import { CloseIcon } from '@/components/icons'
 import { useTranslation } from '../../lib/i18n'
 import Tooltip from './Tooltip'
@@ -16,6 +16,7 @@ interface ModalProps {
 
 export function Modal({ open, onClose, title, children, footer, className, elevated }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const titleId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -31,11 +32,11 @@ export function Modal({ open, onClose, title, children, footer, className, eleva
   return (
     <div className={`fixed inset-0 flex items-end justify-center sm:items-center ${elevated ? 'z-[200]' : 'z-50'}`}>
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div ref={ref} className={`relative mx-0 flex max-h-[calc(100vh-1rem)] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:mx-4 sm:rounded-2xl ${/max-w-/.test(className || '') ? '' : 'max-w-lg'} ${className || ''}`}
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} className={`relative mx-0 flex max-h-[calc(100vh-1rem)] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:mx-4 sm:rounded-2xl ${/max-w-/.test(className || '') ? '' : 'max-w-lg'} ${className || ''}`}
         style={{ borderRadius: 'var(--radius)' }}>
         {title && (
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-            <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+            <h3 id={titleId} className="text-lg font-semibold text-slate-900">{title}</h3>
             <ModalCloseButton onClose={onClose} />
           </div>
         )}
