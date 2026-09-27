@@ -20,6 +20,7 @@ import (
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugins/contentcollect"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试：启动完整应用（安装向导 → 插件默认启用），经真实路由与中间件访问采集接口。
@@ -46,7 +47,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.do(t, http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"采集测试"},"admin":{"username":"import-owner","email":"import-owner@test.local","password":"secret123"}}`, "")
+	status, installed := e.do(t, http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"采集测试"},"admin":{"username":"import-owner","email":"import-owner@test.local","password":"secret123"}}`, "")
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

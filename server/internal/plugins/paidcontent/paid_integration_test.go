@@ -17,6 +17,7 @@ import (
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugins/paidcontent"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试（仅经 HTTP 与支付、会员插件协作）：付费墙与试读、导出拦截、购买章节/整本、作者入账与提现、会员权益免费读与折扣。
@@ -42,7 +43,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"付费测试"},"admin":{"username":"paid-admin","email":"paid-admin@test.local","password":"secret123"}}`)
+	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"付费测试"},"admin":{"username":"paid-admin","email":"paid-admin@test.local","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

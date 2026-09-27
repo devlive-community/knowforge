@@ -22,6 +22,7 @@ import (
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins/chapterguide"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试（经 HTTP，AI 服务用本地假服务器模拟）：批量生成与复用、过期与编辑、强制重新生成、全书概览、读者可见性、
@@ -102,7 +103,7 @@ func newTestEnv(t *testing.T, aiURL string) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"导读测试"},"admin":{"username":"g-admin","email":"g-admin@test.local","password":"secret123"}}`)
+	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"导读测试"},"admin":{"username":"g-admin","email":"g-admin@test.local","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

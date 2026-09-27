@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // TestDocumentStatusCascadeAndFollowParent 覆盖：子章节状态跟随父章节的创建默认，以及父章节改状态时的级联。
@@ -48,7 +49,7 @@ func TestDocumentStatusCascadeAndFollowParent(t *testing.T) {
 	}
 
 	_, installed := req(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "级联测试"},
 		"admin":    map[string]any{"username": "author", "email": "author@test.local", "password": "secret123"},
 	}, "")

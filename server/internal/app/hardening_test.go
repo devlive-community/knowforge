@@ -17,6 +17,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 加固测试：覆盖此前测试未守护的边界。
@@ -58,7 +59,7 @@ func TestSearchLoggedInVisibility(t *testing.T) {
 	}
 
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "可见性测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -126,7 +127,7 @@ func TestImportSecurity(t *testing.T) {
 		return resp.StatusCode, payload
 	}
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "导入安全测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -244,7 +245,7 @@ func TestExportByCollaborator(t *testing.T) {
 	}
 
 	request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "协作者导出测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -320,7 +321,7 @@ func TestPasswordResetExpiredToken(t *testing.T) {
 		return resp.StatusCode, payload
 	}
 	request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "过期令牌测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

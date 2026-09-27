@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 控制台时间线接口集成测试（/admin/activity，user:manage 仅管理员）：
@@ -67,7 +68,7 @@ func TestAdminActivity(t *testing.T) {
 	}
 
 	_, install := post("/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "时间线测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -157,7 +158,7 @@ func TestAdminActivityEmpty(t *testing.T) {
 		return resp.StatusCode, payload
 	}
 	_, install := post("/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "空时间线站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	})

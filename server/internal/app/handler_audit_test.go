@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 func TestAdminAuditLogs(t *testing.T) {
@@ -49,7 +50,7 @@ func TestAdminAuditLogs(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "审计测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

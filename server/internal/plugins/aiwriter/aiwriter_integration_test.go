@@ -19,6 +19,7 @@ import (
 	"knowforge/server/internal/auth"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试（经 HTTP，AI 服务用本地假服务器模拟 OpenAI 兼容的流式接口）：动作与上下文、流式推送、取消、采纳、额度、权限与插件开关。
@@ -113,7 +114,7 @@ func newTestEnv(t *testing.T, aiURL string) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"写作助手测试"},"admin":{"username":"w-admin","email":"w-admin@test.local","password":"secret123"}}`)
+	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"写作助手测试"},"admin":{"username":"w-admin","email":"w-admin@test.local","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

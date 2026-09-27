@@ -16,6 +16,7 @@ import (
 	"knowforge/server/internal/auth"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 个人存储：上传记入用量，超出空间时拒绝；「我的文件」列出文件与被引用次数，删除时同时从存储删除并释放空间；只能删除自己的文件。
@@ -66,7 +67,7 @@ func TestUserStorageQuota(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&p)
 		return resp.StatusCode, p
 	}
-	_, installed := do("", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"存储"},"admin":{"username":"st-admin","email":"st-admin@test.local","password":"secret123"}}`)
+	_, installed := do("", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"存储"},"admin":{"username":"st-admin","email":"st-admin@test.local","password":"secret123"}}`)
 	adminToken := installed["data"].(map[string]any)["token"].(string)
 	newUser := func(name string) (*models.User, string) {
 		u := &models.User{Username: name, Email: name + "@test.local", Role: "user", IsActive: true, EmailVerified: true}

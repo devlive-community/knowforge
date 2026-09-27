@@ -18,6 +18,7 @@ import (
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins/growth"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试：启动完整应用，经插件管理接口启用/停用成长插件（建表、权限、种子等级与经验规则）。
@@ -43,7 +44,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.do(t, http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"成长测试"},"admin":{"username":"growth-admin","email":"growth-admin@test.local","password":"secret123"}}`)
+	status, installed := e.do(t, http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"成长测试"},"admin":{"username":"growth-admin","email":"growth-admin@test.local","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

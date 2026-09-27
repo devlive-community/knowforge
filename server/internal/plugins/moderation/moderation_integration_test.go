@@ -16,6 +16,7 @@ import (
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugins/moderation"
+	"knowforge/server/internal/testdb"
 )
 
 type testEnv struct {
@@ -39,7 +40,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.request(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"审核测试"},"admin":{"username":"mod-admin","email":"mod-admin@test.local","password":"secret123"}}`)
+	status, installed := e.request(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"审核测试"},"admin":{"username":"mod-admin","email":"mod-admin@test.local","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

@@ -16,6 +16,7 @@ import (
 	"knowforge/server/internal/auth"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // PDF 导出端点由插件注册：权限规则与核心导出一致；未安装 Chromium 运行时给出明确提示。
@@ -47,7 +48,7 @@ func TestExportBookPDFRoutingAndGuards(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&payload)
 		return resp.StatusCode, payload
 	}
-	_, installed := do(http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"PDF 测试"},"admin":{"username":"pdf-owner","email":"pdf-owner@test.local","password":"secret123"}}`, "")
+	_, installed := do(http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"PDF 测试"},"admin":{"username":"pdf-owner","email":"pdf-owner@test.local","password":"secret123"}}`, "")
 	token := installed["data"].(map[string]any)["token"].(string)
 	var owner models.User
 	a.DB.Where("username = ?", "pdf-owner").First(&owner)
@@ -93,7 +94,7 @@ func TestPDFMonthlyEntitlement(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&payload)
 		return resp.StatusCode, payload
 	}
-	_, installed := do(http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"PDF 权益"},"admin":{"username":"pdf-admin","email":"pdf-admin@test.local","password":"secret123"}}`, "")
+	_, installed := do(http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"PDF 权益"},"admin":{"username":"pdf-admin","email":"pdf-admin@test.local","password":"secret123"}}`, "")
 	adminToken := installed["data"].(map[string]any)["token"].(string)
 	// 模拟已安装的运行时：记录指向一个存在的可执行文件（测试二进制本身）
 	a.DB.Create(&models.Plugin{Key: "pdf-export", Installed: true, Meta: fmt.Sprintf(`{"chrome_path":%q}`, os.Args[0])})

@@ -10,17 +10,14 @@ import (
 	"time"
 
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
 func testQueue(t *testing.T) (*Queue, *gorm.DB, *time.Time) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := testdb.Open(t)
 	if err := db.AutoMigrate(&models.BackgroundJob{}); err != nil {
 		t.Fatal(err)
 	}

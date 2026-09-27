@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 存储驱动集成测试：本地上传回归 / 管理端配置读写与权限 / 七牛驱动全流程（模拟上传端点）
@@ -67,7 +68,7 @@ func TestStorageDrivers(t *testing.T) {
 	defer fakeQiniu.Close()
 
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "存储测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

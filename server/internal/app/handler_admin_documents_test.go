@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 后台章节管理：验证跨书籍元数据检索，以及管理员复用既有章节更新/删除权限。
@@ -50,7 +51,7 @@ func TestAdminDocuments(t *testing.T) {
 	}
 
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "章节管理测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

@@ -23,6 +23,7 @@ import (
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins/payment"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试：启动完整应用、启用支付插件，以测试内登记的商品验证下单 → 支付确认 → 履约（幂等）全流程。
@@ -97,7 +98,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.request(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"支付测试"},"admin":{"username":"pay-admin","email":"pay-admin@test.local","password":"secret123"}}`)
+	status, installed := e.request(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"支付测试"},"admin":{"username":"pay-admin","email":"pay-admin@test.local","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

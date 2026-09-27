@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // TestCurrentReadingStreak 覆盖连续阅读天数的边界：空、连读、今天/昨天起算、断档。
@@ -77,7 +78,7 @@ func TestReadingMinuteGoalAndActivity(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "时长目标测试站"},
 		"admin":    map[string]any{"username": "author", "email": "author@test.local", "password": "secret123"},
 	}, "")

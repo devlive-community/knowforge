@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // TestBookTranslationsGrouping 覆盖翻译组：同 trans_group 的可见书籍聚合、私有书对匿名不可见、少于两本不成组。
@@ -49,7 +50,7 @@ func TestBookTranslationsGrouping(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "多语言测试"},
 		"admin":    map[string]any{"username": "author", "email": "author@test.local", "password": "secret123"},
 	}, "")
@@ -123,7 +124,7 @@ func TestBookVersionsGroupedListing(t *testing.T) {
 		return resp.StatusCode, payload
 	}
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "版本测试"},
 		"admin":    map[string]any{"username": "author", "email": "author@test.local", "password": "secret123"},
 	}, "")

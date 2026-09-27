@@ -14,6 +14,7 @@ import (
 	"knowforge/server/internal/auth"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 func TestTranslationConfig(t *testing.T) {
@@ -51,7 +52,7 @@ func TestTranslationConfig(t *testing.T) {
 	}
 
 	_, installed := req(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "翻译测试"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -132,7 +133,7 @@ func TestTranslationUsageRecorded(t *testing.T) {
 		return resp.StatusCode, p
 	}
 	_, installed := req(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"}, "site": map[string]any{"name": "翻译用量"},
+		"database": testdb.InstallMap(t), "site": map[string]any{"name": "翻译用量"},
 		"admin": map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
 	admin := installed["data"].(map[string]any)["token"].(string)

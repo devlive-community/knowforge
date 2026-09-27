@@ -18,6 +18,7 @@ import (
 	"knowforge/server/internal/database"
 	"knowforge/server/internal/jobqueue"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -26,10 +27,7 @@ import (
 func newContentImportTestApp(t *testing.T) (*App, *models.User, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	db, err := database.Open(config.DatabaseConfig{
-		Type: database.TypeSQLite,
-		Path: filepath.Join(t.TempDir(), "content-import.db"),
-	})
+	db, err := database.Open(testdb.Config(t))
 	if err != nil {
 		t.Fatalf("打开测试数据库失败: %v", err)
 	}

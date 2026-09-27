@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 协作模块集成测试：权限边界 / editor 写权限 / viewer 只读 / 自行退出 / 邀请通知
@@ -50,7 +51,7 @@ func TestCollaboration(t *testing.T) {
 
 	// 安装 + alice/bob 注册
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "协作测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

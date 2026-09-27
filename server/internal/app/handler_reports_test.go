@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 func TestContentReportModerationFlow(t *testing.T) {
@@ -41,7 +42,7 @@ func TestContentReportModerationFlow(t *testing.T) {
 	}
 
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"}, "site": map[string]any{"name": "举报测试"},
+		"database": testdb.InstallMap(t), "site": map[string]any{"name": "举报测试"},
 		"admin": map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
 	adminToken := install["data"].(map[string]any)["token"].(string)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 func TestReadingAnnotationsPrivacyAndVisibility(t *testing.T) {
@@ -44,7 +45,7 @@ func TestReadingAnnotationsPrivacyAndVisibility(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"}, "site": map[string]any{"name": "标注测试"},
+		"database": testdb.InstallMap(t), "site": map[string]any{"name": "标注测试"},
 		"admin": map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
 	adminToken := installed["data"].(map[string]any)["token"].(string)

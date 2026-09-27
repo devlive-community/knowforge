@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 func TestAuthorAnalyticsOverview(t *testing.T) {
@@ -48,7 +49,7 @@ func TestAuthorAnalyticsOverview(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "作者仪表盘测试站"},
 		"admin":    map[string]any{"username": "author", "email": "author@test.local", "password": "secret123"},
 	}, "")

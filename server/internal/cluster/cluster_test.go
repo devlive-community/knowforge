@@ -2,21 +2,16 @@ package cluster
 
 import (
 	"context"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
+	"knowforge/server/internal/testdb"
 )
 
 // 两个实例共享同一个数据库：发现对方、广播只发给其他实例、乱序提交的消息补拉、租约互斥与过期接管。
 func TestTwoNodes(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "c.db")+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := testdb.Open(t)
 	if err := db.AutoMigrate(&Instance{}, &Event{}, &Lease{}); err != nil {
 		t.Fatal(err)
 	}
@@ -107,10 +102,7 @@ func TestWithoutStart(t *testing.T) {
 
 // Start/Stop：登记与注销本实例。
 func TestStartStop(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "s.db")), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := testdb.Open(t)
 	if err := Start(context.Background(), db, "test"); err != nil {
 		t.Fatal(err)
 	}

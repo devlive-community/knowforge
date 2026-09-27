@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // TestPublishChapterPromotesDraftBook 覆盖：发布章节时，草稿书籍自动提升为 in_progress；
@@ -49,7 +50,7 @@ func TestPublishChapterPromotesDraftBook(t *testing.T) {
 	}
 
 	_, installed := req(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "发布联动测试"},
 		"admin":    map[string]any{"username": "author", "email": "author@test.local", "password": "secret123"},
 	}, "")

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 func TestBatchExportMyBooks(t *testing.T) {
@@ -64,7 +65,7 @@ func TestBatchExportMyBooks(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "批量导出测试站"},
 		"admin":    map[string]any{"username": "alice", "email": "alice@test.local", "password": "secret123"},
 	}, "")

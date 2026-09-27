@@ -3,14 +3,13 @@ package app
 import (
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
 
-	"knowforge/server/internal/config"
 	"knowforge/server/internal/database"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,10 +17,7 @@ import (
 // TestConcurrentViewCountIncrements 验证浏览量使用数据库原子自增，并发请求不会丢更新。
 func TestConcurrentViewCountIncrements(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, err := database.Open(config.DatabaseConfig{
-		Type: database.TypeSQLite,
-		Path: filepath.Join(t.TempDir(), "views.db"),
-	})
+	db, err := database.Open(testdb.Config(t))
 	if err != nil {
 		t.Fatalf("打开测试数据库失败: %v", err)
 	}

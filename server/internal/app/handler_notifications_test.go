@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 通知模块集成测试：列表空数组 / 评论与点赞触发 / 已读标记 / SSE 首帧与鉴权 / 权限
@@ -54,7 +55,7 @@ func TestNotifications(t *testing.T) {
 
 	// 安装 + 注册普通用户 alice
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "通知测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

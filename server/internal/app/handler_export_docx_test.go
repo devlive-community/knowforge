@@ -12,6 +12,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // DOCX 导出应产出结构合法、良构 XML 的 .docx（Word 严格解析 OOXML）。
@@ -28,7 +29,7 @@ func TestExportBookDOCXStructure(t *testing.T) {
 	ts := httptest.NewServer(a.Router())
 	defer ts.Close()
 
-	install := `{"database":{"type":"sqlite"},"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
+	install := `{"database":` + testdb.InstallJSON(t) + `,"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
 	r, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/setup/install", bytes.NewBufferString(install))
 	r.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(r)

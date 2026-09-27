@@ -11,6 +11,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 func TestAccountDeletionFlow(t *testing.T) {
@@ -48,7 +49,7 @@ func TestAccountDeletionFlow(t *testing.T) {
 	}
 
 	req(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "注销测试"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

@@ -16,6 +16,7 @@ import (
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/jobqueue"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 func TestCleanupExpiredImportSources(t *testing.T) {
@@ -152,7 +153,7 @@ func TestAdminBackgroundJobs(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "任务测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

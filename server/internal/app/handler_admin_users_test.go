@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // fmtUID 将用户 ID 格式化为路径片段
@@ -62,7 +63,7 @@ func TestAdminUsers(t *testing.T) {
 
 	// 安装取得管理员令牌
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "用户管理测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -234,7 +235,7 @@ func TestAdminDeleteUserWithRelatedData(t *testing.T) {
 	}
 
 	_, installed := req(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "删除测试"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -246,7 +247,9 @@ func TestAdminDeleteUserWithRelatedData(t *testing.T) {
 
 	// 关联数据：第三方绑定（外键来源）+ 阅读进度
 	a.DB.Exec("INSERT INTO user_authentications (user_id, provider, provider_id) VALUES (?,?,?)", uidVal, "github", "gh-123")
-	a.DB.Exec("INSERT INTO reading_progresses (user_id, book_id, doc_id) VALUES (?,?,?)", uidVal, 1, 1)
+	if err := a.DB.Exec("INSERT INTO reading_progresses (user_id, book_id, doc_id, doc_slug) VALUES (?,?,?,?)", uidVal, 1, 1, "intro").Error; err != nil {
+		t.Fatalf("写入阅读进度失败: %v", err)
+	}
 
 	status, resp := req(http.MethodDelete, "/api/v1/admin/users/"+fmtUID(uint64(uidVal)), nil, adminToken)
 	if status != http.StatusOK {

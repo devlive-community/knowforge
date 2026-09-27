@@ -14,6 +14,7 @@ import (
 	"knowforge/server/internal/auth"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 用量预警：超过阈值时记录并通知管理员，同一对象只报一次；不限制调用本身。
@@ -30,7 +31,7 @@ func TestAIUsageAlerts(t *testing.T) {
 	server := httptest.NewServer(a.Router())
 	defer server.Close()
 	resp, err := http.Post(server.URL+"/api/v1/setup/install", "application/json", strings.NewReader(
-		`{"database":{"type":"sqlite"},"site":{"name":"预警测试"},"admin":{"username":"admin","email":"admin@test.local","password":"secret123"}}`))
+		`{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"预警测试"},"admin":{"username":"admin","email":"admin@test.local","password":"secret123"}}`))
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("安装失败: %v %v", err, resp)
 	}
@@ -97,7 +98,7 @@ func TestAIUsageRetentionAndExport(t *testing.T) {
 	server := httptest.NewServer(a.Router())
 	defer server.Close()
 	resp, err := http.Post(server.URL+"/api/v1/setup/install", "application/json", strings.NewReader(
-		`{"database":{"type":"sqlite"},"site":{"name":"保留测试"},"admin":{"username":"admin","email":"admin@test.local","password":"secret123"}}`))
+		`{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"保留测试"},"admin":{"username":"admin","email":"admin@test.local","password":"secret123"}}`))
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("安装失败: %v %v", err, resp)
 	}

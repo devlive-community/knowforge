@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 后台书籍管理列表：验证管理员权限、私有内容可见、筛选与安全排序回退。
@@ -49,7 +50,7 @@ func TestAdminBooks(t *testing.T) {
 	}
 
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "书籍管理测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

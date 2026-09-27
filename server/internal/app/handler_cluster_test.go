@@ -13,6 +13,7 @@ import (
 
 	"knowforge/server/internal/cluster"
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 多实例状态：列出在线实例；另一个实例的标记文件不可见时提示数据目录未共享，并提示版本不一致与在线升级只升级当前实例。
@@ -29,7 +30,7 @@ func TestAdminClusterStatus(t *testing.T) {
 	server := httptest.NewServer(a.Router())
 	defer server.Close()
 	resp, err := http.Post(server.URL+"/api/v1/setup/install", "application/json", strings.NewReader(
-		`{"database":{"type":"sqlite"},"site":{"name":"集群测试"},"admin":{"username":"admin","email":"admin@test.local","password":"secret123"}}`))
+		`{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"集群测试"},"admin":{"username":"admin","email":"admin@test.local","password":"secret123"}}`))
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("安装失败: %v %v", err, resp)
 	}

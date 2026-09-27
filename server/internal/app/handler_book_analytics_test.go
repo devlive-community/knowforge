@@ -11,6 +11,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 func TestBookAnalyticsAggregationAndAuthorization(t *testing.T) {
@@ -49,7 +50,7 @@ func TestBookAnalyticsAggregationAndAuthorization(t *testing.T) {
 	}
 
 	_, installed := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "分析测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -145,7 +146,7 @@ func TestClassifyAnalyticsSource(t *testing.T) {
 	cases := map[string]string{
 		"":                               "direct",
 		"not a url":                      "direct",
-		"https://knowforge.test/book":   "internal",
+		"https://knowforge.test/book":    "internal",
 		"https://www.baidu.com/s?wd=x":   "search",
 		"https://www.zhihu.com/question": "social",
 		"https://example.com/article":    "external",

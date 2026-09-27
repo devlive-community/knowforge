@@ -23,6 +23,7 @@ import (
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins/qa"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试（经 HTTP，AI 服务用本地假服务器模拟 OpenAI 兼容接口）：索引与向量化、标准问答出处、划词提问、Agent 工具调用、每日额度、社区问答。
@@ -155,7 +156,7 @@ func newTestEnv(t *testing.T, aiURL string) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"问答测试"},"admin":{"username":"qa-admin","email":"qa-admin@test.local","password":"secret123"}}`)
+	status, installed := e.req(t, "", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"问答测试"},"admin":{"username":"qa-admin","email":"qa-admin@test.local","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

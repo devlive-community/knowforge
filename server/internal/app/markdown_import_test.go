@@ -15,6 +15,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 func TestMarkdownNamingAndOrder(t *testing.T) {
@@ -80,7 +81,7 @@ func TestMarkdownImport(t *testing.T) {
 		return r
 	}
 	_, installed := send(jsonReq(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"}, "site": map[string]any{"name": "md"},
+		"database": testdb.InstallMap(t), "site": map[string]any{"name": "md"},
 		"admin": map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}), "")
 	token := installed["data"].(map[string]any)["token"].(string)

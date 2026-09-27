@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 
 	"github.com/pquerna/otp/totp"
 )
@@ -51,7 +52,7 @@ func TestLoginTwoPhaseTwoFactor(t *testing.T) {
 	}
 
 	request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "2FA 登录测试"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

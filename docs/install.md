@@ -310,6 +310,20 @@ make dev-web
 
 前端开发服务地址 `http://localhost:3000`，API 直连 `http://localhost:6969`。
 
+### 在 PostgreSQL / MySQL 上运行后端测试
+
+后端测试默认使用 SQLite。设置 `KNOWFORGE_TEST_DB` 后，同一套测试会在 PostgreSQL 或 MySQL 上运行：每个测试新建一个独立的库，结束后删除，账号需要有建库、删库权限。CI 会在三种数据库上各跑一遍。
+
+```bash
+docker run -d --rm --name kf-test-pg -e POSTGRES_PASSWORD=kftest -p 127.0.0.1:55432:5432 postgres:16-alpine
+cd server && KNOWFORGE_TEST_DB=postgres KNOWFORGE_TEST_DB_PORT=55432 KNOWFORGE_TEST_DB_PASSWORD=kftest go test -p 4 ./...
+
+docker run -d --rm --name kf-test-mysql -e MYSQL_ROOT_PASSWORD=kftest -p 127.0.0.1:53306:3306 mysql:8.4
+cd server && KNOWFORGE_TEST_DB=mysql KNOWFORGE_TEST_DB_PORT=53306 KNOWFORGE_TEST_DB_PASSWORD=kftest go test -p 4 ./...
+```
+
+可用的环境变量：`KNOWFORGE_TEST_DB`（`postgres` / `mysql`）、`KNOWFORGE_TEST_DB_HOST`、`KNOWFORGE_TEST_DB_PORT`、`KNOWFORGE_TEST_DB_USER`（默认 `postgres` / `root`）、`KNOWFORGE_TEST_DB_PASSWORD`。
+
 ---
 
 ## 相关链接

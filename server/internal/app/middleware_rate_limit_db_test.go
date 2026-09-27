@@ -9,6 +9,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // newInstalledApp 启动并安装一个临时 sqlite 应用，返回带 DB 的实例。
@@ -25,7 +26,7 @@ func newInstalledApp(t *testing.T) *App {
 	}
 	ts := httptest.NewServer(a.Router())
 	t.Cleanup(ts.Close)
-	install := `{"database":{"type":"sqlite"},"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
+	install := `{"database":` + testdb.InstallJSON(t) + `,"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/setup/install", strings.NewReader(install))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)

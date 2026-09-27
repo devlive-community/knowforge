@@ -10,6 +10,7 @@ import (
 	"knowforge/server/internal/authz"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 特性插件（成就）：禁用时后台接口 404，启用后 200；启用/禁用切换即切换站点配置开关。
@@ -26,7 +27,7 @@ func TestFeaturePluginGate(t *testing.T) {
 	ts := httptest.NewServer(a.Router())
 	defer ts.Close()
 
-	install := `{"database":{"type":"sqlite"},"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
+	install := `{"database":` + testdb.InstallJSON(t) + `,"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
 	r, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/setup/install", bytes.NewBufferString(install))
 	r.Header.Set("Content-Type", "application/json")
 	resp, _ := http.DefaultClient.Do(r)
@@ -108,7 +109,7 @@ func TestPluginUninstallGuardsAgainstStaleInstall(t *testing.T) {
 	ts := httptest.NewServer(a.Router())
 	defer ts.Close()
 
-	install := `{"database":{"type":"sqlite"},"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
+	install := `{"database":` + testdb.InstallJSON(t) + `,"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
 	r, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/setup/install", bytes.NewBufferString(install))
 	r.Header.Set("Content-Type", "application/json")
 	resp, _ := http.DefaultClient.Do(r)
@@ -119,7 +120,7 @@ func TestPluginUninstallGuardsAgainstStaleInstall(t *testing.T) {
 
 	count := func() int64 {
 		var n int64
-		a.DB.Model(&models.Plugin{}).Where("key = ?", pluginPDFExport).Count(&n)
+		a.DB.Model(&models.Plugin{}).Where(&models.Plugin{Key: pluginPDFExport}).Count(&n)
 		return n
 	}
 	uninstall := func() int {

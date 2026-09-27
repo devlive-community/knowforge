@@ -18,6 +18,7 @@ import (
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/legacy"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 旧库迁移集成测试：sqlite 模拟旧版 MySQL schema → 迁移 → 校验数据无损与幂等
@@ -37,7 +38,7 @@ func TestLegacyMigration(t *testing.T) {
 
 	// 目标库完成安装（自带 admin）
 	raw, _ := json.Marshal(map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "迁移测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	})

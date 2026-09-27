@@ -13,6 +13,7 @@ import (
 	"knowforge/server/internal/auth"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 私有书籍数量：新建私有书、公开改私有、导入/复制等新建的私有草稿都受限；新建公开书、私有改公开不受限；只统计本人的私有书。
@@ -44,7 +45,7 @@ func TestPrivateBooksEntitlement(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&p)
 		return resp.StatusCode, p
 	}
-	_, installed := do("", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"私有书"},"admin":{"username":"pb-admin","email":"pb-admin@test.local","password":"secret123"}}`)
+	_, installed := do("", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"私有书"},"admin":{"username":"pb-admin","email":"pb-admin@test.local","password":"secret123"}}`)
 	adminToken := installed["data"].(map[string]any)["token"].(string)
 	u := &models.User{Username: "pb-writer", Email: "pb-writer@test.local", Role: "user", IsActive: true, EmailVerified: true}
 	a.DB.Create(u)

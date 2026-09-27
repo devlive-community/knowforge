@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试：覆盖 安装 → 登录 → 建书 → 发章节 → 公开阅读 → 系统版本 的完整链路
@@ -102,7 +103,7 @@ func TestFullLifecycle(t *testing.T) {
 
 	// 2. 安装（sqlite）
 	install := post("/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "测试站", "description": "集成测试"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

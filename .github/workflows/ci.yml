@@ -40,6 +40,60 @@ jobs:
           CGO_ENABLED: "0"
         run: go build -trimpath -o /tmp/knowforge-server .
 
+  server-db:
+    # 同一套 Go 测试在 PostgreSQL 与 MySQL 上再跑一遍（默认的 server 任务使用 SQLite）；
+    # 每个测试在服务容器中新建独立的库（见 internal/testdb），结束后删除
+    name: Go tests on ${{ matrix.db }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: postgres
+            port: 5432
+            user: postgres
+          - db: mysql
+            port: 3306
+            user: root
+    services:
+      postgres:
+        image: ${{ matrix.db == 'postgres' && 'postgres:16-alpine' || '' }}
+        env:
+          POSTGRES_PASSWORD: kftest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      mysql:
+        image: ${{ matrix.db == 'mysql' && 'mysql:8.4' || '' }}
+        env:
+          MYSQL_ROOT_PASSWORD: kftest
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pkftest"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Test
+        working-directory: server
+        env:
+          KNOWFORGE_TEST_DB: ${{ matrix.db }}
+          KNOWFORGE_TEST_DB_HOST: 127.0.0.1
+          KNOWFORGE_TEST_DB_PORT: ${{ matrix.port }}
+          KNOWFORGE_TEST_DB_USER: ${{ matrix.user }}
+          KNOWFORGE_TEST_DB_PASSWORD: kftest
+        # 限制并行的测试包数，避免同时建库与连接数过多
+        run: go test -p 4 ./...
+
   web:
     name: Web checks (typecheck + lint + test + build)
     runs-on: ubuntu-latest

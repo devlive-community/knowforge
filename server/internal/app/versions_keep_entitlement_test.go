@@ -13,6 +13,7 @@ import (
 	"knowforge/server/internal/auth"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 每章可查看的历史版本数：只列出最近的若干版本（其余仍保存、标出隐藏数），超出范围的版本不能查看或恢复；放宽后重新可见。
@@ -44,7 +45,7 @@ func TestVersionsKeepEntitlement(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&p)
 		return resp.StatusCode, p
 	}
-	_, installed := do("", http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"版本"},"admin":{"username":"vk-admin","email":"vk-admin@test.local","password":"secret123"}}`)
+	_, installed := do("", http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"版本"},"admin":{"username":"vk-admin","email":"vk-admin@test.local","password":"secret123"}}`)
 	adminToken := installed["data"].(map[string]any)["token"].(string)
 	u := &models.User{Username: "vk-writer", Email: "vk-writer@test.local", Role: "user", IsActive: true, EmailVerified: true}
 	a.DB.Create(u)

@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // M16 导入导出集成测试：验收标准 = 导出再导入内容无损
@@ -57,7 +58,7 @@ func TestBookExportImport(t *testing.T) {
 
 	// 安装 + alice/bob 注册
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "导入导出测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")

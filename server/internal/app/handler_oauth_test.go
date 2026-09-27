@@ -10,6 +10,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // OAuth 模块集成测试：不访问 GitHub 外网，覆盖
@@ -55,7 +56,7 @@ func TestOAuthFlow(t *testing.T) {
 
 	// 安装，取得管理员令牌
 	_, install, _ := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "OAuth 测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -156,7 +157,7 @@ func TestOAuthStateDBBacked(t *testing.T) {
 	}
 	ts := httptest.NewServer(a.Router())
 	defer ts.Close()
-	install := `{"database":{"type":"sqlite"},"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
+	install := `{"database":` + testdb.InstallJSON(t) + `,"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
 	ir, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/setup/install", strings.NewReader(install))
 	ir.Header.Set("Content-Type", "application/json")
 	if resp, err := http.DefaultClient.Do(ir); err != nil {

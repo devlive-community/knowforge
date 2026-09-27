@@ -12,6 +12,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // EPUB 导出应产出结构合法的 EPUB：mimetype 首位且非压缩、含 container/opf/nav 与章节。
@@ -28,7 +29,7 @@ func TestExportBookEPUBStructure(t *testing.T) {
 	ts := httptest.NewServer(a.Router())
 	defer ts.Close()
 
-	install := `{"database":{"type":"sqlite"},"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
+	install := `{"database":` + testdb.InstallJSON(t) + `,"site":{"name":"t"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`
 	r, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/setup/install", bytes.NewBufferString(install))
 	r.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(r)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // TestAuthorizationBoundaries 覆盖公开数据、对象归属和令牌回跳地址的安全边界。
@@ -56,7 +57,7 @@ func TestAuthorizationBoundaries(t *testing.T) {
 	}
 
 	_, install, _ := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "权限测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
@@ -233,6 +234,9 @@ func TestAuthorizationBoundaries(t *testing.T) {
 
 	// 书籍转私有后，旧收藏列表必须过滤已经失去访问权的书籍。
 	request(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/reactions", publicBookID), map[string]any{"type": "favorite"}, bobToken)
+	if _, favorites, _ := request(http.MethodGet, "/api/v1/users/me/reactions?type=favorite", nil, bobToken); favorites["data"].(map[string]any)["total"].(float64) != 1 {
+		t.Fatalf("收藏列表的总数应为 1: %v", favorites)
+	}
 	request(http.MethodPut, fmt.Sprintf("/api/v1/books/%d", publicBookID), map[string]any{"is_public": false}, aliceToken)
 	status, favorites, _ := request(http.MethodGet, "/api/v1/users/me/reactions?type=favorite", nil, bobToken)
 	if status != http.StatusOK || favorites["data"].(map[string]any)["total"].(float64) != 0 {

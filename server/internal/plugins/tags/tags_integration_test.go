@@ -15,6 +15,7 @@ import (
 	"knowforge/server/internal/app"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 集成测试：启动完整应用（标签插件默认启用），经真实路由验证标签管理与「书籍-标签」扩展点。
@@ -40,7 +41,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	e := &testEnv{app: a, server: httptest.NewServer(a.Router()), client: &http.Client{Timeout: 10 * time.Second}}
 	t.Cleanup(e.server.Close)
-	status, installed := e.do(t, http.MethodPost, "/api/v1/setup/install", `{"database":{"type":"sqlite"},"site":{"name":"标签测试"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`)
+	status, installed := e.do(t, http.MethodPost, "/api/v1/setup/install", `{"database":`+testdb.InstallJSON(t)+`,"site":{"name":"标签测试"},"admin":{"username":"admin","email":"a@b.c","password":"secret123"}}`)
 	if status != http.StatusOK {
 		t.Fatalf("安装失败: %d %v", status, installed)
 	}

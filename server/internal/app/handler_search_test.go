@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 // 搜索接口集成测试：匿名可搜公开内容、空结果必须是数组（防 nil 切片序列化 null）、章节结果带 doc_slug/book_slug
@@ -49,15 +50,16 @@ func TestGlobalSearch(t *testing.T) {
 		return resp.StatusCode, payload
 	}
 
-	// 安装（sqlite）并取得管理员令牌
+	// 安装并取得管理员令牌
 	_, install := request(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "搜索测试站"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	}, "")
 	adminToken := install["data"].(map[string]any)["token"].(string)
-	if a.search != searchBackendSQLite {
-		t.Fatalf("SQLite 测试应启用 FTS5，实际为 %q", a.search)
+	want := map[string]searchBackend{"sqlite": searchBackendSQLite, "mysql": searchBackendMySQL, "postgres": searchBackendPostgres}[testdb.Kind()]
+	if a.search != want {
+		t.Fatalf("%s 应启用 %q 全文索引，实际为 %q", testdb.Kind(), want, a.search)
 	}
 
 	// 公开书籍 + 命中内容的章节

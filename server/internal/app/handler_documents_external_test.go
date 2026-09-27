@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
+	"knowforge/server/internal/testdb"
 )
 
 func uintStr(v uint) string { return strconv.FormatUint(uint64(v), 10) }
@@ -51,7 +52,7 @@ func TestDocumentExternalURLRoundTrip(t *testing.T) {
 	}
 
 	_, installed := req(http.MethodPost, "/api/v1/setup/install", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "外链章节测试站"},
 		"admin":    map[string]any{"username": "alice", "email": "alice@test.local", "password": "secret123"},
 	}, "")

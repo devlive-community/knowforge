@@ -12,6 +12,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/testdb"
 )
 
 // 系统邮件（激活邮箱、找回密码）多语言：新用户按触发请求的界面语言；已设偏好语言的用户按偏好（优先于请求语言）；默认中文。
@@ -59,7 +60,7 @@ func TestSystemEmailsFollowRecipientLanguage(t *testing.T) {
 	}
 
 	post("/api/v1/setup/install", "", map[string]any{
-		"database": map[string]any{"type": "sqlite"},
+		"database": testdb.InstallMap(t),
 		"site":     map[string]any{"name": "KF"},
 		"admin":    map[string]any{"username": "admin", "email": "admin@test.local", "password": "secret123"},
 	})
