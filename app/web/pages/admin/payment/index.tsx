@@ -126,7 +126,7 @@ function OrdersPanel() {
                     <div>{formatDate(o.created_at)}</div>
                     {o.paid_at && <div className="text-emerald-600">{t('admin.payment.paidAt', { date: formatDate(o.paid_at) })}</div>}
                   </td>
-                  <td className="px-4 py-3 text-right"><span className="flex justify-end gap-2">
+                  <td className="whitespace-nowrap px-4 py-3 text-right"><span className="flex justify-end gap-2">
                     {item.refundable_cents > 0 && <Button size="sm" variant="outline" onClick={() => setRefunding(item)}>{t('admin.payment.refund.action')}</Button>}
                     {o.channel === 'offline' && o.status !== 'paid' && o.status !== 'refunded' && <Button size="sm" loading={busy === `${o.order_no}:confirm`} onClick={() => run(o, 'confirm')}>{t('admin.payment.op.confirm')}</Button>}
                     {o.status === 'paid' && !o.fulfilled_at && <Button size="sm" variant="outline" loading={busy === `${o.order_no}:fulfill`} onClick={() => run(o, 'fulfill')}>{t('admin.payment.op.fulfill')}</Button>}
