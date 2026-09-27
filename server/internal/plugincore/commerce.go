@@ -1,6 +1,7 @@
 package plugincore
 
 import (
+	"context"
 	"sort"
 
 	"knowforge/server/internal/models"
@@ -129,4 +130,33 @@ func DiscountProviderByKey(key string) (DiscountProvider, bool) {
 		}
 	}
 	return DiscountProvider{}, false
+}
+
+// —— 周期扣款：提供结算的插件（如支付插件在渠道开通签约/订阅后）为已签约的用户自动发起扣款。——
+//
+// 商品提供者（如会员的自动续费）在续费时询问 RecurringChargerFor：有可用的扣款能力则调用 Charge，
+// 扣款成功后与普通订单一样经 ProductProvider.Fulfill 履约；没有时由商品提供者自行降级（如提醒用户一键续费）。
+
+// RecurringCharger 周期扣款能力。
+type RecurringCharger struct {
+	Key string
+	// Ready 该用户是否已签约、可按 currency 自动扣款。
+	Ready func(core Core, userID uint, currency string) bool
+	// Charge 按商品（kind + sku）为用户发起一次自动扣款，返回订单号；扣款成功后须经 ProductProvider.Fulfill 履约（按订单号幂等）。
+	Charge func(ctx context.Context, core Core, userID uint, kind, sku string) (string, error)
+}
+
+var recurringChargers []RecurringCharger
+
+// RegisterRecurringCharger 登记周期扣款能力。
+func RegisterRecurringCharger(c RecurringCharger) { recurringChargers = append(recurringChargers, c) }
+
+// RecurringChargerFor 可为该用户按 currency 自动扣款的能力（第一个就绪的）。
+func RecurringChargerFor(core Core, userID uint, currency string) (RecurringCharger, bool) {
+	for _, c := range recurringChargers {
+		if c.Ready != nil && c.Ready(core, userID, currency) {
+			return c, true
+		}
+	}
+	return RecurringCharger{}, false
 }

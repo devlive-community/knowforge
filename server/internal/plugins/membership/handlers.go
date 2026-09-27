@@ -30,6 +30,8 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	// 本人
 	api.GET("/users/me/membership", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyMembership)
 	api.GET("/users/me/membership/gifts", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyGifts)
+	api.GET("/users/me/membership/renewal", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyRenewal)
+	api.PUT("/users/me/membership/renewal", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.UpdateRenewal)
 	api.GET("/users/me/membership/referral", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyReferral)
 	api.POST("/membership/redeem", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.Redeem)
 	api.POST("/membership/plans/:id/trial", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.StartTrial)
@@ -483,9 +485,16 @@ func (b *behavior) AdminListMembers(c *gin.Context) {
 		ids = append(ids, r.UserID)
 	}
 	users, plans := b.userBriefs(ids), b.planBriefs()
+	var renewing []uint
+	b.core.Gorm().Model(&Renewal{}).Where("user_id IN ? AND enabled = ?", ids, true).Pluck("user_id", &renewing)
+	autoRenew := map[uint]bool{}
+	for _, id := range renewing {
+		autoRenew[id] = true
+	}
 	items := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
-		items = append(items, gin.H{"user": users[r.UserID], "plan": plans[r.PlanID], "started_at": r.StartedAt, "expires_at": r.ExpiresAt, "active": r.ExpiresAt.After(now), "trial": r.Trial})
+		items = append(items, gin.H{"user": users[r.UserID], "plan": plans[r.PlanID], "started_at": r.StartedAt, "expires_at": r.ExpiresAt,
+			"active": r.ExpiresAt.After(now), "trial": r.Trial, "auto_renew": autoRenew[r.UserID]})
 	}
 	b.core.OK(c, plugincore.PageResult{Items: items, Total: total, Page: page, PageSize: pageSize})
 }

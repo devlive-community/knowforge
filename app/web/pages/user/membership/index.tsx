@@ -6,6 +6,7 @@ import ResourceIcon from '@/components/ResourceIcon'
 import MyEntitlementsCard from '@/components/MyEntitlementsCard'
 import GiftsCard from '@/components/membership/GiftsCard'
 import ReferralCard from '@/components/membership/ReferralCard'
+import RenewalCard from '@/components/membership/RenewalCard'
 import Seo from '@/components/Seo'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
@@ -153,6 +154,8 @@ function MyMembershipInner() {
               )}
             </div>
           </Card>
+
+          {m?.active && !m.trial && m.plan && <RenewalCard plan={plans.find((p) => p.id === m.plan!.id) || m.plan} currency={mine.currency} />}
 
           <RedeemCard onRedeemed={loadMine} />
 

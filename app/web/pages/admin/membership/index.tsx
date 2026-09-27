@@ -42,6 +42,7 @@ interface MemberItem {
   expires_at: string
   active: boolean
   trial: boolean
+  auto_renew: boolean
 }
 interface RecordItem { record: MembershipRecord; user?: UserLite; operator?: UserLite }
 
@@ -316,7 +317,7 @@ function MembersPanel({ plans, onChanged }: { plans: PlanItem[]; onChanged: () =
                   <td className="px-4 py-3 text-slate-700">{m.plan?.name || '—'}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(m.started_at)}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(m.expires_at)}</td>
-                  <td className="px-4 py-3"><span className="flex flex-wrap gap-1.5"><Badge tone={m.active ? 'emerald' : 'slate'}>{m.active ? t('admin.membership.member.active') : t('admin.membership.member.expired')}</Badge>{m.trial && <Badge tone="sky">{t('membership.trial.badge')}</Badge>}</span></td>
+                  <td className="px-4 py-3"><span className="flex flex-wrap gap-1.5"><Badge tone={m.active ? 'emerald' : 'slate'}>{m.active ? t('admin.membership.member.active') : t('admin.membership.member.expired')}</Badge>{m.trial && <Badge tone="sky">{t('membership.trial.badge')}</Badge>}{m.auto_renew && <Badge tone="primary">{t('membership.renewal.title')}</Badge>}</span></td>
                   <td className="px-4 py-3 text-right"><span className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => setAdjusting(m)}>{t('admin.membership.member.adjust')}</Button>
                     <Button variant="ghost" size="sm" className="text-rose-600" loading={revoking === m.user.id} onClick={() => revoke(m)}>{t('admin.membership.member.revoke')}</Button>

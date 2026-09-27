@@ -166,6 +166,7 @@ func sweep(core plugincore.Core, _ *jobqueue.Queue) {
 			core.NotifyI18n(m.UserID, notificationType, k, map[string]string{"plan": plan.Name, "date": formatDate(m.ExpiresAt)}, map[string]any{"link": notificationLink})
 		}
 	}
+	b.sweepRenewals(now) // 续费计划先处理（已处理的周期不再发普通到期提醒）
 	if days := b.reminderDays(); days > 0 {
 		notify(db.Where("reminded_at IS NULL AND expires_at > ? AND expires_at <= ?", now, addDays(now, days)), "notify.membership.expiring", "notify.membership.trialExpiring", "reminded_at")
 	}
