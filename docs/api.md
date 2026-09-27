@@ -446,6 +446,31 @@ Authorization: Bearer kf_pat_…
 
 - 关注者在被关注书籍**发布新章节**（草稿→已发布）时收到 `book_update` 站内通知（作者本人除外），受用户「关注更新」通知偏好（`book_update`）开关控制。
 
+## Webhook（「Webhook」插件，默认关闭）
+
+用户订阅自己书籍上的事件，事件发生时经任务队列向接收地址投递 `POST` JSON：
+
+```json
+{ "id": 123, "event": "chapter.published", "created_at": "2026-09-27T12:00:00Z", "data": { "book": {…}, "chapter": {…} } }
+```
+
+- 事件：`chapter.published`（`data.book`、`data.chapter`）、`comment.received`（另含 `data.comment{id,content,author,created_at}`，正文截取 500 字）、`reaction.received`（`data.book`、`data.reaction{id,type: like\|favorite,user,created_at}`）、`ping`（测试）；`book`/`chapter` 含 `id,slug,title,url`
+- 请求头：`X-KnowForge-Event`、`X-KnowForge-Delivery`（投递 ID，同 `id`）、`X-KnowForge-Timestamp`（Unix 秒）、`X-KnowForge-Signature: sha256=<hex>`，其中签名为 `HMAC-SHA256(密钥, 时间戳 + "." + 请求体)`；接收端应校验签名并拒绝过旧的时间戳
+- 返回 2xx 视为成功；否则按退避（5 秒起翻倍）重试，共 5 次；单次请求超时 10 秒，不跟随重定向。连续 10 次投递失败的订阅自动停用并通知用户
+- 默认拒绝投递到内网、本机、链路本地等地址（连接时校验解析结果，防止 SSRF）；内网部署可设置环境变量 `KNOWFORGE_WEBHOOK_ALLOW_PRIVATE=true`
+- 投递记录保留 30 天；每人的订阅数为权益 `webhooks.max`（基础 5 个）
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/webhooks` | 我的订阅 `items:[{id,url,events,book_id,active,failures,disabled_reason,last_delivery_at,last_status,created_at}]` + 可订阅的 `events` + `limit` | `webhooks:use` |
+| POST | `/webhooks` | `{url, events[], book_id?(0 为我的全部书籍)}` 创建，返回 `{item, secret}`（签名密钥只返回这一次）；超出权益上限 403 | `webhooks:use` |
+| PUT | `/webhooks/:id` | `{url?, events?, book_id?, active?}`；重新启用时清空连续失败计数 | `webhooks:use` |
+| DELETE | `/webhooks/:id` | 删除订阅与其投递记录 | `webhooks:use` |
+| POST | `/webhooks/:id/test` | 投递一条 `ping` 事件（停用时也可测试） | `webhooks:use` |
+| POST | `/webhooks/:id/secret` | 重置签名密钥，返回新 `secret`（只返回这一次） | `webhooks:use` |
+| GET | `/webhooks/:id/deliveries?page=&page_size=` | 投递记录 `items:[{id,event,payload,status: pending\|success\|failed,attempts,response_status,response_body(前 1KB),error,duration_ms,created_at,delivered_at}]` | `webhooks:use` |
+| POST | `/webhooks/deliveries/:id/redeliver` | 以相同内容重新投递（新建一次投递） | `webhooks:use` |
+
 ## 用户成长等级（「成长等级」插件，默认关闭）
 
 > `growth` 为 feature 插件（默认**关闭**，开关键 `growth_enabled`）。启用后建表、注册 `growth:*`/`experience:adjust` 权限并种子默认等级；禁用后本节端点与页面/入口一并停用（数据保留）。经验只由服务端权威事件产生（成就解锁奖励 `reward_xp`、首次读章节、管理员调整），流水不可变、`dedupe_key` 唯一保证幂等，等级由经验按 `min_xp` 阈值解析，升级写历史 + `growth` 通知。

@@ -19,4 +19,5 @@ import (
 	_ "knowforge/server/internal/plugins/qa"
 	_ "knowforge/server/internal/plugins/tags"
 	_ "knowforge/server/internal/plugins/watermark"
+	_ "knowforge/server/internal/plugins/webhooks"
 )

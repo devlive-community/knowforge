@@ -37,6 +37,7 @@ const (
 	KeyQA               = "qa"
 	KeyAIWriter         = "ai-writer"
 	KeyChapterGuide     = "chapter-guide"
+	KeyWebhooks         = "webhooks"
 )
 
 // Meta 一个插件的声明式元数据（不含依赖 app 的行为）。

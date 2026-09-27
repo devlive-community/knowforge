@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ReactNode, useRef, useState } from 'react'
 import UserAvatar from '@/components/UserAvatar'
 import { getToken } from '@/lib/api'
+import { useApp } from '@/lib/auth'
 import type { User } from '@/lib/types'
 import { ShieldIcon, UserCircleIcon, DownloadIcon, LinkIcon, PaletteIcon, TrashIcon } from '@/components/icons'
 import { useFeedback } from '@/components/ui'
@@ -9,7 +10,7 @@ import { useTranslation } from '@/lib/i18n'
 
 interface AccountSettingsLayoutProps {
   user: User
-  active: 'profile' | 'security' | 'invite' | 'notify' | 'export' | 'oauth' | 'theme' | 'tokens' | 'danger'
+  active: 'profile' | 'security' | 'invite' | 'notify' | 'export' | 'oauth' | 'theme' | 'tokens' | 'webhooks' | 'danger'
   /** 头像上传后回调（个人资料页用） */
   onAvatarChange?: (url: string) => void
   children: ReactNode
@@ -19,6 +20,7 @@ interface AccountSettingsLayoutProps {
 export default function AccountSettingsLayout({ user, active, onAvatarChange, children }: AccountSettingsLayoutProps) {
   const { showToast } = useFeedback()
   const { t } = useTranslation()
+  const { site } = useApp()
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -52,6 +54,10 @@ export default function AccountSettingsLayout({ user, active, onAvatarChange, ch
     { key: 'theme' as const, label: t('account.nav.theme'), icon: <PaletteIcon className="h-4 w-4" />, href: '/user/theme' },
     { key: 'export' as const, label: t('account.nav.export'), icon: <DownloadIcon className="h-4 w-4" />, href: '/user/export' },
     { key: 'tokens' as const, label: t('account.nav.tokens'), icon: <i className="fa-solid fa-key w-4 text-center text-[13px]" aria-hidden="true" />, href: '/user/tokens' },
+    // Webhook 插件启用时显示
+    ...((site.feature_plugins || []).includes('webhooks')
+      ? [{ key: 'webhooks' as const, label: t('account.nav.webhooks'), icon: <i className="fa-solid fa-satellite-dish w-4 text-center text-[13px]" aria-hidden="true" />, href: '/user/webhooks' }]
+      : []),
     { key: 'danger' as const, label: t('account.nav.danger'), icon: <TrashIcon className="h-4 w-4" />, href: '/user/danger' },
   ]
 
