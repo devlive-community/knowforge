@@ -477,6 +477,10 @@ Authorization: Bearer <token>
 | GET/PUT | `/admin/membership/settings` | `{currency(ISO 4217), reminder_days(0–30)}`，PUT 可只传部分字段 | `membership:manage` |
 | POST | `/membership/redeem` | `{code}` 兑换码开通/续期会员（不区分大小写，可省略 `-`）；同一批次每人限用一次，失败过多（每小时 10 次）返回 429；返回 `{action: grant\|extend\|switch, plan{id,name}, expires_at}`，流水来源 `redeem` | `membership:read` |
 | GET | `/users/me/membership/gifts?page=&page_size=` | 我购买的礼品卡 `items:[{id,code(作废时为空),plan_name,days,order_no,status:unused\|redeemed\|void,redeemed_at?,redeemed_by_me,created_at}]`。礼品卡经支付插件购买（商品 `kind=membership_gift`，`sku`=价格 ID），支付成功后生成属于购买者的一次性兑换码，被他人兑换时通知购买者；退款并撤销时未兑换的按比例缩短天数（退完作废），已兑换的从兑换者的会员中按比例扣回 | `membership:read` |
+| GET | `/admin/membership/coupons?page=&page_size=` | 优惠券 `items:[{id,code,name,type:percent\|amount,percent_off,amount_off_cents,min_amount_cents,currency,plan_ids,include_gifts,new_members_only,max_uses,per_user_limit,starts_at?,expires_at?,status,used,reserved}]` + `currency` | `membership:manage` |
+| POST | `/admin/membership/coupons` | `{name, code?(4–40 位字母数字下划线，缺省随机), type, percent_off?(1–99), amount_off_cents?, min_amount_cents?(满减须大于优惠金额), plan_ids?(空为全部), include_gifts?, new_members_only?, max_uses?(0 不限), per_user_limit?(默认 1，0 不限), starts_at?, expires_at?}` 新建优惠码；经 plugincore 优惠扩展点供支付插件在会员（及可选的礼品卡）结算时使用 | `membership:manage` |
+| PUT | `/admin/membership/coupons/:id` | `{status?: active\|disabled, max_uses?}` 停用/启用、调整总次数 | `membership:manage` |
+| GET | `/admin/membership/coupons/:id/uses?page=&page_size=` | 使用记录 `items:[{use{order_no,discount_cents,status:reserved\|used\|released,created_at},user}]` | `membership:manage` |
 | GET | `/admin/membership/redeem/batches?page=&page_size=` | 兑换码批次 `items:[{id,name,plan_id,plan_name,days,kind:cards\|promo,max_uses,expires_at?,status,codes,redeemed,promo_code?}]`（不含礼品卡） | `membership:manage` |
 | POST | `/admin/membership/redeem/batches` | `{name, plan_id, days(1–3650), kind, count?(cards，1–10000), code?(promo，4–40 位字母数字下划线，缺省随机), max_uses?(promo，1–1000000), expires_at?}` 生成一批卡密或一个多人可用的推广码，返回批次 | `membership:manage` |
 | PUT | `/admin/membership/redeem/batches/:id` | `{status: active\|disabled}` 停用/启用整批 | `membership:manage` |
@@ -497,8 +501,8 @@ Authorization: Bearer <token>
 - 通知：用户（退款成功、失败、驳回）、管理员（新的退款申请）、作者（收益扣回）。
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/payment/products/:kind/:sku` | 结算页：`product{kind,sku,title,description,duration_days,amount_cents,currency,return_link}` + 该货币可用的 `channels` | `payment:order` |
-| POST | `/payment/orders` | `{kind, sku, channel: offline\|alipay\|wechat\|stripe, mobile?}` 下单并发起支付，返回 `{order, action}`；`action.type`：`redirect`（`url` 跳转收银台）/ `qrcode`（`qr` 二维码 data URI）/ `offline`（`instructions`、`qr_image`）。同时待支付订单最多 10 个 | `payment:order` |
+| GET | `/payment/products/:kind/:sku` | 结算页：`product{kind,sku,title,description,duration_days,amount_cents,currency,return_link}` + 该货币可用的 `channels` + `coupon_supported`（是否可输入优惠码）；`?coupon=` 试算优惠码，返回 `discount{code,label,amount_off_cents}`（不占用次数，不可用时 400） | `payment:order` |
+| POST | `/payment/orders` | `{kind, sku, channel: offline\|alipay\|wechat\|stripe, coupon?, mobile?}` 下单并发起支付（使用优惠码时占用一次，订单记 `original_cents`、`discount_cents`、`coupon_code`，`amount_cents` 为实付；支付后确认使用，取消/过期时归还），返回 `{order, action}`；`action.type`：`redirect`（`url` 跳转收银台）/ `qrcode`（`qr` 二维码 data URI）/ `offline`（`instructions`、`qr_image`）。同时待支付订单最多 10 个 | `payment:order` |
 | GET | `/payment/orders/:no` | 订单详情（本人或管理员），含退款记录 `refunds[]`（退款中的会先向渠道查询）、`refundable_cents`、`can_request_refund` 或 `refund_blocked_reason`；待支付的在线订单会先向渠道主动查询一次（限频 5 秒，回调不可达时的兜底），待支付时附带继续支付的 `action` | `payment:order` |
 | POST | `/payment/orders/:no/cancel` | 取消待支付订单 | `payment:order` |
 | POST | `/payment/orders/:no/proof` | `{note}` 线下转账：提交付款说明 | `payment:order` |

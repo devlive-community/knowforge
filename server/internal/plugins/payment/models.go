@@ -21,12 +21,17 @@ type Order struct {
 	SKU          string `gorm:"size:64" json:"sku"`
 	Title        string `gorm:"size:200" json:"title"`
 	DurationDays int    `json:"duration_days"`
-	AmountCents  int64  `gorm:"not null" json:"amount_cents"`
+	AmountCents  int64  `gorm:"not null" json:"amount_cents"` // 实付金额（优惠后）
 	Currency     string `gorm:"size:3;not null" json:"currency"`
-	ReturnLink   string `gorm:"size:255" json:"return_link"`
-	Payload      string `gorm:"type:text" json:"-"` // 履约快照（JSON）
-	Channel      string `gorm:"size:20;index" json:"channel"`
-	Status       string `gorm:"size:20;index;not null" json:"status"`
+	// 优惠：OriginalCents 商品原价，DiscountCents 优惠金额，CouponCode 使用的优惠码，DiscountKey 优惠提供者（支付/取消时回调）
+	OriginalCents int64  `gorm:"not null;default:0" json:"original_cents"`
+	DiscountCents int64  `gorm:"not null;default:0" json:"discount_cents"`
+	CouponCode    string `gorm:"size:64" json:"coupon_code"`
+	DiscountKey   string `gorm:"size:40" json:"-"`
+	ReturnLink    string `gorm:"size:255" json:"return_link"`
+	Payload       string `gorm:"type:text" json:"-"` // 履约快照（JSON）
+	Channel       string `gorm:"size:20;index" json:"channel"`
+	Status        string `gorm:"size:20;index;not null" json:"status"`
 	// ChannelRef 渠道侧的会话/二维码信息（Stripe Checkout Session ID、微信 code_url），ChannelTradeNo 渠道交易号
 	ChannelRef     string     `gorm:"size:512" json:"-"`
 	ChannelTradeNo string     `gorm:"size:128" json:"channel_trade_no"`

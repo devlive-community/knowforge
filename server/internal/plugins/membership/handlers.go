@@ -50,6 +50,10 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	reg(http.MethodPut, "/admin/membership/redeem/batches/:id", b.AdminUpdateBatch)
 	reg(http.MethodGet, "/admin/membership/redeem/batches/:id/codes", b.AdminBatchCodes)
 	reg(http.MethodPut, "/admin/membership/redeem/codes/:id", b.AdminUpdateCode)
+	reg(http.MethodGet, "/admin/membership/coupons", b.AdminListCoupons)
+	reg(http.MethodPost, "/admin/membership/coupons", b.AdminCreateCoupon)
+	reg(http.MethodPut, "/admin/membership/coupons/:id", b.AdminUpdateCoupon)
+	reg(http.MethodGet, "/admin/membership/coupons/:id/uses", b.AdminCouponUses)
 	reg(http.MethodGet, "/admin/membership/settings", b.AdminGetSettings)
 	reg(http.MethodPut, "/admin/membership/settings", b.AdminUpdateSettings)
 }

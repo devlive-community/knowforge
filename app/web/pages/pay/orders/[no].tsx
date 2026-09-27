@@ -122,6 +122,7 @@ function PaymentOrderInner() {
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-2xl font-bold tabular-nums text-slate-900">{formatPrice(o.amount_cents, o.currency, locale)}</div>
+                    {o.discount_cents > 0 && <div className="mt-1 text-xs tabular-nums text-emerald-600">{t('payment.coupon.orderDiscount', { code: o.coupon_code, amount: formatPrice(o.discount_cents, o.currency, locale) })}</div>}
                     {o.refunded_cents > 0 && <div className="mt-1 text-xs tabular-nums text-rose-600">{t('payment.refund.refundedAmount', { amount: formatPrice(o.refunded_cents, o.currency, locale) })}</div>}
                   </div>
                 </div>

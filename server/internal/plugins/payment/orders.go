@@ -30,7 +30,7 @@ func newOrderNo() string {
 }
 
 // createOrder 解析商品、快照下单并向渠道发起支付。
-func (b *behavior) createOrder(ctx context.Context, u *models.User, kind, sku, channelKey string, mobile bool, baseURL string) (*Order, action, error) {
+func (b *behavior) createOrder(ctx context.Context, u *models.User, kind, sku, channelKey, coupon string, mobile bool, baseURL string) (*Order, action, error) {
 	provider, found := plugincore.ProductProviderFor(kind)
 	if !found {
 		return nil, action{}, errors.New("商品不存在")
@@ -60,15 +60,33 @@ func (b *behavior) createOrder(ctx context.Context, u *models.User, kind, sku, c
 	}
 	o := &Order{
 		OrderNo: newOrderNo(), UserID: u.ID, Kind: product.Kind, SKU: product.SKU, Title: product.Title, DurationDays: product.DurationDays,
-		AmountCents: product.AmountCents, Currency: strings.ToUpper(product.Currency), ReturnLink: product.ReturnLink, Payload: string(payload),
-		Channel: channelKey, Status: StatusPending, ExpiresAt: time.Now().Add(ttl),
+		AmountCents: product.AmountCents, OriginalCents: product.AmountCents, Currency: strings.ToUpper(product.Currency), ReturnLink: product.ReturnLink,
+		Payload: string(payload), Channel: channelKey, Status: StatusPending, ExpiresAt: time.Now().Add(ttl),
+	}
+	if coupon = strings.TrimSpace(coupon); coupon != "" {
+		dp, found := plugincore.DiscountProviderFor(b.core, product.Kind)
+		if !found {
+			return nil, action{}, errors.New("该商品不能使用优惠码")
+		}
+		d, err := dp.Reserve(b.core, u, product, coupon, o.OrderNo)
+		if err != nil {
+			return nil, action{}, err
+		}
+		o.DiscountKey = dp.Key
+		if d.AmountOffCents <= 0 || d.AmountOffCents >= product.AmountCents {
+			b.releaseDiscount(o)
+			return nil, action{}, errors.New("优惠金额无效")
+		}
+		o.CouponCode, o.DiscountCents, o.AmountCents = d.Code, d.AmountOffCents, product.AmountCents-d.AmountOffCents
 	}
 	if err := db.Create(o).Error; err != nil {
+		b.releaseDiscount(o)
 		return nil, action{}, err
 	}
 	ref, act, err := ch.Create(ctx, createInput{Order: o, Cfg: cfg, BaseURL: baseURL, Mobile: mobile})
 	if err != nil {
 		db.Model(o).Updates(map[string]any{"status": StatusCancelled, "fulfill_error": truncateRunes("发起支付失败: "+err.Error(), 500)})
+		b.releaseDiscount(o)
 		return nil, action{}, err
 	}
 	if ref != "" {
@@ -104,6 +122,9 @@ func (b *behavior) markPaid(res *paidResult, channelKey string, confirmedBy uint
 		return false, nil
 	}
 	o.Status, o.PaidAt = StatusPaid, &now
+	if dp, found := plugincore.DiscountProviderByKey(o.DiscountKey); found && o.DiscountKey != "" {
+		dp.Confirm(b.core, o.OrderNo)
+	}
 	b.fulfill(&o)
 	link := o.ReturnLink
 	if link == "" {
@@ -111,6 +132,16 @@ func (b *behavior) markPaid(res *paidResult, channelKey string, confirmedBy uint
 	}
 	b.core.NotifyI18n(o.UserID, notificationType, "notify.payment.paid", map[string]string{"title": o.Title}, map[string]any{"link": link, "order_no": o.OrderNo})
 	return true, nil
+}
+
+// releaseDiscount 订单未支付即结束：归还占用的优惠码次数（提供者按订单号幂等）。
+func (b *behavior) releaseDiscount(o *Order) {
+	if o.DiscountKey == "" {
+		return
+	}
+	if dp, found := plugincore.DiscountProviderByKey(o.DiscountKey); found {
+		dp.Release(b.core, o.OrderNo)
+	}
 }
 
 // fulfill 回调商品提供者履约（提供者按订单号幂等）；失败记录错误，由巡检或管理员重试。
@@ -171,7 +202,13 @@ func sweep(core plugincore.Core, _ *jobqueue.Queue) {
 	}
 	b := &behavior{core: core}
 	db := core.Gorm()
-	db.Model(&Order{}).Where("status = ? AND expires_at < ?", StatusPending, time.Now()).Update("status", StatusExpired)
+	var expiring []Order
+	db.Where("status = ? AND expires_at < ?", StatusPending, time.Now()).Find(&expiring)
+	for i := range expiring {
+		if db.Model(&Order{}).Where("id = ? AND status = ?", expiring[i].ID, StatusPending).Update("status", StatusExpired).RowsAffected == 1 {
+			b.releaseDiscount(&expiring[i])
+		}
+	}
 	var failed []Order
 	db.Where("status = ? AND fulfilled_at IS NULL", StatusPaid).Limit(50).Find(&failed)
 	for i := range failed {

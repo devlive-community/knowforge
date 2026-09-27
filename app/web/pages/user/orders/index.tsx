@@ -46,6 +46,7 @@ function MyOrdersInner() {
                     </span>
                   </span>
                   <span className="flex items-center gap-3">
+                    {o.discount_cents > 0 && <span className="text-xs tabular-nums text-slate-400 line-through">{formatPrice(o.original_cents, o.currency, locale)}</span>}
                     <span className="font-bold tabular-nums text-slate-900">{formatPrice(o.amount_cents, o.currency, locale)}</span>
                     <Badge tone={STATUS_TONE[o.status]}>{t(`payment.status.${o.status}`)}</Badge>
                     {o.status === 'paid' && o.refunded_cents > 0 && <Badge tone="slate">{t('payment.refund.partial')}</Badge>}

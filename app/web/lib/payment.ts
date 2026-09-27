@@ -7,7 +7,10 @@ export interface PaymentOrder {
   sku: string
   title: string
   duration_days: number
-  amount_cents: number
+  amount_cents: number // 实付金额（优惠后）
+  original_cents: number // 商品原价
+  discount_cents: number // 优惠金额
+  coupon_code: string
   currency: string
   return_link: string
   channel: PaymentChannel
@@ -65,6 +68,13 @@ export interface PaymentAction {
   qr?: string
   instructions?: string
   qr_image?: string
+}
+
+/** 结算时优惠码的试算结果（plugincore.Discount） */
+export interface PaymentDiscount {
+  code: string
+  label: string
+  amount_off_cents: number
 }
 
 /** 可售商品（plugincore.Product） */

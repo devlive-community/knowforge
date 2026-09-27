@@ -87,12 +87,28 @@ func (b *behavior) GetProduct(c *gin.Context) {
 		b.core.Fail(c, http.StatusNotFound, "商品不存在")
 		return
 	}
-	product, err := provider.Resolve(b.core, b.core.CurrentUser(c), c.Param("sku"))
+	u := b.core.CurrentUser(c)
+	product, err := provider.Resolve(b.core, u, c.Param("sku"))
 	if err != nil {
 		b.core.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	b.core.OK(c, gin.H{"product": product, "channels": availableChannels(loadConfig(b.core), product.Currency)})
+	dp, couponSupported := plugincore.DiscountProviderFor(b.core, product.Kind)
+	resp := gin.H{"product": product, "channels": availableChannels(loadConfig(b.core), product.Currency), "coupon_supported": couponSupported}
+	// ?coupon= 试算优惠（不占用次数；下单时才占用）
+	if code := strings.TrimSpace(c.Query("coupon")); code != "" {
+		if !couponSupported {
+			b.core.Fail(c, http.StatusBadRequest, "该商品不能使用优惠码")
+			return
+		}
+		d, err := dp.Quote(b.core, u, product, code)
+		if err != nil {
+			b.core.Fail(c, http.StatusBadRequest, err.Error())
+			return
+		}
+		resp["discount"] = d
+	}
+	b.core.OK(c, resp)
 }
 
 // CreateOrder POST /payment/orders {kind, sku, channel, mobile}
@@ -101,13 +117,14 @@ func (b *behavior) CreateOrder(c *gin.Context) {
 		Kind    string `json:"kind"`
 		SKU     string `json:"sku"`
 		Channel string `json:"channel"`
+		Coupon  string `json:"coupon"`
 		Mobile  bool   `json:"mobile"`
 	}
 	if c.ShouldBindJSON(&req) != nil || req.Kind == "" || req.SKU == "" || req.Channel == "" {
 		b.core.Fail(c, http.StatusBadRequest, "参数错误")
 		return
 	}
-	o, act, err := b.createOrder(c.Request.Context(), b.core.CurrentUser(c), req.Kind, req.SKU, req.Channel, req.Mobile, b.baseURL(c))
+	o, act, err := b.createOrder(c.Request.Context(), b.core.CurrentUser(c), req.Kind, req.SKU, req.Channel, req.Coupon, req.Mobile, b.baseURL(c))
 	if err != nil {
 		b.core.Fail(c, http.StatusBadRequest, err.Error())
 		return
@@ -165,6 +182,7 @@ func (b *behavior) CancelOrder(c *gin.Context) {
 		b.core.Fail(c, http.StatusConflict, "订单当前状态不能取消")
 		return
 	}
+	b.releaseDiscount(o)
 	b.core.OK(c, gin.H{"message": "已取消"})
 }
 
@@ -357,6 +375,7 @@ func (b *behavior) AdminCancel(c *gin.Context) {
 		b.core.Fail(c, http.StatusConflict, "订单当前状态不能取消")
 		return
 	}
+	b.releaseDiscount(o)
 	b.core.RecordAudit(c, "payment.order_cancelled", "payment_order", o.OrderNo, o.Title, map[string]any{"changed_fields": []string{"status"}})
 	b.respondOrder(c, o.ID)
 }

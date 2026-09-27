@@ -77,3 +77,56 @@ func ProductKinds() []string {
 	sort.Strings(out)
 	return out
 }
+
+// —— 优惠：结算时由优惠提供者（如会员插件的优惠券）为商品计算折扣。——
+//
+// 支付插件只经此扩展点询问：结算页输入优惠码时调用 Quote 试算；下单时调用 Reserve 占用一次使用次数（按订单号），
+// 订单支付成功后调用 Confirm 确认使用，订单取消/过期/发起支付失败时调用 Release 归还（均须按订单号幂等）。
+// 优惠后金额须大于 0（提供者保证折扣小于商品金额）。
+
+// Discount 一次优惠的结果。
+type Discount struct {
+	Code           string `json:"code"`             // 规范化后的优惠码
+	Label          string `json:"label"`            // 展示名称（如「新用户 8 折」）
+	AmountOffCents int64  `json:"amount_off_cents"` // 优惠金额（小于商品金额）
+}
+
+// DiscountProvider 优惠提供者。
+type DiscountProvider struct {
+	Key string
+	// Applies 该类商品是否可能使用优惠（结算页据此决定是否显示优惠码输入框）。
+	Applies func(core Core, kind string) bool
+	// Quote 试算：返回 u 对 product 使用 code 的优惠；不可用时返回可展示的错误。
+	Quote func(core Core, u *models.User, product Product, code string) (Discount, error)
+	// Reserve 下单时占用一次使用次数（按 orderNo 幂等），返回的优惠以此为准。
+	Reserve func(core Core, u *models.User, product Product, code, orderNo string) (Discount, error)
+	// Confirm 订单支付成功：确认使用（此前已归还的也重新计为已使用，因为用户确实按优惠价付了款）。
+	Confirm func(core Core, orderNo string)
+	// Release 订单未支付即结束：归还占用的次数。
+	Release func(core Core, orderNo string)
+}
+
+var discountProviders []DiscountProvider
+
+// RegisterDiscountProvider 登记优惠提供者。
+func RegisterDiscountProvider(p DiscountProvider) { discountProviders = append(discountProviders, p) }
+
+// DiscountProviderFor 可用于该类商品的优惠提供者（第一个适用的）。
+func DiscountProviderFor(core Core, kind string) (DiscountProvider, bool) {
+	for _, p := range discountProviders {
+		if p.Applies != nil && p.Applies(core, kind) {
+			return p, true
+		}
+	}
+	return DiscountProvider{}, false
+}
+
+// DiscountProviderByKey 按键查优惠提供者（订单记录了使用的提供者，支付/取消时据此回调）。
+func DiscountProviderByKey(key string) (DiscountProvider, bool) {
+	for _, p := range discountProviders {
+		if p.Key == key {
+			return p, true
+		}
+	}
+	return DiscountProvider{}, false
+}

@@ -114,6 +114,7 @@ function OrdersPanel() {
                   <td className="px-4 py-3">{user && <span className="flex items-center gap-2"><UserAvatar user={user} /><span className="text-slate-700">{user.nickname || user.username}</span></span>}</td>
                   <td className="px-4 py-3">
                     <div className="font-medium tabular-nums text-slate-900">{formatPrice(o.amount_cents, o.currency, locale)}</div>
+                    {o.discount_cents > 0 && <div className="text-xs tabular-nums text-emerald-600">{t('payment.coupon.orderDiscount', { code: o.coupon_code, amount: formatPrice(o.discount_cents, o.currency, locale) })}</div>}
                     {o.refunded_cents > 0 && <div className="text-xs tabular-nums text-rose-600">{t('admin.payment.refundedAmount', { amount: formatPrice(o.refunded_cents, o.currency, locale) })}</div>}
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400"><i className={CHANNEL_ICONS[o.channel]} aria-hidden="true" />{t(`payment.channel.${o.channel}`)}</div>
                   </td>
