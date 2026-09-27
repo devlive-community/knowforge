@@ -19,7 +19,7 @@ import (
 )
 
 // Version 服务版本号（构建时可通过 -ldflags "-X ...Version=x.y.z" 覆盖）
-var Version = "2026.0.6"
+var Version = "2026.0.7"
 
 type setupSite struct {
 	Name        string `json:"name"`

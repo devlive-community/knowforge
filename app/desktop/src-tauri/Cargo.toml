@@ -1,6 +1,6 @@
 [package]
 name = "knowforge-desktop"
-version = "2026.0.6"
+version = "2026.0.7"
 description = "KnowForge 桌面客户端"
 edition = "2021"
 
