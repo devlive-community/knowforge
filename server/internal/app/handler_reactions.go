@@ -114,13 +114,13 @@ func (a *App) MyReactions(c *gin.Context) {
 			true, publiclyReadableBookStatuses, u.ID, u.ID,
 		)
 	}
-	q = q.Select("reactions.*").Order("reactions.created_at DESC")
-	if err := q.Limit(pageSize).Offset((page - 1) * pageSize).Find(&reactions).Error; err != nil {
+	// 先计数再取列：COUNT 不能带 reactions.* 选择列与排序（PostgreSQL 不支持 COUNT(reactions.*)）
+	var total int64
+	q.Session(&gorm.Session{}).Count(&total)
+	if err := q.Select("reactions.*").Order("reactions.created_at DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&reactions).Error; err != nil {
 		fail(c, http.StatusInternalServerError, "查询失败")
 		return
 	}
-	var total int64
-	q.Session(&gorm.Session{}).Limit(-1).Offset(-1).Count(&total)
 
 	// 批量取书籍
 	bookIDs := make([]uint, 0, len(reactions))

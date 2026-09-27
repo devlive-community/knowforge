@@ -155,7 +155,7 @@ const revokedReason = "revoked"
 // revokeForActivity 按删除活动收回对应经验（幂等：每条原流水只收回一次）。
 func (b *behavior) revokeForActivity(ev plugincore.ActivityEvent) {
 	rules, ok := xpRevocations[ev.Type]
-	if !ok || ev.SourceID == "" {
+	if !ok || ev.SourceID == "" || !b.core.PluginEnabled(plugins.KeyGrowth) {
 		return
 	}
 	keys := make([]string, 0, len(rules))

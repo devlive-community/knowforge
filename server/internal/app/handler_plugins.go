@@ -74,13 +74,13 @@ func (a *App) pluginEnabled(key string) bool {
 			return a.getSetting(info.EnabledKey) == "true"
 		}
 		var p models.Plugin
-		if err := a.DB.Where("`key` = ?", key).First(&p).Error; err != nil {
+		if err := a.DB.Where(&models.Plugin{Key: key}).First(&p).Error; err != nil {
 			return true // 内置特性插件默认启用
 		}
 		return p.Installed
 	}
 	var p models.Plugin
-	return a.DB.Where("`key` = ? AND installed = ?", key, true).First(&p).Error == nil
+	return a.DB.Where(&models.Plugin{Key: key, Installed: true}).First(&p).Error == nil
 }
 
 // RequireFeaturePlugin 特性插件启用守卫：插件被禁用时对应后端接口直接 404，确保「禁用即前后端全禁」。
@@ -101,7 +101,7 @@ func (a *App) setFeaturePluginEnabled(info *pluginInfo, enabled bool) error {
 		return a.setSetting(info.EnabledKey, strconv.FormatBool(enabled), info.Name+" 启用开关")
 	}
 	var p models.Plugin
-	if err := a.DB.Where("`key` = ?", info.Key).First(&p).Error; err != nil {
+	if err := a.DB.Where(&models.Plugin{Key: info.Key}).First(&p).Error; err != nil {
 		p = models.Plugin{Key: info.Key}
 	}
 	p.Installed = enabled
@@ -247,7 +247,7 @@ func chromeBinaryName() string {
 // installedChromePath 返回已安装插件记录的 chrome 可执行路径（未安装返回空）
 func (a *App) installedChromePath() string {
 	var p models.Plugin
-	if err := a.DB.Where("`key` = ? AND installed = ?", pluginPDFExport, true).First(&p).Error; err != nil {
+	if err := a.DB.Where(&models.Plugin{Key: pluginPDFExport, Installed: true}).First(&p).Error; err != nil {
 		return ""
 	}
 	path := a.localChromePath(&p)
@@ -338,7 +338,7 @@ var localChromeFetching atomic.Bool
 // syncLocalPluginFiles 多实例：插件在其他实例上安装后，本实例补齐本地文件（如 PDF 导出所需的 chrome），不改数据库记录。
 func (a *App) syncLocalPluginFiles() {
 	var p models.Plugin
-	if a.DB == nil || a.DB.Where("`key` = ? AND installed = ?", pluginPDFExport, true).First(&p).Error != nil || a.localChromePath(&p) != "" {
+	if a.DB == nil || a.DB.Where(&models.Plugin{Key: pluginPDFExport, Installed: true}).First(&p).Error != nil || a.localChromePath(&p) != "" {
 		return
 	}
 	if !localChromeFetching.CompareAndSwap(false, true) {
@@ -480,7 +480,7 @@ func (a *App) AdminInstallPlugin(c *gin.Context) {
 		return
 	}
 	var p models.Plugin
-	if err := a.DB.Where("`key` = ?", key).First(&p).Error; err != nil {
+	if err := a.DB.Where(&models.Plugin{Key: key}).First(&p).Error; err != nil {
 		p = models.Plugin{Key: key}
 	}
 	if s, _ := pluginMeta(&p)["status"].(string); s == "downloading" {
@@ -530,7 +530,7 @@ func (a *App) AdminUninstallPlugin(c *gin.Context) {
 	a.plugins.begin(key)
 	a.plugins.log(key, "info", "开始卸载：清理下载文件…")
 	_ = os.RemoveAll(pluginDir(key))
-	if err := a.DB.Where("`key` = ?", key).Delete(&models.Plugin{}).Error; err != nil {
+	if err := a.DB.Where(&models.Plugin{Key: key}).Delete(&models.Plugin{}).Error; err != nil {
 		a.plugins.log(key, "error", fmt.Sprintf("卸载失败：删除数据库记录出错：%v", err))
 		fail(c, http.StatusInternalServerError, fmt.Sprintf("卸载失败：删除数据库记录出错：%v", err))
 		return
