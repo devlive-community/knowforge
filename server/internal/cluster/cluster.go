@@ -38,7 +38,7 @@ const (
 type Instance struct {
 	ID        string    `gorm:"primaryKey;size:32" json:"id"`
 	Host      string    `gorm:"size:255" json:"host"`
-	PID       int       `json:"pid"`
+	PID       int       `gorm:"column:pid" json:"pid"`
 	Version   string    `gorm:"size:40" json:"version"`
 	StartedAt time.Time `json:"started_at"`
 	SeenAt    time.Time `gorm:"index" json:"seen_at"`
