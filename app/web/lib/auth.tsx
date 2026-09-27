@@ -140,10 +140,11 @@ interface AppProviderProps {
   initialUser?: User | null
 }
 
-// ensureAuthCookie 老用户升级后补种令牌 Cookie，让下一次刷新 SSR 即可渲染登录态
+// ensureAuthCookie 让令牌 Cookie 与本地令牌一致（登录、恢复会话后调用），服务端渲染的页面（如阅读页）据此渲染登录态；
+// 切换账号时覆盖旧 Cookie，避免服务端仍按上一个账号渲染。
 function ensureAuthCookie() {
   const token = getToken()
-  if (token && typeof document !== 'undefined' && !document.cookie.includes('knowforge_token=')) {
+  if (token && typeof document !== 'undefined' && !document.cookie.split(';').some((part) => part.trim() === `knowforge_token=${token}`)) {
     document.cookie = `knowforge_token=${token}; path=/; max-age=604800`
   }
 }
@@ -234,6 +235,7 @@ export function AppProvider({ children, initialSite, initialInstalled, initialUs
 
   const login = useCallback((token: string, u: User) => {
     storeSession(token, u)
+    ensureAuthCookie() // 登录后立即种 Cookie：否则在整页刷新前，服务端渲染的页面仍按未登录渲染
     setUser(u)
     loadAndApplyTheme()
   }, [loadAndApplyTheme])
