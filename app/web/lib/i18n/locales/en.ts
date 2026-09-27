@@ -4634,4 +4634,9 @@ export const en: Record<string, string> = {
   'export.footer.notIncluded': 'Your level or membership doesn\'t include a custom footer, so exports use "Powered by {siteName}"',
   'entitlement.books.private_max.label': 'Private books',
   'entitlement.books.private_max.hint': 'How many non-public books a user can have (private drafts from imports, copies, crawls and translations count; trashed books don\'t). Public books aren\'t limited by this',
+  'entitlement.versions.keep.label': 'Visible versions per chapter',
+  'entitlement.versions.keep.hint': 'How many recent versions of each chapter can be viewed and restored (based on the book owner). Older versions are still kept and show up again when the limit is raised',
+  'entitlement.unit.versions': '{n} versions',
+  'entitlement.unitShort.versions': 'versions',
+  'writer.versionsHidden': '{n} older versions are hidden (you can see the latest {keep}). Level up or become a member to see them',
 }

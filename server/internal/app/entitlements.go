@@ -23,6 +23,8 @@ const (
 	cfgCustomFooter     = "entitlement_export_custom_footer"
 	entPrivateBooksMax  = "books.private_max"
 	cfgPrivateBooksMax  = "entitlement_books_private_max"
+	entVersionsKeep     = "versions.keep"
+	cfgVersionsKeep     = "entitlement_versions_keep"
 
 	cfgEntBooksMax         = "entitlement_books_max"
 	cfgEntCollaboratorsMax = "entitlement_collaborators_max"
@@ -103,6 +105,14 @@ func init() {
 		Base: func(core plugincore.Core) int64 { return settingLimit(core, cfgPrivateBooksMax, plugincore.Unlimited) },
 		SetBase: func(core plugincore.Core, v int64) error {
 			return core.SetSetting(cfgPrivateBooksMax, strconv.FormatInt(v, 10), "权益：私有书籍数量上限（基础）")
+		},
+	})
+	// 每章可查看/恢复的历史版本数（按书籍所有者）：超出的较早版本仍然保存，只是隐藏，升级后即可查看；基础为不限
+	plugincore.RegisterEntitlement(plugincore.EntitlementDef{
+		Key: entVersionsKeep, Kind: plugincore.EntitlementLimit, Unit: "versions", Min: 1, Max: 10000, AllowUnlimited: true, Order: 12,
+		Base: func(core plugincore.Core) int64 { return settingLimit(core, cfgVersionsKeep, plugincore.Unlimited) },
+		SetBase: func(core plugincore.Core, v int64) error {
+			return core.SetSetting(cfgVersionsKeep, strconv.FormatInt(v, 10), "权益：每章可查看的历史版本数（基础）")
 		},
 	})
 }

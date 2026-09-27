@@ -2037,7 +2037,7 @@ function RevisionDrawer({
 }) {
   const { t } = useTranslation()
   const { confirmAction } = useFeedback()
-  const [result, setResult] = useState<PageResult<DocumentRevisionSummary> | null>(null)
+  const [result, setResult] = useState<(PageResult<DocumentRevisionSummary> & { hidden?: number; keep?: number }) | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<DocumentRevision | null>(null)
   const [listLoading, setListLoading] = useState(false)
@@ -2056,7 +2056,7 @@ function RevisionDrawer({
     setListLoading(true)
     setError('')
     try {
-      const next = await api<PageResult<DocumentRevisionSummary>>(`/documents/${document.id}/revisions`, { params: { page_size: 50 } })
+      const next = await api<PageResult<DocumentRevisionSummary> & { hidden?: number; keep?: number }>(`/documents/${document.id}/revisions`, { params: { page_size: 50 } })
       setResult(next)
       setSelectedId((currentId) => next.items.some((item) => item.id === currentId) ? currentId : next.items[0]?.id ?? null)
     } catch (e) {
@@ -2154,7 +2154,7 @@ function RevisionDrawer({
     setLoadingMore(true)
     setError('')
     try {
-      const next = await api<PageResult<DocumentRevisionSummary>>(`/documents/${document.id}/revisions`, {
+      const next = await api<PageResult<DocumentRevisionSummary> & { hidden?: number; keep?: number }>(`/documents/${document.id}/revisions`, {
         params: { page: result.page + 1, page_size: 50 },
       })
       setResult({ ...next, items: [...result.items, ...next.items] })
@@ -2210,6 +2210,9 @@ function RevisionDrawer({
                   <Button variant="ghost" size="sm" className="w-full" loading={loadingMore} onClick={loadMore}>
                     {t('writer.loadEarlier')}
                   </Button>
+                )}
+                {!!result.hidden && result.items.length >= result.total && (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">{t('writer.versionsHidden', { n: result.hidden, keep: result.keep ?? 0 })}</p>
                 )}
               </div>
             )}

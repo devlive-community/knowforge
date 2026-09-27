@@ -4634,4 +4634,9 @@ export const zh: Record<string, string> = {
   'export.footer.notIncluded': '当前等级/会员不含自定义页脚，导出时固定为「Powered by {siteName}」',
   'entitlement.books.private_max.label': '私有书籍数量',
   'entitlement.books.private_max.hint': '最多可以有多少本不公开的书（导入、复制、采集、翻译新建的私有草稿也计入，回收站中的不计）；公开书籍不受此限',
+  'entitlement.versions.keep.label': '每章可查看的历史版本数',
+  'entitlement.versions.keep.hint': '版本历史中每章可查看和恢复的最近版本数（按书籍作者计）；更早的版本仍会保存，放宽后即可查看',
+  'entitlement.unit.versions': '{n} 个',
+  'entitlement.unitShort.versions': '个',
+  'writer.versionsHidden': '还有 {n} 个更早的版本（当前可查看最近 {keep} 个），升级等级或开通会员后可查看',
 }

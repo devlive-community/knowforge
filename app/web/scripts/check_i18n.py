@@ -70,9 +70,9 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'entitlement.': ['books.max', 'collaborators.max', 'upload.max_mb', 'collect.page', 'collect.site', 'collect.site_max_pages',
                      'content.access_tier', 'content.discount_percent', 'content.free_all',
                      'qa.ai_daily', 'qa.agent_daily', 'ai.monthly_tokens', 'translate.monthly_chars', 'aiwriter.monthly_uses', 'translate.ai_book', 'chapterguide.monthly', 'qa.insights',
-                     'export.pdf_monthly', 'export.custom_footer', 'books.private_max'],
-    'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports'],
-    'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports'],
+                     'export.pdf_monthly', 'export.custom_footer', 'books.private_max', 'versions.keep'],
+    'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions'],
+    'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions'],
     # AI 写作助手：动作 / 动作说明 / 任务状态 / 采纳方式；调用功能名 ai.feature.aiwriter.<action>
     'aiWriter.action.': ['continue', 'polish', 'rewrite', 'expand', 'shorten', 'outline', 'summary', 'custom'],
     'aiWriter.actionHint.': ['continue', 'polish', 'rewrite', 'expand', 'shorten', 'outline', 'summary', 'custom'],
