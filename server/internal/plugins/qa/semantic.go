@@ -21,13 +21,14 @@ import (
 // 检索分两步：先用书籍向量（分块向量的均值）选出最相关的若干本书，再在这些书的分块中计算相似度，查询开销与全站规模无关。
 
 const (
-	cfgSemantic     = "qa_semantic_search"
-	reindexJobType  = "qa.reindex"
-	semanticBooks   = 20  // 第一步保留的候选书籍数
-	relatedMinScore = 0.2 // 相关推荐的最低相似度
-	searchMinScore  = 0.2
-	queryCacheSize  = 512
-	reindexDelay    = 2 * time.Minute
+	cfgSemantic       = "qa_semantic_search"
+	entSemanticSearch = "qa.semantic_search" // 能否使用语义搜索（权益；游客按基础值）
+	reindexJobType    = "qa.reindex"
+	semanticBooks     = 20  // 第一步保留的候选书籍数
+	relatedMinScore   = 0.2 // 相关推荐的最低相似度
+	searchMinScore    = 0.2
+	queryCacheSize    = 512
+	reindexDelay      = 2 * time.Minute
 )
 
 // BookVector / DocVector 书籍与章节的内容向量（分块向量的归一化均值），用于第一步召回与相关推荐。
@@ -352,6 +353,9 @@ func (b *behavior) semanticStats() map[string]int64 {
 func registerSemantic() {
 	plugincore.RegisterSemanticProvider(plugincore.SemanticProvider{
 		Available: func(core plugincore.Core) bool { return (&behavior{core: core}).semanticAvailable() },
+		Allowed: func(core plugincore.Core, u *models.User) bool {
+			return plugincore.EntitlementValue(core, u, entSemanticSearch) > 0
+		},
 		Search: func(ctx context.Context, core plugincore.Core, u *models.User, query string, bookID uint, limit int) ([]plugincore.SemanticHit, error) {
 			return (&behavior{core: core}).semanticSearch(ctx, u, query, bookID, limit)
 		},

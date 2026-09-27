@@ -279,7 +279,7 @@ Authorization: Bearer <token>
 
 按用户生效的能力上限与开关。数值 `-1` 表示不限，开关 1 开 / 0 关；所属功能不可用时（插件未启用、服务未配置）权益为「不可用」，不参与限制。
 - **核心**：`books.max`（书籍数量，含导入/复制/采集/翻译新建，不含回收站）、`books.private_max`（私有书籍数量：新建私有书、公开改私有，以及导入/复制/采集/翻译新建的私有草稿时校验，按书籍所有者计，基础不限）、`collaborators.max`（单本书协作者人数，含待接受邀请，按书籍所有者计）、`upload.max_mb`（单文件上传大小）、`ai.monthly_tokens`（每月 AI 用量 tokens，所有 AI 功能合计，配置了 AI 服务才可用）、`translate.monthly_chars`（每月翻译字数，写作台翻译与整本 AI 翻译合计，配置了翻译服务或 AI 服务才可用）、`versions.keep`（每章可查看/恢复的最近版本数，按书籍所有者计，最少 1；较早的版本仍保存、只是隐藏，版本列表返回 `hidden` 与 `keep`，查看或恢复超出范围的版本返回 403；基础不限）、`export.custom_footer`（开关，自定义导出页脚：书籍页脚看书籍作者、个人页脚看导出者，关闭时固定为「Powered by 站点名」，基础为开）。
-- **插件**：内容采集 `collect.page`、`collect.site`（开关）与 `collect.site_max_pages`；PDF 导出（无头浏览器）`export.pdf_monthly`（每月 PDF 导出次数，基础不限，游客导出不受此限）；付费内容 `content.access_tier`、`content.discount_percent`、`content.free_all`；书籍问答 `qa.ai_daily`、`qa.agent_daily`、`qa.insights`（开关）；AI 写作助手 `aiwriter.monthly_uses`；书籍多语言 `translate.ai_book`（开关，整本 AI 翻译）；章节导读 `chapterguide.monthly`。
+- **插件**：内容采集 `collect.page`、`collect.site`（开关）与 `collect.site_max_pages`；PDF 导出（无头浏览器）`export.pdf_monthly`（每月 PDF 导出次数，基础不限，游客导出不受此限）；付费内容 `content.access_tier`、`content.discount_percent`、`content.free_all`；书籍问答 `qa.ai_daily`、`qa.agent_daily`、`qa.insights`（开关）、`qa.semantic_search`（开关，站内语义搜索，游客按基础值，相关推荐不受限；开启全站语义搜索后才可用）；AI 写作助手 `aiwriter.monthly_uses`；书籍多语言 `translate.ai_book`（开关，整本 AI 翻译）；章节导读 `chapterguide.monthly`。
 
 - **基础值**：全站默认，未配置时与升级前一致（书籍/协作者不限，上传与采集沿用原设置），管理员主动收紧才生效。
 - **来源**：插件登记（成长等级：当前等级及以下启用等级的累计配置；会员：有效期内独占，未配置的键回退基础值，见「会员」），高优先级来源先取值。
@@ -650,7 +650,7 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 
 ## 语义搜索与相关推荐
 
-核心只经 `plugincore.RegisterSemanticProvider` 询问插件登记的语义检索能力（目前由「书籍问答」插件的「全站语义搜索与相关推荐」提供，管理员开启且配置了嵌入模型时可用），返回的章节与书籍再按当前用户的可见性与内容门禁过滤；没有可用能力时各接口返回空列表。
+核心只经 `plugincore.RegisterSemanticProvider` 询问插件登记的语义检索能力（能力可提供 `Allowed` 按用户判定能否使用语义搜索，问答插件据权益 `qa.semantic_search` 判定）（目前由「书籍问答」插件的「全站语义搜索与相关推荐」提供，管理员开启且配置了嵌入模型时可用），返回的章节与书籍再按当前用户的可见性与内容门禁过滤；没有可用能力时各接口返回空列表。
 - **索引**：开启后为所有公开书籍建立问答分块的向量索引（巡检补齐；公开书籍的章节发布或修改后约 2 分钟重建，连续修改只重建一次），并为每本书、每个章节保存分块向量的均值。向量化为系统调用（功能 `qa.index`）。
 - **检索**：先用书籍向量选出最相关的 20 本读者可读的书，再在这些书中按分块相似度取每章最相关的一处（未解锁的付费章节不参与）。搜索词的向量化为系统调用（功能 `qa.search`），相同搜索词复用向量。
 - **相关推荐**：相关书籍比较书籍向量（不含同一作品的其他语言/版本，只推荐公开书籍）；相关章节先选相关的书（含本书），再比较章节向量。相似度低于 0.2 的不推荐。书籍详情页优先展示相关书籍，没有时回退到同标签书籍。

@@ -63,11 +63,14 @@ func (a *App) SemanticSearch(c *gin.Context) {
 	}
 	provider, available := plugincore.ActiveSemanticProvider(a)
 	items := []semanticDocResult{}
+	u := currentUser(c)
+	if available && provider.Allowed != nil && !provider.Allowed(a, u) {
+		available = false
+	}
 	if !available || q == "" {
 		ok(c, gin.H{"available": available, "items": items})
 		return
 	}
-	u := currentUser(c)
 	var bookID uint
 	if slug := strings.TrimSpace(c.Query("book")); slug != "" {
 		var book models.Book

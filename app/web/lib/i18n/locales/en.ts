@@ -4639,4 +4639,6 @@ export const en: Record<string, string> = {
   'entitlement.unit.versions': '{n} versions',
   'entitlement.unitShort.versions': 'versions',
   'writer.versionsHidden': '{n} older versions are hidden (you can see the latest {keep}). Level up or become a member to see them',
+  'entitlement.qa.semantic_search.label': 'Semantic search',
+  'entitlement.qa.semantic_search.hint': 'The "Related by meaning" results in site search (needs site-wide semantic search). When off, only keyword search is offered; recommendations aren\'t affected',
 }

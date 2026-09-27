@@ -4639,4 +4639,6 @@ export const zh: Record<string, string> = {
   'entitlement.unit.versions': '{n} 个',
   'entitlement.unitShort.versions': '个',
   'writer.versionsHidden': '还有 {n} 个更早的版本（当前可查看最近 {keep} 个），升级等级或开通会员后可查看',
+  'entitlement.qa.semantic_search.label': '语义搜索',
+  'entitlement.qa.semantic_search.hint': '站内搜索中的「语义相关」结果（需开启全站语义搜索）；关闭后只提供关键词搜索，相关推荐不受影响',
 }

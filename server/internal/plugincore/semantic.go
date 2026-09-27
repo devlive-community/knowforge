@@ -25,6 +25,8 @@ type SemanticHit struct {
 type SemanticProvider struct {
 	// Available 当前是否可用（插件启用、已开启全站语义检索且嵌入模型可用）。
 	Available func(core Core) bool
+	// Allowed 用户能否使用语义搜索（如权益；nil 表示所有人可用）。相关推荐不受此限制。
+	Allowed func(core Core, u *models.User) bool
 	// Search 在 u 可读的内容中检索与 query 语义相关的小节（bookID 非 0 时限定在该书内），按相关度降序。
 	Search func(ctx context.Context, core Core, u *models.User, query string, bookID uint, limit int) ([]SemanticHit, error)
 	// RelatedBooks 与 book 内容相近的其他书籍 ID（按相关度降序）。

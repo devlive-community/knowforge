@@ -96,6 +96,20 @@ func init() {
 		},
 	})
 
+	// 语义搜索：能否使用为权益（基础为开，可设为会员专享；相关推荐不受限）
+	plugincore.RegisterEntitlement(plugincore.EntitlementDef{
+		Key: entSemanticSearch, Kind: plugincore.EntitlementFlag, Order: 83,
+		Available: func(core plugincore.Core) bool { return (&behavior{core: core}).semanticAvailable() },
+		Base: func(core plugincore.Core) int64 {
+			if core.GetSetting("qa_semantic_search_base") == "0" {
+				return 0
+			}
+			return 1
+		},
+		SetBase: func(core plugincore.Core, v int64) error {
+			return core.SetSetting("qa_semantic_search_base", strconv.FormatInt(v, 10), "问答：语义搜索（基础）")
+		},
+	})
 	// 作者洞察：能否查看为权益（基础为开，可设为会员专享）
 	plugincore.RegisterEntitlement(plugincore.EntitlementDef{
 		Key: entInsights, Kind: plugincore.EntitlementFlag, Order: 82,

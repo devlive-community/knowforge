@@ -138,6 +138,22 @@ func TestSemanticSearchAndRelated(t *testing.T) {
 		t.Fatalf("修改后应重新索引: %v", data(p)["items"])
 	}
 
+	// 语义搜索为权益：关闭后读者与游客的搜索不可用，相关推荐不受影响，管理员不受限
+	e.req(t, e.token, http.MethodPut, "/api/v1/admin/entitlements/base", `{"values":{"qa.semantic_search":0}}`)
+	if _, p := e.as(t, reader, http.MethodGet, "/api/v1/search/semantic?q=缓存", ""); data(p)["available"] != false {
+		t.Fatalf("权益关闭后读者不可用: %v", p)
+	}
+	if _, p := e.req(t, "", http.MethodGet, "/api/v1/search/semantic?q=缓存", ""); data(p)["available"] != false {
+		t.Fatalf("权益关闭后游客不可用: %v", p)
+	}
+	if _, p := e.req(t, e.token, http.MethodGet, "/api/v1/search/semantic?q=缓存", ""); data(p)["available"] != true {
+		t.Fatalf("管理员不受限: %v", p)
+	}
+	if _, p := e.as(t, reader, http.MethodGet, fmt.Sprintf("/api/v1/books/%d/related", cacheBook), ""); len(data(p)["items"].([]any)) == 0 {
+		t.Fatalf("相关推荐不受语义搜索权益影响: %v", p)
+	}
+	e.req(t, e.token, http.MethodPut, "/api/v1/admin/entitlements/base", `{"values":{"qa.semantic_search":1}}`)
+
 	// 关闭后不可用
 	e.req(t, e.token, http.MethodPut, "/api/v1/admin/qa/settings", `{"semantic_search":false}`)
 	if _, p := e.req(t, "", http.MethodGet, fmt.Sprintf("/api/v1/books/%d/related", cacheBook), ""); len(data(p)["items"].([]any)) != 0 {
