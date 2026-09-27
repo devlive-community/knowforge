@@ -69,9 +69,10 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     # t(`entitlement.unit.${unit}`) / unitShort、t(`entitlement.source.${source}`)（权益来源键）
     'entitlement.': ['books.max', 'collaborators.max', 'upload.max_mb', 'collect.page', 'collect.site', 'collect.site_max_pages',
                      'content.access_tier', 'content.discount_percent', 'content.free_all',
-                     'qa.ai_daily', 'qa.agent_daily', 'ai.monthly_tokens', 'translate.monthly_chars', 'aiwriter.monthly_uses', 'translate.ai_book', 'chapterguide.monthly', 'qa.insights'],
-    'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses'],
-    'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses'],
+                     'qa.ai_daily', 'qa.agent_daily', 'ai.monthly_tokens', 'translate.monthly_chars', 'aiwriter.monthly_uses', 'translate.ai_book', 'chapterguide.monthly', 'qa.insights',
+                     'export.pdf_monthly', 'export.custom_footer'],
+    'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports'],
+    'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports'],
     # AI 写作助手：动作 / 动作说明 / 任务状态 / 采纳方式；调用功能名 ai.feature.aiwriter.<action>
     'aiWriter.action.': ['continue', 'polish', 'rewrite', 'expand', 'shorten', 'outline', 'summary', 'custom'],
     'aiWriter.actionHint.': ['continue', 'polish', 'rewrite', 'expand', 'shorten', 'outline', 'summary', 'custom'],
@@ -137,7 +138,7 @@ SKIP_DIRS = {'node_modules', '.next', '.next-build', 'lib/i18n/locales', 'covera
 # 新增碰撞时在此登记，并注明出处
 KNOWN_NON_KEYS = {
     # 权益键（lib/entitlements.ts entitlementAllowed 的参数，数据值，文案键为 entitlement.<key>.label）
-    'collect.page', 'collect.site',
+    'collect.page', 'collect.site', 'export.custom_footer',
     # components/MyEntitlementsCard.tsx 按月计量权益的键（数据值）
     'ai.monthly_tokens', 'translate.monthly_chars',
     # pages/admin/audit-logs.tsx 审计 action 下拉的 value（数据值，文案键为 admin.audit.action.*）

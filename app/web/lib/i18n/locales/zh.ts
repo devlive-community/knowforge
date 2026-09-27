@@ -4625,4 +4625,11 @@ export const zh: Record<string, string> = {
   'admin.tasks.types.moderation.ai_review': 'AI 审核复核',
   'notify.moderation.aiFlagged': '「{title}」已自动通过，但被 AI 标记为疑似违规，请复审',
   'ai.feature.moderation.ai': 'AI 辅助审核',
+  'entitlement.export.pdf_monthly.label': '每月 PDF 导出次数',
+  'entitlement.export.pdf_monthly.hint': '每月可导出 PDF 的次数（需安装无头浏览器插件）；游客导出不受此限制，由书籍的「允许游客导出」控制',
+  'entitlement.export.custom_footer.label': '自定义导出页脚',
+  'entitlement.export.custom_footer.hint': '导出文件每页页脚可改为自己的文字；关闭时固定为「Powered by 站点名」',
+  'entitlement.unit.exports': '{n} 次',
+  'entitlement.unitShort.exports': '次',
+  'export.footer.notIncluded': '当前等级/会员不含自定义页脚，导出时固定为「Powered by {siteName}」',
 }

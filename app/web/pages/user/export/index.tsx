@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Container from '@/components/Container'
 import { api, API_BASE, getToken } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
+import { entitlementAllowed } from '@/lib/entitlements'
 import { useTranslation } from '@/lib/i18n'
 import { Button, Field, Select, Switch, Input, Loading, Checkbox, EmptyState, useFeedback } from '@/components/ui'
 import AccountSettingsLayout from '@/components/AccountSettingsLayout'
@@ -128,7 +129,8 @@ interface ExportSettings {
 const DEFAULTS: ExportSettings = { page_size: 'A4', include_cover: true, include_toc: true, font_size: 15, code_theme: 'light', margin: 'normal', footer: '' }
 
 export default function ExportSettingsPage() {
-  const { site } = useApp()
+  const { site, user: me } = useApp()
+  const customFooter = entitlementAllowed(me, 'export.custom_footer', true) // 自定义页脚为权益
   const siteName = site.site_name || 'KnowForge'
   const user = useRequireAuth()
   const { showToast } = useFeedback()
@@ -207,8 +209,8 @@ export default function ExportSettingsPage() {
                   <div><div className="text-sm font-medium text-slate-900">{t('user.export.includeToc')}</div><p className="mt-1 text-xs text-slate-500">{t('user.export.includeTocHint')}</p></div>
                   <Switch checked={s.include_toc} onChange={(v) => setS({ ...s, include_toc: v })} ariaLabel={t('user.export.includeToc')} />
                 </div>
-                <Field label={t('user.export.footer')} hint={t('user.export.footerHint', { siteName })}>
-                  <Input value={s.footer} maxLength={100} placeholder={`Powered by ${siteName}`}
+                <Field label={t('user.export.footer')} hint={customFooter ? t('user.export.footerHint', { siteName }) : t('export.footer.notIncluded', { siteName })}>
+                  <Input value={s.footer} maxLength={100} placeholder={`Powered by ${siteName}`} disabled={!customFooter}
                     onChange={(e) => setS({ ...s, footer: e.target.value })} />
                 </Field>
               </div>

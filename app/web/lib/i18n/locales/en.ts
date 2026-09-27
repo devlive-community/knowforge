@@ -4625,4 +4625,11 @@ export const en: Record<string, string> = {
   'admin.tasks.types.moderation.ai_review': 'AI moderation review',
   'notify.moderation.aiFlagged': '"{title}" passed automatically but AI flagged it as a possible violation. Please review it',
   'ai.feature.moderation.ai': 'AI-assisted moderation',
+  'entitlement.export.pdf_monthly.label': 'Monthly PDF exports',
+  'entitlement.export.pdf_monthly.hint': 'How many PDFs a user can export per month (needs the headless browser plugin). Guest exports are controlled by each book\'s "allow guests to export" setting instead',
+  'entitlement.export.custom_footer.label': 'Custom export footer',
+  'entitlement.export.custom_footer.hint': 'Replace the per-page footer on exports with your own text; when off it\'s always "Powered by <site name>"',
+  'entitlement.unit.exports': '{n} exports',
+  'entitlement.unitShort.exports': 'exports',
+  'export.footer.notIncluded': 'Your level or membership doesn\'t include a custom footer, so exports use "Powered by {siteName}"',
 }

@@ -209,11 +209,15 @@ func (a *App) resolveExportStyle(style string, book *models.Book, u *models.User
 // resolveExportFooter 解析每页页脚文案（Powered by …）：
 // 优先书籍自有配置，其次导出者个人配置，最后回退默认 "Powered by <站点名>"。
 func (a *App) resolveExportFooter(book *models.Book, u *models.User) string {
+	// 书籍页脚需书籍作者有「自定义导出页脚」权益，个人页脚需导出者有该权益
 	var bs models.BookExportSetting
 	if err := a.DB.Where("book_id = ?", book.ID).First(&bs).Error; err == nil && strings.TrimSpace(bs.Footer) != "" {
-		return bs.Footer
+		var owner models.User
+		if a.DB.First(&owner, book.UserID).Error == nil && a.entitlement(&owner, entCustomFooter) > 0 {
+			return bs.Footer
+		}
 	}
-	if u != nil {
+	if u != nil && a.entitlement(u, entCustomFooter) > 0 {
 		var us models.UserExportSetting
 		if err := a.DB.Where("user_id = ?", u.ID).First(&us).Error; err == nil && strings.TrimSpace(us.Footer) != "" {
 			return us.Footer

@@ -19,6 +19,8 @@ const (
 	entBooksMax         = "books.max"
 	entCollaboratorsMax = "collaborators.max"
 	entUploadMaxMB      = "upload.max_mb"
+	entCustomFooter     = "export.custom_footer"
+	cfgCustomFooter     = "entitlement_export_custom_footer"
 
 	cfgEntBooksMax         = "entitlement_books_max"
 	cfgEntCollaboratorsMax = "entitlement_collaborators_max"
@@ -72,6 +74,22 @@ func init() {
 				return fmt.Errorf("基础上传大小最大 100MB（更大的上限请通过等级或会员权益授予）")
 			}
 			return core.SetSetting(cfgUploadMaxMB, strconv.FormatInt(v, 10), "上传文件大小上限（MB）")
+		},
+	})
+}
+
+func init() {
+	// 导出页脚自定义：关闭时导出文件的页脚固定为「Powered by 站点名」（相当于去除站点标识为权益）；基础为开，与升级前一致
+	plugincore.RegisterEntitlement(plugincore.EntitlementDef{
+		Key: entCustomFooter, Kind: plugincore.EntitlementFlag, Order: 36,
+		Base: func(core plugincore.Core) int64 {
+			if core.GetSetting(cfgCustomFooter) == "0" {
+				return 0
+			}
+			return 1
+		},
+		SetBase: func(core plugincore.Core, v int64) error {
+			return core.SetSetting(cfgCustomFooter, strconv.FormatInt(v, 10), "权益：自定义导出页脚（基础）")
 		},
 	})
 }

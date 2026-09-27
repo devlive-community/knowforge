@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { InferGetServerSidePropsType } from 'next'
 import { api } from '@/lib/api'
 import { useTranslation } from '@/lib/i18n'
+import { useApp } from '@/lib/auth'
+import { entitlementAllowed } from '@/lib/entitlements'
 import { Button, Switch, Checkbox, Field, Select, Input, Loading, useFeedback } from '@/components/ui'
 import BookSettingsLayout from '@/components/BookSettingsLayout'
 import { getBookSettingsProps } from '@/lib/book-settings'
@@ -28,6 +30,9 @@ const ALL_FORMATS: { key: string; label?: string; labelKey?: string; hintKey: st
 ]
 
 export default function BookSettingsExport({ book }: InferGetServerSidePropsType<typeof getBookSettingsProps>) {
+  const { site, user: me } = useApp()
+  // 书籍页脚按书籍作者的「自定义导出页脚」权益生效（协作者编辑时以作者为准，这里只在作者本人编辑时提示）
+  const footerBlocked = !!me && me.id === book.user_id && !entitlementAllowed(me, 'export.custom_footer', true)
   const { showToast } = useFeedback()
   const { t } = useTranslation()
   const [exportEnabled, setExportEnabled] = useState(book.export_enabled ?? true)
@@ -152,8 +157,8 @@ export default function BookSettingsExport({ book }: InferGetServerSidePropsType
                     <Checkbox checked={style.include_toc} onChange={(v) => setStyle({ ...style, include_toc: v })} ariaLabel={t('bookSettings.export.includeToc')} /> {t('bookSettings.export.includeToc')}
                   </label>
                 </div>
-                <Field label={t('bookSettings.export.footer')} hint={t('bookSettings.export.footerHint')}>
-                  <Input value={style.footer} maxLength={100} placeholder={t('bookSettings.export.footerPlaceholder')}
+                <Field label={t('bookSettings.export.footer')} hint={footerBlocked ? t('export.footer.notIncluded', { siteName: site.site_name || 'KnowForge' }) : t('bookSettings.export.footerHint')}>
+                  <Input value={style.footer} maxLength={100} placeholder={t('bookSettings.export.footerPlaceholder')} disabled={footerBlocked}
                     onChange={(e) => setStyle({ ...style, footer: e.target.value })} />
                 </Field>
               </div>

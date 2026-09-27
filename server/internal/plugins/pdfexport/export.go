@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/plugincore"
 
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
@@ -60,6 +61,19 @@ func (px *behavior) ExportBookPDF(c *gin.Context) {
 		px.core.Fail(c, http.StatusBadRequest, "PDF 导出插件尚未安装，请联系管理员在后台「插件」中安装")
 		return
 	}
+	// 每月 PDF 导出次数（权益；匿名导出由书籍的「允许游客导出」控制）
+	if u != nil {
+		limit := plugincore.EntitlementValue(px.core, u, entPDFMonthly)
+		if !plugincore.WithinLimit(limit, px.monthlyPDFExports(u.ID)) {
+			msg := fmt.Sprintf("本月 PDF 导出次数已用完（%d 次），下月恢复，或提升等级/开通会员获得更多次数", limit)
+			if limit == 0 {
+				msg = "当前等级/会员不含 PDF 导出，提升等级或开通会员后可用"
+			}
+			px.core.Fail(c, http.StatusTooManyRequests, msg)
+			return
+		}
+	}
+
 	webPort := px.core.WebPort()
 	if webPort == 0 {
 		px.core.Fail(c, http.StatusServiceUnavailable, "Web 运行时不可用，无法生成 PDF")
@@ -87,6 +101,15 @@ func (px *behavior) ExportBookPDF(c *gin.Context) {
 	px.core.RecordBookExport(u, book, "pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.pdf", book.Slug))
 	c.Data(http.StatusOK, "application/pdf", pdf)
+}
+
+// monthlyPDFExports 用户本月已导出的 PDF 次数。
+func (px *behavior) monthlyPDFExports(userID uint) int64 {
+	now := time.Now()
+	var n int64
+	px.core.Gorm().Model(&models.BookExportRecord{}).
+		Where("user_id = ? AND format = ? AND created_at >= ?", userID, "pdf", time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())).Count(&n)
+	return n
 }
 
 func boolParam(b bool) string {
