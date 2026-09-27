@@ -782,6 +782,7 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/system/version` | 当前版本/commit + 上游最新版本 + 是否可升级 | `system:read` |
+| GET | `/system/cluster` | 在线服务实例 `instances:[{id,host,pid,version,started_at,seen_at,self,data_shared}]`、`database` 与多实例部署提示 `warnings`（`sqlite` 多实例使用 SQLite / `data_dir` 数据目录未共享 / `version` 版本不一致 / `upgrade` 在线升级只升级当前实例） | `system:read` |
 | POST | `/system/upgrade` | 在线升级（下载 Release 资产 → 校验替换 → 重启服务） | `system:upgrade` |
 | GET | `/admin/users?page=&page_size=&q=&role=&status=&sort=` | 分页查询用户（`q` 匹配用户名/邮箱，`role` admin\|user，`status` active\|inactive，`sort` created_at_desc\|created_at_asc\|last_login_at_desc\|last_login_at_asc，默认 created_at_desc） | `user:manage` |
 | PUT | `/admin/users/:id/role` | 变更角色 `{role: admin\|user}`；禁止操作自身，保留至少一位启用管理员 | `user:manage` |

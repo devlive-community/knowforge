@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { api } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import AdminLayout from '@/components/AdminLayout'
+import ClusterStatusCard from '@/components/ClusterStatusCard'
 import { Badge, ButtonLink, Loading } from '@/components/ui'
 import {
   ShieldCheckIcon, TagIcon, DatabaseIcon, CodeIcon, GlobeIcon, ServerIcon,
@@ -176,6 +177,8 @@ export default function AdminSystem() {
           </div>
         </section>
       </div>
+
+      <ClusterStatusCard />
 
       {/* 最近活动时间线 */}
       <h2 className="mb-4 mt-8 text-lg font-semibold text-slate-900">{t('admin.system.recentActivity')}</h2>

@@ -96,6 +96,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'membership.gift.status.': ['unused', 'redeemed', 'void'],
     'admin.membership.coupon.type.': ['percent', 'amount'],
     'membership.referral.kind.': ['signup', 'purchase'],
+    'admin.system.cluster.warning.': ['sqlite', 'data_dir', 'version', 'upgrade'],
     'admin.membership.coupon.useStatus.': ['reserved', 'used', 'released'],
     'admin.membership.redeem.kindHint.': ['cards', 'promo'],
     'admin.membership.status.': ['active', 'archived'],

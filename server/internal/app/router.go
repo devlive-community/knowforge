@@ -334,6 +334,7 @@ func (a *App) Router() *gin.Engine {
 			admin.GET("/content-settings", a.RequirePermission(authz.SiteUpdate), a.GetContentSettings)
 			admin.PUT("/content-settings", a.RequirePermission(authz.SiteUpdate), a.UpdateContentSettings)
 			admin.GET("/system/version", a.RequirePermission(authz.SystemRead), a.SystemVersion)
+			admin.GET("/system/cluster", a.RequirePermission(authz.SystemRead), a.AdminClusterStatus)
 			admin.POST("/system/upgrade", a.RequirePermission(authz.SystemUpgrade), a.SystemUpgrade)
 
 			// 用户管理（user:manage，仅管理员）。独立 /admin 前缀与公开 /users/:username 区分

@@ -279,6 +279,7 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 				log.Printf("[cluster] 实例登记失败: %v", err)
 			} else {
 				clusterApp.Store(a)
+				writeClusterMarker()
 				a.syncLocalPluginFiles()
 			}
 			go queue.Start(workerCtx)
@@ -293,6 +294,7 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 			if cancel != nil {
 				cancel()
 			}
+			removeClusterMarker()
 			cluster.Stop()
 			return
 		case <-ticker.C:
