@@ -125,7 +125,7 @@ func (a *App) localizeBookImages(ctx context.Context, book *models.Book, u *mode
 		if !allowed[ext] {
 			return "", fmt.Errorf("站点不允许上传 %s 图片", ext)
 		}
-		return a.storeUpload(ext, data)
+		return a.storeUserFile(u, "image_localize", ext, data)
 	}
 
 	for i := range docs {

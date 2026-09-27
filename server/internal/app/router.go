@@ -213,6 +213,8 @@ func (a *App) Router() *gin.Engine {
 		// ── 全文搜索（search:read，匿名可搜公开内容） ──
 		api.GET("/search", a.OptionalAuth(), a.GlobalSearch)
 		api.GET("/search/semantic", a.OptionalAuth(), a.SemanticSearch)
+		api.GET("/users/me/files", a.RequireAuth(), a.MyFiles)
+		api.DELETE("/users/me/files/:id", a.RequireAuth(), a.DeleteMyFile)
 
 		// ── 权益：定义（供等级/会员权益编辑器）与本人生效值 ──
 		api.GET("/entitlements/definitions", a.RequireAuth(), a.EntitlementDefinitions)

@@ -240,6 +240,7 @@ func resolveRelative(fromFile, ref string) (string, string, bool) {
 // markdownImporter 一次导入的上下文：上传过的图片按包内路径去重。
 type markdownImporter struct {
 	a        *App
+	owner    *models.User // 图片记入其个人存储
 	files    map[string][]byte
 	maxImage int64
 	uploaded map[string]string
@@ -265,8 +266,8 @@ func (m *markdownImporter) rewriteImages(src, body string) string {
 		if !found || !allowed[ext] || int64(len(data)) > m.maxImage {
 			return match
 		}
-		url, err := m.a.storeUpload(ext, data)
-		if err != nil {
+		url, err := m.a.storeUserFile(m.owner, "markdown_import", ext, data)
+		if err != nil { // 保存失败（含个人存储空间不足）时保留原引用
 			return match
 		}
 		m.uploaded[resolved] = url
@@ -532,7 +533,7 @@ func (a *App) importMarkdownAsBook(files map[string][]byte, u *models.User, titl
 	if publish {
 		status = "published"
 	}
-	m := &markdownImporter{a: a, files: files, maxImage: a.userUploadMaxBytes(u), uploaded: map[string]string{}, slugs: map[string]string{}, bookSlug: book.Slug}
+	m := &markdownImporter{a: a, owner: u, files: files, maxImage: a.userUploadMaxBytes(u), uploaded: map[string]string{}, slugs: map[string]string{}, bookSlug: book.Slug}
 	created, err := m.importTree(&book, u, tree, nil, status)
 	if err != nil {
 		a.DB.Unscoped().Delete(&book)
@@ -599,7 +600,7 @@ func (a *App) ImportMarkdownDocuments(c *gin.Context) {
 		fail(c, http.StatusBadRequest, fmt.Sprintf("章节数量过多（最多 %d 个）", maxImportedChapters))
 		return
 	}
-	m := &markdownImporter{a: a, files: files, maxImage: a.userUploadMaxBytes(u), uploaded: map[string]string{}, slugs: map[string]string{}, bookSlug: book.Slug}
+	m := &markdownImporter{a: a, owner: u, files: files, maxImage: a.userUploadMaxBytes(u), uploaded: map[string]string{}, slugs: map[string]string{}, bookSlug: book.Slug}
 	created, err := m.importTree(book, u, tree, parentID, "")
 	if err != nil {
 		fail(c, http.StatusInternalServerError, err.Error())

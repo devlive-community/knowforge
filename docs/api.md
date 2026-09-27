@@ -278,7 +278,7 @@ Authorization: Bearer <token>
 ## 权益（等级特权 / 会员）
 
 按用户生效的能力上限与开关。数值 `-1` 表示不限，开关 1 开 / 0 关；所属功能不可用时（插件未启用、服务未配置）权益为「不可用」，不参与限制。
-- **核心**：`books.max`（书籍数量，含导入/复制/采集/翻译新建，不含回收站）、`books.private_max`（私有书籍数量：新建私有书、公开改私有，以及导入/复制/采集/翻译新建的私有草稿时校验，按书籍所有者计，基础不限）、`collaborators.max`（单本书协作者人数，含待接受邀请，按书籍所有者计）、`upload.max_mb`（单文件上传大小）、`ai.monthly_tokens`（每月 AI 用量 tokens，所有 AI 功能合计，配置了 AI 服务才可用）、`translate.monthly_chars`（每月翻译字数，写作台翻译与整本 AI 翻译合计，配置了翻译服务或 AI 服务才可用）、`versions.keep`（每章可查看/恢复的最近版本数，按书籍所有者计，最少 1；较早的版本仍保存、只是隐藏，版本列表返回 `hidden` 与 `keep`，查看或恢复超出范围的版本返回 403；基础不限）、`export.custom_footer`（开关，自定义导出页脚：书籍页脚看书籍作者、个人页脚看导出者，关闭时固定为「Powered by 站点名」，基础为开）。
+- **核心**：`books.max`（书籍数量，含导入/复制/采集/翻译新建，不含回收站）、`books.private_max`（私有书籍数量：新建私有书、公开改私有，以及导入/复制/采集/翻译新建的私有草稿时校验，按书籍所有者计，基础不限）、`collaborators.max`（单本书协作者人数，含待接受邀请，按书籍所有者计）、`upload.max_mb`（单文件上传大小）、`storage.total_mb`（个人存储空间 MB：上传、Markdown 导入的图片与外链图片本地化保存的文件合计，基础不限；本功能上线前上传的文件不计入）、`ai.monthly_tokens`（每月 AI 用量 tokens，所有 AI 功能合计，配置了 AI 服务才可用）、`translate.monthly_chars`（每月翻译字数，写作台翻译与整本 AI 翻译合计，配置了翻译服务或 AI 服务才可用）、`versions.keep`（每章可查看/恢复的最近版本数，按书籍所有者计，最少 1；较早的版本仍保存、只是隐藏，版本列表返回 `hidden` 与 `keep`，查看或恢复超出范围的版本返回 403；基础不限）、`export.custom_footer`（开关，自定义导出页脚：书籍页脚看书籍作者、个人页脚看导出者，关闭时固定为「Powered by 站点名」，基础为开）。
 - **插件**：内容采集 `collect.page`、`collect.site`（开关）与 `collect.site_max_pages`；PDF 导出（无头浏览器）`export.pdf_monthly`（每月 PDF 导出次数，基础不限，游客导出不受此限）；付费内容 `content.access_tier`、`content.discount_percent`、`content.free_all`；书籍问答 `qa.ai_daily`、`qa.agent_daily`、`qa.insights`（开关）、`qa.semantic_search`（开关，站内语义搜索，游客按基础值，相关推荐不受限；开启全站语义搜索后才可用）；AI 写作助手 `aiwriter.monthly_uses`；书籍多语言 `translate.ai_book`（开关，整本 AI 翻译）；章节导读 `chapterguide.monthly`。
 
 - **基础值**：全站默认，未配置时与升级前一致（书籍/协作者不限，上传与采集沿用原设置），管理员主动收紧才生效。
@@ -395,7 +395,9 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| POST | `/upload` | `multipart/form-data` 字段 `file`，仅图片（png/jpg/jpeg/gif/webp/svg/ico），≤ `upload.max_mb` 权益；返回 `{ url }`（如 `/uploads/xxx.png`） | `upload:create` |
+| POST | `/upload` | `multipart/form-data` 字段 `file`，仅图片（png/jpg/jpeg/gif/webp/svg/ico），≤ `upload.max_mb` 权益；超出个人存储空间 `storage.total_mb` 时 403；返回 `{ url }`（如 `/uploads/xxx.png`）并记入「我的文件」 | `upload:create` |
+| GET | `/users/me/files?page=&page_size=` | 我的文件（新→旧）：`{items[]{file{id, driver, name, url, ext, size, source: upload\|markdown_import\|image_localize, created_at}, references（被章节正文、书籍封面/简介、用户头像引用的次数）}, total, page, page_size, used_bytes, limit_mb(-1 不限)}` | 登录 |
+| DELETE | `/users/me/files/:id` | 删除自己的文件：按保存时的驱动（local / S3 DeleteObject / 七牛资源管理 delete）从存储中删除并释放空间 → `{deleted, used_bytes}`；该驱动的凭据已不可用时 409 | 登录 |
 
 ## 评论
 

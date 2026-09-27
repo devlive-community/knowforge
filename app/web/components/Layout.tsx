@@ -51,6 +51,7 @@ function UserMenu() {
       { label: t('nav.menu.purchases'), href: '/user/purchases', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-bag-shopping ${className || ''}`} aria-hidden="true" /> },
       { label: t('nav.menu.earnings'), href: '/user/earnings', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-sack-dollar ${className || ''}`} aria-hidden="true" /> },
     ] : []),
+    { label: t('nav.menu.files'), href: '/user/files', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-folder-open ${className || ''}`} aria-hidden="true" /> },
     ...(site.ai_usage_enabled ? [{ label: t('nav.menu.aiUsage'), href: '/user/ai-usage', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-microchip ${className || ''}`} aria-hidden="true" /> }] : []),
     ...((site.feature_plugins || []).includes('qa') ? [{ label: t('nav.menu.qa'), href: '/user/qa', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-comments ${className || ''}`} aria-hidden="true" /> }] : []),
     ...((site.feature_plugins || []).includes('moderation') ? [{ label: t('nav.menu.moderation'), href: '/user/moderation', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-shield-halved ${className || ''}`} aria-hidden="true" /> }] : []),

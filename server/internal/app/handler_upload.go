@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"knowforge/server/internal/config"
-	"knowforge/server/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -48,7 +47,11 @@ func (a *App) Upload(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "读取文件失败")
 		return
 	}
-	url, err := a.storeUpload(ext, data)
+	url, err := a.storeUserFile(currentUser(c), "upload", ext, data)
+	if isStorageFull(err) {
+		fail(c, http.StatusForbidden, err.Error())
+		return
+	}
 	if err != nil {
 		fail(c, http.StatusInternalServerError, err.Error())
 		return
@@ -56,15 +59,13 @@ func (a *App) Upload(c *gin.Context) {
 	ok(c, gin.H{"url": url})
 }
 
-// storeUpload 以随机文件名（日期-随机串+扩展名）写入当前存储驱动（本地 / 七牛等），返回访问地址。
-// 上传接口与导入（如 Markdown 包内图片）共用，保证图片统一落到管理员配置的存储。
-func (a *App) storeUpload(ext string, data []byte) (string, error) {
+// uploadName 随机文件名（日期-随机串+扩展名）。上传接口与导入（如 Markdown 包内图片）经 storeUserFile 写入管理员配置的存储。
+func uploadName(ext string) (string, error) {
 	buf := make([]byte, 8)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("生成文件名失败")
 	}
-	name := time.Now().Format("20060102") + "-" + hex.EncodeToString(buf)[:8] + ext
-	return storage.FromSettings(a.DB, config.DataDir()).Upload(name, data)
+	return time.Now().Format("20060102") + "-" + hex.EncodeToString(buf)[:8] + ext, nil
 }
 
 // ServeUploads 将数据目录中的上传文件挂载到 /uploads

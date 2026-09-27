@@ -766,6 +766,20 @@ type Document struct {
 	Paywall map[string]any `gorm:"-" json:"paywall,omitempty"`
 }
 
+// UserFile 用户上传到站点存储的文件（上传接口、Markdown 导入的图片、外链图片本地化），用于统计个人存储用量与删除。
+// Driver/Name 记录保存时的驱动与文件名，站点之后切换存储驱动也能删除。
+type UserFile struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index" json:"user_id"`
+	Driver    string    `gorm:"size:10" json:"driver"`
+	Name      string    `gorm:"size:255" json:"name"`
+	URL       string    `gorm:"size:500;index" json:"url"`
+	Ext       string    `gorm:"size:10" json:"ext"`
+	Size      int64     `json:"size"`
+	Source    string    `gorm:"size:20" json:"source"` // upload | markdown_import | image_localize
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+}
+
 // DocumentRevision 章节不可变历史版本。只允许新增与读取，不提供更新接口。
 type DocumentRevision struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
@@ -799,6 +813,7 @@ func All(db *gorm.DB) error {
 		&Plugin{},
 		&UserExportSetting{},
 		&BookExportRecord{},
+		&UserFile{},
 		&UserReadingGoal{},
 		&ReadingDailyTime{},
 		&EmailVerificationToken{},

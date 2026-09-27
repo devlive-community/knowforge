@@ -70,7 +70,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'entitlement.': ['books.max', 'collaborators.max', 'upload.max_mb', 'collect.page', 'collect.site', 'collect.site_max_pages',
                      'content.access_tier', 'content.discount_percent', 'content.free_all',
                      'qa.ai_daily', 'qa.agent_daily', 'ai.monthly_tokens', 'translate.monthly_chars', 'aiwriter.monthly_uses', 'translate.ai_book', 'chapterguide.monthly', 'qa.insights',
-                     'export.pdf_monthly', 'export.custom_footer', 'books.private_max', 'versions.keep', 'qa.semantic_search'],
+                     'export.pdf_monthly', 'export.custom_footer', 'books.private_max', 'versions.keep', 'qa.semantic_search', 'storage.total_mb'],
     'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions'],
     'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions'],
     # AI 写作助手：动作 / 动作说明 / 任务状态 / 采纳方式；调用功能名 ai.feature.aiwriter.<action>
@@ -87,6 +87,8 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     # 章节导读：管理页状态 / 费用承担方
     'chapterGuide.state.': ['none', 'empty', 'queued', 'generating', 'ready', 'stale', 'edited', 'failed'],
     'chapterGuide.manage.bearer.': ['author', 'site'],
+    # 我的文件：文件来源
+    'files.source.': ['upload', 'markdown_import', 'image_localize'],
     'entitlement.source.': ['base', 'level', 'membership', 'admin', 'unavailable'],
     # 会员：tab / 状态 / 流水动作（Record.Action 取值域）/ 时长单位
     'admin.membership.tab.': ['plans', 'members', 'records', 'settings'],

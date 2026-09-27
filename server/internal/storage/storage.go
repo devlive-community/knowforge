@@ -69,6 +69,11 @@ func FromConfig(cfg Config, dataDir string) Uploader {
 
 // FromSettings 从站点配置表解析驱动（缺省 local）
 func FromSettings(db *gorm.DB, dataDir string) Uploader {
+	return FromConfig(loadConfig(db), dataDir)
+}
+
+// loadConfig 读取站点配置表中的存储配置（读取失败时为空配置，即 local）。
+func loadConfig(db *gorm.DB) Config {
 	keys := []string{"storage_driver", "qiniu_access_key", "qiniu_secret_key", "qiniu_bucket", "qiniu_domain", "qiniu_upload_host",
 		"s3_endpoint", "s3_region", "s3_bucket", "s3_access_key", "s3_secret_key", "s3_public_url", "s3_path_style", "s3_prefix"}
 	var rows []struct {
@@ -76,7 +81,7 @@ func FromSettings(db *gorm.DB, dataDir string) Uploader {
 		ConfigValue string
 	}
 	if err := db.Table("site_configs").Where("config_key IN ?", keys).Find(&rows).Error; err != nil {
-		return &LocalUploader{dataDir: dataDir}
+		return Config{}
 	}
 	cfg := Config{}
 	for _, r := range rows {
@@ -111,7 +116,7 @@ func FromSettings(db *gorm.DB, dataDir string) Uploader {
 			cfg.S3Prefix = strings.TrimSpace(r.ConfigValue)
 		}
 	}
-	return FromConfig(cfg, dataDir)
+	return cfg
 }
 
 // ── 本地驱动 ─────────────────────────────────────────────────────────────
