@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -131,30 +130,27 @@ func createCodes(tx *gorm.DB, batch RedeemBatch, n int, ownerID uint) ([]RedeemC
 	return codes, nil
 }
 
-// —— 防穷举：按用户统计最近一小时的错误次数 ——
+// —— 防穷举：按用户统计最近一小时的错误次数（存数据库，多实例共享）——
 
-var redeemFails = struct {
-	sync.Mutex
-	m map[uint][]time.Time
-}{m: map[uint][]time.Time{}}
-
-func recentFails(userID uint, now time.Time) int {
-	redeemFails.Lock()
-	defer redeemFails.Unlock()
-	kept := redeemFails.m[userID][:0]
-	for _, t := range redeemFails.m[userID] {
-		if now.Sub(t) < redeemFailWindow {
-			kept = append(kept, t)
-		}
-	}
-	redeemFails.m[userID] = kept
-	return len(kept)
+// RedeemFail 一次输错的兑换码（只用于限制穷举，超过统计窗口后清理）。
+type RedeemFail struct {
+	ID        uint      `gorm:"primaryKey"`
+	UserID    uint      `gorm:"index:idx_redeem_fail"`
+	CreatedAt time.Time `gorm:"index:idx_redeem_fail"`
 }
 
-func recordFail(userID uint, now time.Time) {
-	redeemFails.Lock()
-	redeemFails.m[userID] = append(redeemFails.m[userID], now)
-	redeemFails.Unlock()
+func (RedeemFail) TableName() string { return "membership_redeem_fails" }
+
+func (b *behavior) recentFails(userID uint, now time.Time) int {
+	var n int64
+	b.core.Gorm().Model(&RedeemFail{}).Where("user_id = ? AND created_at > ?", userID, now.Add(-redeemFailWindow)).Count(&n)
+	return int(n)
+}
+
+func (b *behavior) recordFail(userID uint, now time.Time) {
+	db := b.core.Gorm()
+	db.Create(&RedeemFail{UserID: userID, CreatedAt: now})
+	db.Where("created_at < ?", now.Add(-redeemFailWindow)).Delete(&RedeemFail{})
 }
 
 var (
@@ -226,14 +222,14 @@ func (b *behavior) Redeem(c *gin.Context) {
 	}
 	u := b.core.CurrentUser(c)
 	now := time.Now()
-	if recentFails(u.ID, now) >= redeemFailLimit {
+	if b.recentFails(u.ID, now) >= redeemFailLimit {
 		b.core.Fail(c, http.StatusTooManyRequests, "输错次数过多，请一小时后再试")
 		return
 	}
 	r, err := b.redeem(u.ID, req.Code, now)
 	if err != nil {
 		if errors.Is(err, errCodeInvalid) {
-			recordFail(u.ID, now)
+			b.recordFail(u.ID, now)
 		}
 		b.core.Fail(c, http.StatusBadRequest, err.Error())
 		return

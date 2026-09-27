@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"knowforge/server/internal/ai"
+	instances "knowforge/server/internal/cluster"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
@@ -97,9 +98,15 @@ func (b *behavior) embedQuestionsLater(bookID uint) {
 	if _, busy := embeddingBooks.LoadOrStore(bookID, true); busy {
 		return
 	}
+	lease := fmt.Sprintf("qa.embed-questions:%d", bookID)
+	if !instances.TryLease(lease, 30*time.Minute) { // 其他实例正在补算
+		embeddingBooks.Delete(bookID)
+		return
+	}
 	go func() {
 		defer func() {
 			_ = recover()
+			instances.ReleaseLease(lease)
 			embeddingBooks.Delete(bookID)
 		}()
 		b.embedQuestions(context.Background(), bookID)

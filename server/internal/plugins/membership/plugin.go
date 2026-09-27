@@ -45,8 +45,8 @@ func init() {
 		Kind:        plugins.KindFeature,
 		Builtin:     true,
 		EnabledKey:  cfgEnabled,
-		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}, &TrialUse{}, &ReferralReward{}},
-		Tables:      []string{"membership_referral_rewards", "membership_trial_uses", "membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
+		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}, &TrialUse{}, &ReferralReward{}, &RedeemFail{}},
+		Tables:      []string{"membership_redeem_fails", "membership_referral_rewards", "membership_trial_uses", "membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
 		AdminPerms:  []authz.Permission{PermManage},
 		UserPerms:   []authz.Permission{PermRead},
 	})

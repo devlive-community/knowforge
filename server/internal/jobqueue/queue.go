@@ -31,7 +31,10 @@ const (
 	StatusFailed    = "failed"
 
 	defaultMaxAttempts = 5
+	// staleJobAge 执行中的任务超过这段时间没有心跳，视为执行它的进程已退出（多实例时其他实例据此接手）
 	staleJobAge        = 5 * time.Minute
+	defaultHeartbeat   = time.Minute
+	recoverEvery       = time.Minute
 	completedRetention = 30 * 24 * time.Hour
 )
 
@@ -40,7 +43,8 @@ type ResultHandler func(context.Context, json.RawMessage) (any, error)
 
 // Queue stores encrypted payloads in the application database and executes one
 // claimed task at a time. Conditional status updates make claiming safe when
-// multiple application processes temporarily share the same database.
+// multiple application processes share the same database; running tasks refresh
+// locked_at as a heartbeat so that only tasks of exited processes are recovered.
 type Queue struct {
 	db             *gorm.DB
 	aead           cipher.AEAD
@@ -48,6 +52,7 @@ type Queue struct {
 	resultHandlers map[string]ResultHandler
 	mu             sync.RWMutex
 	now            func() time.Time
+	heartbeatEvery time.Duration // 执行中的任务刷新 locked_at 的间隔
 }
 
 func New(db *gorm.DB, secret string) (*Queue, error) {
@@ -211,6 +216,9 @@ func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
 	if err := q.db.WithContext(ctx).First(&candidate, candidate.ID).Error; err != nil {
 		return true, fmt.Errorf("reload background job: %w", err)
 	}
+	hbCtx, stopHeartbeat := context.WithCancel(ctx)
+	defer stopHeartbeat()
+	go q.heartbeat(hbCtx, candidate.ID)
 
 	q.mu.RLock()
 	handler := q.handlers[candidate.Type]
@@ -247,6 +255,24 @@ func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
 		"last_error": "", "result": sealedResult, "updated_at": finished,
 	}).Error
 	return true, err
+}
+
+// heartbeat 任务执行期间定期刷新 locked_at，避免长任务被其他进程当作中断而重复执行。
+func (q *Queue) heartbeat(ctx context.Context, id uint) {
+	every := q.heartbeatEvery
+	if every <= 0 {
+		every = defaultHeartbeat
+	}
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			q.db.Model(&models.BackgroundJob{}).Where("id = ? AND status = ?", id, StatusRunning).Update("locked_at", q.now())
+		}
+	}
 }
 
 func (q *Queue) Result(job *models.BackgroundJob, target any) error {
@@ -329,8 +355,10 @@ func (q *Queue) Start(ctx context.Context) {
 	}
 	poll := time.NewTicker(2 * time.Second)
 	cleanup := time.NewTicker(time.Hour)
+	recoverTick := time.NewTicker(recoverEvery) // 多实例：其他实例退出后遗留的任务由仍在运行的实例接手
 	defer poll.Stop()
 	defer cleanup.Stop()
+	defer recoverTick.Stop()
 	for {
 		ran, err := q.RunOnce(ctx)
 		if err != nil {
@@ -343,6 +371,10 @@ func (q *Queue) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-poll.C:
+		case <-recoverTick.C:
+			if err := q.RecoverStale(ctx); err != nil {
+				log.Printf("[jobs] recover stale tasks failed: %v", err)
+			}
 		case <-cleanup.C:
 			cutoff := q.now().Add(-completedRetention)
 			if err := q.db.WithContext(ctx).Where("status IN ? AND finished_at < ?", []string{StatusSucceeded, StatusFailed}, cutoff).

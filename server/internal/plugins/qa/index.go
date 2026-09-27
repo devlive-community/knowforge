@@ -19,6 +19,7 @@ import (
 	"gorm.io/gorm"
 
 	"knowforge/server/internal/ai"
+	instances "knowforge/server/internal/cluster"
 	"knowforge/server/internal/models"
 )
 
@@ -187,11 +188,20 @@ func cosine(a, b []float32) float64 {
 
 var bookLocks sync.Map // 书籍 ID → *sync.Mutex，避免同一本书并发重建
 
-func lockBook(id uint) func() {
+// lockBook 同一本书的索引重建互斥：本实例内用本地锁，多实例之间用集群租约。
+func lockBook(ctx context.Context, id uint) (func(), error) {
 	m, _ := bookLocks.LoadOrStore(id, &sync.Mutex{})
 	mu := m.(*sync.Mutex)
 	mu.Lock()
-	return mu.Unlock
+	release, err := instances.Lock(ctx, fmt.Sprintf("qa.index:%d", id), 10*time.Minute)
+	if err != nil {
+		mu.Unlock()
+		return nil, err
+	}
+	return func() {
+		release()
+		mu.Unlock()
+	}, nil
 }
 
 // publishedDocs 已发布章节（按目录深度优先顺序）；withContent 为 false 时不加载正文（只用于计算摘要）。
@@ -246,7 +256,10 @@ func embedKey(docID uint, heading, content string) string {
 
 // ensureIndex 书籍内容变化时重建分块（未变化的分块保留已算好的向量）；需要时投递向量化任务。
 func (b *behavior) ensureIndex(ctx context.Context, bookID uint) (IndexState, error) {
-	unlock := lockBook(bookID)
+	unlock, err := lockBook(ctx, bookID)
+	if err != nil {
+		return IndexState{}, err
+	}
 	defer unlock()
 	db := b.core.Gorm()
 	hash := contentHash(publishedDocs(db, bookID, false))
@@ -284,7 +297,7 @@ func (b *behavior) ensureIndex(ctx context.Context, bookID uint) (IndexState, er
 		}
 	}
 	state = IndexState{BookID: bookID, ContentHash: hash, Chunks: len(chunks), Embedded: embedded, IndexedAt: time.Now()}
-	err := db.Transaction(func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("book_id = ?", bookID).Delete(&Chunk{}).Error; err != nil {
 			return err
 		}

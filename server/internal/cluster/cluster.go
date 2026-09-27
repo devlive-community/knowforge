@@ -317,3 +317,32 @@ func (n *Node) pull() {
 
 // Inject 模拟收到其他实例发来的消息（用于测试跨实例行为）。
 func Inject(channel string, payload []byte) { dispatch(channel, payload) }
+
+// Lock 跨实例互斥：阻塞直到获得租约 name（或 ctx 结束），持有期间自动续期，返回释放函数。
+// 同一实例内的互斥需调用方另加本地锁（租约以实例为持有者，同一实例重复获取会成功）。
+func Lock(ctx context.Context, name string, ttl time.Duration) (func(), error) {
+	for !TryLease(name, ttl) {
+		select {
+		case <-ctx.Done():
+			return func() {}, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	renewCtx, stop := context.WithCancel(context.Background())
+	go func() {
+		t := time.NewTicker(ttl / 3)
+		defer t.Stop()
+		for {
+			select {
+			case <-renewCtx.Done():
+				return
+			case <-t.C:
+				TryLease(name, ttl)
+			}
+		}
+	}()
+	return func() {
+		stop()
+		ReleaseLease(name)
+	}, nil
+}

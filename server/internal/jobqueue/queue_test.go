@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -192,5 +193,48 @@ func TestQueueEnqueueIfDueSuppressesActiveAndRecentTasks(t *testing.T) {
 	next, created, err := queue.EnqueueIfDue(ctx, "maintenance.cleanup", map[string]any{}, 3, 24*time.Hour)
 	if err != nil || !created || next == nil || next.ID == first.ID {
 		t.Fatalf("task should become due after cooldown: created=%v job=%v err=%v", created, next, err)
+	}
+}
+
+// 长任务执行期间持续心跳：即使超过 staleJobAge，其他进程的恢复也不会把它当作中断而重复执行。
+func TestQueueHeartbeatKeepsLongJobClaimed(t *testing.T) {
+	queue, db, start := testQueue(t)
+	var clock atomic.Int64
+	clock.Store(start.UnixNano())
+	queue.now = func() time.Time { return time.Unix(0, clock.Load()).UTC() }
+	queue.heartbeatEvery = 10 * time.Millisecond
+
+	started, release := make(chan struct{}), make(chan struct{})
+	queue.Register("long.test", func(context.Context, json.RawMessage) error {
+		close(started)
+		<-release
+		return nil
+	})
+	if _, err := queue.Enqueue(context.Background(), "long.test", map[string]string{}, 3); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := queue.RunOnce(context.Background())
+		done <- err
+	}()
+	<-started
+	clock.Add(int64(10 * time.Minute)) // 已执行 10 分钟
+	time.Sleep(60 * time.Millisecond)  // 期间心跳刷新了 locked_at
+	if err := queue.RecoverStale(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var job models.BackgroundJob
+	db.Where("type = ?", "long.test").First(&job)
+	if job.Status != StatusRunning {
+		t.Fatalf("有心跳的任务不应被恢复: %+v", job)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	db.First(&job, job.ID)
+	if job.Status != StatusSucceeded || job.Attempts != 1 {
+		t.Fatalf("任务应只执行一次并成功: %+v", job)
 	}
 }
