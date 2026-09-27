@@ -1,5 +1,6 @@
-// Package eventhub 进程内的事件推送中心（SSE）：按对象 ID 订阅，非阻塞发布。
-// 供后台运行的 AI 任务（问答、写作助手等）把进度推给正在查看的用户；适用于单实例部署。
+// Package eventhub 事件推送中心（SSE）：按对象 ID 订阅，非阻塞发布。
+// 供后台运行的 AI 任务（问答、写作助手等）把进度推给正在查看的用户。
+// 多实例部署时，发布的事件经 cluster 同时送达其他实例上的订阅者（订阅者可以连在任意实例上）。
 // 订阅者消费过慢（缓冲已满）时被断开，EventSource 自动重连后由接口重新推送快照，不丢状态。
 package eventhub
 
@@ -10,6 +11,8 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
+
+	"knowforge/server/internal/cluster"
 )
 
 // Event 一条待推送的事件（data 为 JSON）。
@@ -20,14 +23,29 @@ type Event struct {
 
 // Hub 按对象 ID 分组的订阅者集合。
 type Hub struct {
-	buffer int
-	mu     sync.Mutex
-	subs   map[uint]map[chan Event]struct{}
+	channel string
+	buffer  int
+	mu      sync.Mutex
+	subs    map[uint]map[chan Event]struct{}
 }
 
-// New 创建推送中心；buffer 为每个订阅者的缓冲事件数。
-func New(buffer int) *Hub {
-	return &Hub{buffer: buffer, subs: map[uint]map[chan Event]struct{}{}}
+// remoteEvent 跨实例传递的一条事件。
+type remoteEvent struct {
+	ID   uint            `json:"id"`
+	Name string          `json:"name"`
+	Data json.RawMessage `json:"data"`
+}
+
+// New 创建推送中心；name 在全站唯一（跨实例频道名），buffer 为每个订阅者的缓冲事件数。
+func New(name string, buffer int) *Hub {
+	h := &Hub{channel: "hub:" + name, buffer: buffer, subs: map[uint]map[chan Event]struct{}{}}
+	cluster.Subscribe(h.channel, func(payload []byte) {
+		var ev remoteEvent
+		if json.Unmarshal(payload, &ev) == nil {
+			h.deliver(ev.ID, Event{Name: ev.Name, Data: ev.Data})
+		}
+	})
+	return h
 }
 
 // Subscribe 订阅对象 id 的事件。
@@ -55,17 +73,25 @@ func (h *Hub) Unsubscribe(id uint, ch chan Event) {
 	}
 }
 
-// Publish 非阻塞推送；缓冲已满的订阅者被断开（其通道被关闭）。
+// Publish 非阻塞推送给本实例与其他实例上的订阅者；缓冲已满的订阅者被断开（其通道被关闭）。
 func (h *Hub) Publish(id uint, name string, payload any) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return
 	}
+	h.deliver(id, Event{Name: name, Data: raw})
+	if msg, err := json.Marshal(remoteEvent{ID: id, Name: name, Data: raw}); err == nil {
+		cluster.Broadcast(h.channel, msg)
+	}
+}
+
+// deliver 推送给本实例的订阅者。
+func (h *Hub) deliver(id uint, ev Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for ch := range h.subs[id] {
 		select {
-		case ch <- Event{Name: name, Data: raw}:
+		case ch <- ev:
 		default:
 			delete(h.subs[id], ch)
 			close(ch)

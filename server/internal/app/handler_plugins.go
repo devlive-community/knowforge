@@ -3,6 +3,7 @@ package app
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"knowforge/server/internal/authz"
@@ -248,12 +250,9 @@ func (a *App) installedChromePath() string {
 	if err := a.DB.Where("`key` = ? AND installed = ?", pluginPDFExport, true).First(&p).Error; err != nil {
 		return ""
 	}
-	path, _ := pluginMeta(&p)["chrome_path"].(string)
+	path := a.localChromePath(&p)
 	if path == "" {
-		return ""
-	}
-	if _, err := os.Stat(path); err != nil {
-		return ""
+		a.syncLocalPluginFiles() // 其他实例安装的：本实例补下载
 	}
 	return path
 }
@@ -276,43 +275,12 @@ func (a *App) runPluginInstall(p *models.Plugin, gen int64) {
 		save(map[string]any{"status": "failed", "error": reason})
 	}
 
-	logf("info", "开始安装：解析 chrome-headless-shell 下载地址…")
-	version, url, err := resolveChromeDownload()
+	version, binPath, err := fetchChrome(logf)
 	if err != nil {
-		fail("解析下载地址失败: " + err.Error())
+		fail(err.Error())
 		return
 	}
-	logf("info", "已解析版本 "+version+"，开始下载…")
 	dir := pluginDir(pluginPDFExport)
-	_ = os.RemoveAll(dir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		fail("创建插件目录失败: " + err.Error())
-		return
-	}
-	zipPath := filepath.Join(dir, "chrome.zip")
-	if err := downloadFile(url, zipPath); err != nil {
-		fail("下载失败: " + err.Error())
-		return
-	}
-	logf("info", "下载完成，正在解压…")
-	chromeRoot := filepath.Join(dir, "chrome")
-	if err := unzipTo(zipPath, chromeRoot); err != nil {
-		fail("解压失败: " + err.Error())
-		return
-	}
-	_ = os.Remove(zipPath)
-
-	binPath := findChromeBinary(chromeRoot)
-	if binPath == "" {
-		fail("未在下载包中找到 chrome-headless-shell 可执行文件")
-		return
-	}
-	_ = os.Chmod(binPath, 0o755)
-	logf("info", "正在校验可执行文件…")
-	if out, err := exec.Command(binPath, "--version").CombinedOutput(); err != nil {
-		fail("chrome-headless-shell 自检失败: " + strings.TrimSpace(string(out)))
-		return
-	}
 
 	// 若已被卸载则不落库，并清理刚下载的文件
 	if !a.plugins.current(key, gen) {
@@ -326,6 +294,72 @@ func (a *App) runPluginInstall(p *models.Plugin, gen int64) {
 	p.InstalledAt = &now
 	save(map[string]any{"status": "installed", "chrome_path": binPath})
 	logf("success", "安装完成：版本 "+version)
+	broadcastReload(reloadPlugins) // 其他实例补齐本地文件
+}
+
+// fetchChrome 下载、解压并自检 chrome-headless-shell 到本实例的插件目录，返回版本与可执行文件路径。
+func fetchChrome(logf func(level, text string)) (string, string, error) {
+	logf("info", "开始安装：解析 chrome-headless-shell 下载地址…")
+	version, url, err := resolveChromeDownload()
+	if err != nil {
+		return "", "", fmt.Errorf("解析下载地址失败: %w", err)
+	}
+	logf("info", "已解析版本 "+version+"，开始下载…")
+	dir := pluginDir(pluginPDFExport)
+	_ = os.RemoveAll(dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", fmt.Errorf("创建插件目录失败: %w", err)
+	}
+	zipPath := filepath.Join(dir, "chrome.zip")
+	if err := downloadFile(url, zipPath); err != nil {
+		return "", "", fmt.Errorf("下载失败: %w", err)
+	}
+	logf("info", "下载完成，正在解压…")
+	chromeRoot := filepath.Join(dir, "chrome")
+	if err := unzipTo(zipPath, chromeRoot); err != nil {
+		return "", "", fmt.Errorf("解压失败: %w", err)
+	}
+	_ = os.Remove(zipPath)
+	binPath := findChromeBinary(chromeRoot)
+	if binPath == "" {
+		return "", "", errors.New("未在下载包中找到 chrome-headless-shell 可执行文件")
+	}
+	_ = os.Chmod(binPath, 0o755)
+	logf("info", "正在校验可执行文件…")
+	if out, err := exec.Command(binPath, "--version").CombinedOutput(); err != nil {
+		return "", "", fmt.Errorf("chrome-headless-shell 自检失败: %s", strings.TrimSpace(string(out)))
+	}
+	return version, binPath, nil
+}
+
+// localChromeFetching 本实例是否正在补下载 chrome（避免重复下载）。
+var localChromeFetching atomic.Bool
+
+// syncLocalPluginFiles 多实例：插件在其他实例上安装后，本实例补齐本地文件（如 PDF 导出所需的 chrome），不改数据库记录。
+func (a *App) syncLocalPluginFiles() {
+	var p models.Plugin
+	if a.DB == nil || a.DB.Where("`key` = ? AND installed = ?", pluginPDFExport, true).First(&p).Error != nil || a.localChromePath(&p) != "" {
+		return
+	}
+	if !localChromeFetching.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer localChromeFetching.Store(false)
+		if _, _, err := fetchChrome(func(_, text string) { log.Printf("[plugins] 补齐本实例的 PDF 导出组件：%s", text) }); err != nil {
+			log.Printf("[plugins] 补齐本实例的 PDF 导出组件失败: %v", err)
+		}
+	}()
+}
+
+// localChromePath 本实例上可用的 chrome 路径：优先插件记录中的路径，其次本实例插件目录中找到的。
+func (a *App) localChromePath(p *models.Plugin) string {
+	if path, _ := pluginMeta(p)["chrome_path"].(string); path != "" {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return findChromeBinary(filepath.Join(pluginDir(pluginPDFExport), "chrome"))
 }
 
 // findChromeBinary 在解压目录中递归查找 chrome-headless-shell 可执行文件
@@ -441,6 +475,7 @@ func (a *App) AdminInstallPlugin(c *gin.Context) {
 			}
 		}
 		a.syncPluginPermissions() // 注册该插件权限
+		broadcastReload(reloadPlugins)
 		ok(c, gin.H{"message": "已启用", "status": "enabled"})
 		return
 	}
@@ -474,6 +509,7 @@ func (a *App) AdminUninstallPlugin(c *gin.Context) {
 			return
 		}
 		a.syncPluginPermissions() // 移除该插件权限
+		broadcastReload(reloadPlugins)
 		purged := false
 		if c.Query("purge") == "true" && len(info.Tables) > 0 {
 			for _, tbl := range info.Tables {

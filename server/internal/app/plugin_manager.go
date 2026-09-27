@@ -1,8 +1,11 @@
 package app
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
+
+	"knowforge/server/internal/cluster"
 )
 
 const pluginLogBufferMax = 200
@@ -52,9 +55,17 @@ func (m *pluginManager) current(key string, gen int64) bool {
 	return m.gen[key] == gen
 }
 
-// log 记录并广播一条日志（level: info|success|error）。
+// log 记录并广播一条日志（level: info|success|error），同时发给其他实例上的日志订阅者。
 func (m *pluginManager) log(key, level, text string) {
 	line := pluginLogLine{Time: time.Now().Format("15:04:05"), Level: level, Text: text}
+	m.append(key, line)
+	if raw, err := json.Marshal(remotePluginLog{Key: key, Line: line}); err == nil {
+		cluster.Broadcast(channelPluginLog, raw)
+	}
+}
+
+// append 记录一条日志并推送给本实例的订阅者。
+func (m *pluginManager) append(key string, line pluginLogLine) {
 	m.mu.Lock()
 	buf := append(m.logs[key], line)
 	if len(buf) > pluginLogBufferMax {

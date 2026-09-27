@@ -26,7 +26,7 @@ import (
 
 var (
 	runningJobs sync.Map // 任务 ID → *jobRun
-	jobsHub     = eventhub.New(1024)
+	jobsHub     = eventhub.New("booktranslations.jobs", 1024)
 )
 
 // segmentRunes 每次调用翻译的原文长度（按段落切分，单个段落或代码块不拆开）。

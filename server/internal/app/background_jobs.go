@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"knowforge/server/internal/cluster"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/jobqueue"
 	"knowforge/server/internal/models"
@@ -273,17 +274,18 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 			workerCtx, workerCancel := context.WithCancel(ctx)
 			cancel = workerCancel
 			active = queue
+			// 多实例：登记本实例（心跳、跨实例消息与租约）
+			if err := cluster.Start(ctx, a.DB, Version); err != nil {
+				log.Printf("[cluster] 实例登记失败: %v", err)
+			} else {
+				clusterApp.Store(a)
+				a.syncLocalPluginFiles()
+			}
 			go queue.Start(workerCtx)
-			a.enqueueMaintenanceIfDue(ctx, queue)
-			a.enqueueSitemapIfDue(ctx, queue)
-			a.enqueueNotificationBackfillIfNeeded(ctx, queue)
-			plugincore.FireJobQueueSweep(a, queue)
+			a.runMaintenance(ctx, queue)
 			nextMaintenanceCheck = currentTime().Add(maintenanceCheckEvery)
 		} else if queue != nil && !currentTime().Before(nextMaintenanceCheck) {
-			a.enqueueMaintenanceIfDue(ctx, queue)
-			a.enqueueSitemapIfDue(ctx, queue)
-			a.enqueueNotificationBackfillIfNeeded(ctx, queue)
-			plugincore.FireJobQueueSweep(a, queue)
+			a.runMaintenance(ctx, queue)
 			nextMaintenanceCheck = currentTime().Add(maintenanceCheckEvery)
 		}
 		select {
@@ -291,10 +293,22 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 			if cancel != nil {
 				cancel()
 			}
+			cluster.Stop()
 			return
 		case <-ticker.C:
 		}
 	}
+}
+
+// runMaintenance 周期维护与插件巡检：多实例时只由持有「维护」租约的一个实例执行（持有者按周期续期，下线后租约过期由其他实例接手）。
+func (a *App) runMaintenance(ctx context.Context, queue *jobqueue.Queue) {
+	if !cluster.TryLease("maintenance", maintenanceCheckEvery+30*time.Minute) {
+		return
+	}
+	a.enqueueMaintenanceIfDue(ctx, queue)
+	a.enqueueSitemapIfDue(ctx, queue)
+	a.enqueueNotificationBackfillIfNeeded(ctx, queue)
+	plugincore.FireJobQueueSweep(a, queue)
 }
 
 // enqueueEmail 在生产应用中写入持久化队列。测试或安装后尚未重启的极短窗口内

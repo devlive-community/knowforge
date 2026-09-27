@@ -17,7 +17,7 @@ import (
 
 var (
 	running sync.Map // 任务 ID → *runState
-	hub     = eventhub.New(1024)
+	hub     = eventhub.New("aiwriter.tasks", 1024)
 )
 
 // runState 进行中任务的内存状态：取消函数与已生成的文本（快照据此给中途连接的写作台）；seq 为片段序号，客户端据此去重。

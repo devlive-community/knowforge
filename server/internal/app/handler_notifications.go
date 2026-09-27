@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/authz"
+	"knowforge/server/internal/cluster"
 	"knowforge/server/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -51,7 +52,16 @@ func (h *notificationHub) unsubscribe(userID uint, ch chan string) {
 	h.Unlock()
 }
 
+// broadcast 推送给本实例与其他实例上该用户的订阅者。
 func (h *notificationHub) broadcast(userID uint, message string) {
+	h.deliver(userID, message)
+	if raw, err := json.Marshal(remoteNotification{UserID: userID, Message: message}); err == nil {
+		cluster.Broadcast(channelNotifications, raw)
+	}
+}
+
+// deliver 推送给本实例上该用户的订阅者。
+func (h *notificationHub) deliver(userID uint, message string) {
 	h.Lock()
 	for ch := range h.subs[userID] {
 		select {

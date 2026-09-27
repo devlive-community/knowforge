@@ -50,7 +50,7 @@ const (
 	maxPolicyRunes    = 2000
 )
 
-var casesHub = eventhub.New(256) // 审核队列页订阅（全部管理员共用一个频道）
+var casesHub = eventhub.New("moderation.cases", 256) // 审核队列页订阅（全部管理员共用一个频道）
 
 type aiSettings struct {
 	Mode          string  `json:"mode"`

@@ -20,7 +20,7 @@ const (
 	streamHeartbeat = 25 * time.Second
 )
 
-var asksHub = eventhub.New(streamBuffer)
+var asksHub = eventhub.New("qa.asks", streamBuffer)
 
 // stepEvent 一个新增步骤及调用链合计（index 为该步骤在 trace 中的下标）。
 type stepEvent struct {

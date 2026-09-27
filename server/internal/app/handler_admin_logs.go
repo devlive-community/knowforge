@@ -85,6 +85,7 @@ func (a *App) AdminUpdateLogConfig(c *gin.Context) {
 		_ = a.setSetting("log_retention_days", strconv.Itoa(n), "运行日志留存天数")
 	}
 	a.initLogging() // 立即按新配置重建文件 writer
+	broadcastReload(reloadLogging)
 	a.Infof("运行日志配置已更新")
 	a.AdminGetLogConfig(c)
 }

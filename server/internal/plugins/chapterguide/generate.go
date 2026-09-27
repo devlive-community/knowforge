@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	booksHub = eventhub.New(256)
+	booksHub = eventhub.New("chapterguide.books", 256)
 	timersMu sync.Mutex
 	timers   = map[uint]*time.Timer{} // 章节 ID → 自动更新的延迟触发（连续保存只生成一次）
 )
