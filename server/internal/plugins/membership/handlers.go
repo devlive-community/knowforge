@@ -30,6 +30,7 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	// 本人
 	api.GET("/users/me/membership", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyMembership)
 	api.GET("/users/me/membership/gifts", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyGifts)
+	api.GET("/users/me/membership/referral", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyReferral)
 	api.POST("/membership/redeem", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.Redeem)
 	api.POST("/membership/plans/:id/trial", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.StartTrial)
 	// 管理员
@@ -51,6 +52,8 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	reg(http.MethodPut, "/admin/membership/redeem/batches/:id", b.AdminUpdateBatch)
 	reg(http.MethodGet, "/admin/membership/redeem/batches/:id/codes", b.AdminBatchCodes)
 	reg(http.MethodPut, "/admin/membership/redeem/codes/:id", b.AdminUpdateCode)
+	reg(http.MethodGet, "/admin/membership/referral", b.AdminGetReferral)
+	reg(http.MethodPut, "/admin/membership/referral", b.AdminUpdateReferral)
 	reg(http.MethodGet, "/admin/membership/coupons", b.AdminListCoupons)
 	reg(http.MethodPost, "/admin/membership/coupons", b.AdminCreateCoupon)
 	reg(http.MethodPut, "/admin/membership/coupons/:id", b.AdminUpdateCoupon)

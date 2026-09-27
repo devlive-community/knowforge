@@ -45,8 +45,8 @@ func init() {
 		Kind:        plugins.KindFeature,
 		Builtin:     true,
 		EnabledKey:  cfgEnabled,
-		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}, &TrialUse{}},
-		Tables:      []string{"membership_trial_uses", "membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
+		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}, &TrialUse{}, &ReferralReward{}},
+		Tables:      []string{"membership_referral_rewards", "membership_trial_uses", "membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
 		AdminPerms:  []authz.Permission{PermManage},
 		UserPerms:   []authz.Permission{PermRead},
 	})
@@ -65,5 +65,7 @@ func init() {
 	i18ntext.Register("notify.membership.trialStarted", map[string]string{"zh-CN": "你已开始「{plan}」免费试用，{date} 结束", "en": "Your free {plan} trial has started and ends on {date}"})
 	i18ntext.Register("notify.membership.trialExpiring", map[string]string{"zh-CN": "你的「{plan}」试用将于 {date} 结束，购买后可继续使用，剩余试用天数会累加", "en": "Your {plan} trial ends on {date}. Buy now to keep it; remaining trial days carry over"})
 	i18ntext.Register("notify.membership.trialExpired", map[string]string{"zh-CN": "你的「{plan}」试用已结束，购买后即可继续使用", "en": "Your {plan} trial has ended. Buy a membership to keep using it"})
+	i18ntext.Register("notify.membership.referralReward", map[string]string{"zh-CN": "邀请奖励：你获得了 {days} 天「{plan}」会员，有效期至 {date}", "en": "Referral reward: {days} days of {plan}, now active until {date}"})
+	i18ntext.Register("notify.membership.referralBonus", map[string]string{"zh-CN": "受邀开通会员，额外获得 {days} 天「{plan}」会员，有效期至 {date}", "en": "Thanks for joining via an invite: {days} extra days of {plan}, active until {date}"})
 	i18ntext.Register("notify.membership.revoked", map[string]string{"zh-CN": "你的「{plan}」会员已被取消", "en": "Your {plan} membership has been cancelled"})
 }

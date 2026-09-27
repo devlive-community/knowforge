@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import AdminLayout from '@/components/AdminLayout'
 import RedeemPanel from '@/components/membership/RedeemPanel'
 import CouponPanel from '@/components/membership/CouponPanel'
+import ReferralPanel from '@/components/membership/ReferralPanel'
 import FeatureGate from '@/components/FeatureGate'
 import ResourceIcon from '@/components/ResourceIcon'
 import IconPicker from '@/components/IconPicker'
@@ -17,8 +18,8 @@ import type { EntitlementDef } from '@/lib/entitlements'
 import { centsFromInput, inputFromCents, type MembershipPlan, type MembershipRecord } from '@/lib/membership'
 import { durationLabel, formatPrice } from '@/lib/commerce'
 
-type Tab = 'plans' | 'members' | 'redeem' | 'coupons' | 'records' | 'settings'
-const TABS: Tab[] = ['plans', 'members', 'redeem', 'coupons', 'records', 'settings']
+type Tab = 'plans' | 'members' | 'redeem' | 'coupons' | 'referral' | 'records' | 'settings'
+const TABS: Tab[] = ['plans', 'members', 'redeem', 'coupons', 'referral', 'records', 'settings']
 
 interface PlanItem { plan: MembershipPlan; active_members: number }
 interface PriceRow { key: string; id?: number; duration_days: string; price: string; original: string }
@@ -87,6 +88,7 @@ function AdminMembershipInner() {
         {tab === 'members' && <MembersPanel plans={plans || []} onChanged={loadPlans} />}
         {tab === 'redeem' && (plans ? <RedeemPanel plans={plans} /> : <Loading className="py-16" />)}
         {tab === 'coupons' && (plans ? <CouponPanel plans={plans} /> : <Loading className="py-16" />)}
+        {tab === 'referral' && (plans ? <ReferralPanel plans={plans} /> : <Loading className="py-16" />)}
         {tab === 'records' && <RecordsPanel />}
         {tab === 'settings' && <SettingsPanel onSaved={loadPlans} />}
       </div>

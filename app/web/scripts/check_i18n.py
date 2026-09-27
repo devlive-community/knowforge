@@ -91,10 +91,11 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'files.source.': ['upload', 'markdown_import', 'image_localize'],
     'entitlement.source.': ['base', 'level', 'membership', 'admin', 'unavailable'],
     # 会员：tab / 状态 / 流水动作（Record.Action 取值域）/ 时长单位
-    'admin.membership.tab.': ['plans', 'members', 'redeem', 'coupons', 'records', 'settings'],
+    'admin.membership.tab.': ['plans', 'members', 'redeem', 'coupons', 'referral', 'records', 'settings'],
     'admin.membership.redeem.kind.': ['cards', 'promo'],
     'membership.gift.status.': ['unused', 'redeemed', 'void'],
     'admin.membership.coupon.type.': ['percent', 'amount'],
+    'membership.referral.kind.': ['signup', 'purchase'],
     'admin.membership.coupon.useStatus.': ['reserved', 'used', 'released'],
     'admin.membership.redeem.kindHint.': ['cards', 'promo'],
     'admin.membership.status.': ['active', 'archived'],

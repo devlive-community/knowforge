@@ -80,7 +80,9 @@ func fulfillOrder(core plugincore.Core, userID uint, orderNo string, payload map
 	if err != nil || done {
 		return err
 	}
-	(&behavior{core: core}).notifyChange(userID, plan, action, m.ExpiresAt)
+	b := &behavior{core: core}
+	b.notifyChange(userID, plan, action, m.ExpiresAt)
+	b.rewardPurchase(userID, orderNo) // 被邀请人首次购买：邀请奖励（按被邀请人幂等）
 	return nil
 }
 
@@ -108,7 +110,7 @@ func refundOrder(core plugincore.Core, ev plugincore.RefundEvent) error {
 	if !ev.Revoke || ev.TotalCents <= 0 {
 		return nil
 	}
-	var d deduction
+	var ds []deduction
 	err := core.Gorm().Transaction(func(tx *gorm.DB) error {
 		var n int64
 		tx.Model(&Record{}).Where("source = ? AND source_ref = ?", refundSource, ev.RefundNo).Count(&n)
@@ -116,14 +118,22 @@ func refundOrder(core plugincore.Core, ev plugincore.RefundEvent) error {
 		if n > 0 || tx.Where("source = ? AND source_ref = ?", orderSource, ev.OrderNo).First(&granted).Error != nil {
 			return nil // 已处理，或该订单从未开通（无需扣回）
 		}
-		var err error
-		d, err = deductDays(tx, ev.UserID, proportionalDays(granted.Days, ev), ev.RefundNo, "订单 %s 退款，扣回 %d 天", ev.OrderNo, time.Now())
+		now := time.Now()
+		// 该订单触发过邀请奖励：一并按比例扣回邀请人与被邀请人的奖励
+		bonus, inviter, err := clawbackReferral(tx, ev, now)
+		if err != nil {
+			return err
+		}
+		d, err := deductDays(tx, ev.UserID, proportionalDays(granted.Days, ev)+bonus, ev.RefundNo, "订单 %s 退款，扣回 %d 天", ev.OrderNo, now)
+		ds = append(append(ds, d), inviter...)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	d.notify(core)
+	for _, d := range ds {
+		d.notify(core)
+	}
 	return nil
 }
 

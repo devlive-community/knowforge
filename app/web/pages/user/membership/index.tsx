@@ -5,6 +5,7 @@ import FeatureGate from '@/components/FeatureGate'
 import ResourceIcon from '@/components/ResourceIcon'
 import MyEntitlementsCard from '@/components/MyEntitlementsCard'
 import GiftsCard from '@/components/membership/GiftsCard'
+import ReferralCard from '@/components/membership/ReferralCard'
 import Seo from '@/components/Seo'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
@@ -201,6 +202,8 @@ function MyMembershipInner() {
 
           <GiftsCard />
 
+          <ReferralCard />
+
           <MyEntitlementsCard />
 
           {/* 会员记录 */}
@@ -213,6 +216,7 @@ function MyMembershipInner() {
                     <span className="flex min-w-0 items-center gap-2">
                       <Badge tone={r.action === 'revoke' ? 'rose' : 'amber'}>{t(`membership.action.${r.action}`)}</Badge>
                       {r.source === 'trial' && <Badge tone="sky">{t('membership.trial.badge')}</Badge>}
+                      {r.source === 'referral' && <Badge tone="violet">{t('membership.referral.badge')}</Badge>}
                       <span className="truncate text-slate-700">{r.plan_name}{r.days > 0 ? ` · ${durationLabel(t, r.days)}` : ''}</span>
                     </span>
                     <span className="text-xs text-slate-400">
