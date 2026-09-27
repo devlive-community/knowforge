@@ -210,7 +210,7 @@ func (b *behavior) CancelTask(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if t.Status != statusRunning || !cancelTask(t.ID) {
+	if t.Status != statusRunning || !cancelTask(t) {
 		b.core.Fail(c, http.StatusConflict, "该任务已结束")
 		return
 	}
@@ -258,6 +258,8 @@ func (b *behavior) DeleteTask(c *gin.Context) {
 type taskView struct {
 	Task
 	ResultSeq int `json:"result_seq,omitempty"`
+	// ResultSync 进行中且在其他实例上生成：快照不含已生成文本，随后推送 partial 补齐（此前的 delta 应忽略）
+	ResultSync bool `json:"result_sync,omitempty"`
 }
 
 // StreamTask GET /ai-writer/tasks/:id/stream（?ticket= 事件流凭证鉴权）一个任务的实时生成：
@@ -280,11 +282,17 @@ func (b *behavior) StreamTask(c *gin.Context) {
 	defer hub.Unsubscribe(t.ID, ch)
 	t, _ = load()
 	view := taskView{Task: t}
+	remote := false
 	if v, ok := running.Load(t.ID); ok && t.Status == statusRunning {
 		view.Result, view.ResultSeq = v.(*runState).snapshot()
+	} else if t.Status == statusRunning {
+		view.ResultSync, remote = true, true // 在其他实例上生成：请求其推送 partial
 	}
 	snapshot, _ := json.Marshal(view)
 	eventhub.Write(c.Writer, "snapshot", snapshot)
+	if remote {
+		running.RequestPartial(t.ID)
+	}
 	if t.Status != statusRunning {
 		eventhub.Write(c.Writer, "done", snapshot)
 		return

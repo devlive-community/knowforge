@@ -28,16 +28,22 @@ export function applyStep(ask: QAAsk, ev: StepEvent): QAAsk {
 
 interface DeltaEvent { seq: number; text?: string }
 
-// applyDelta 追加回答文本片段（快照已包含的忽略）。
+// applyDelta 追加回答文本片段（快照已包含的忽略；等待 partial 同步期间忽略）。
 export function applyDelta(ask: QAAsk, ev: DeltaEvent): QAAsk {
-  if (ev.seq <= (ask.answer_seq ?? 0)) return ask
+  if (ask.answer_sync || ev.seq <= (ask.answer_seq ?? 0)) return ask
   return { ...ask, answer: (ask.answer || '') + (ev.text || ''), answer_seq: ev.seq }
 }
 
 // applyReset 本轮以工具调用结束：清空临时文本（快照已是更新的内容时忽略）。
 export function applyReset(ask: QAAsk, ev: DeltaEvent): QAAsk {
-  if ((ask.answer_seq ?? 0) > ev.seq) return ask
+  if (ask.answer_sync || (ask.answer_seq ?? 0) > ev.seq) return ask
   return { ...ask, answer: '', answer_seq: ev.seq }
+}
+
+// applyPartial 多实例：生成所在实例推送的完整部分回答（等待同步时直接采用；否则只采用不旧于当前的）。
+export function applyPartial(ask: QAAsk, ev: DeltaEvent): QAAsk {
+  if (!ask.answer_sync && ev.seq < (ask.answer_seq ?? 0)) return ask
+  return { ...ask, answer: ev.text || '', answer_seq: ev.seq, answer_sync: false }
 }
 
 // useAskStreams 为列表中每条进行中的问答订阅进度；update 用最新记录替换（或按函数更新）列表项，onFinish 在某条结束时调用。
@@ -73,6 +79,10 @@ export function useAskStreams(
       source.addEventListener('reset', (e) => {
         const ev = parse<DeltaEvent>(e as MessageEvent)
         if (ev) updateRef.current(id, (ask) => applyReset(ask, ev))
+      })
+      source.addEventListener('partial', (e) => {
+        const ev = parse<DeltaEvent>(e as MessageEvent)
+        if (ev) updateRef.current(id, (ask) => applyPartial(ask, ev))
       })
       source.addEventListener('done', (e) => {
         stop() // 结束后关闭，不再重连

@@ -18,6 +18,7 @@ import (
 
 	"knowforge/server/internal/app"
 	"knowforge/server/internal/auth"
+	"knowforge/server/internal/cluster"
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
@@ -634,6 +635,27 @@ func TestQAAgentUnboundedTraceAndCancel(t *testing.T) {
 	e.db.First(&orphan, orphan.ID)
 	if orphan.Status != "failed" || orphan.Error == "" {
 		t.Fatalf("遗留记录应标记中断: %+v", orphan)
+	}
+
+	// 多实例：在其他在线实例上生成的问答不被巡检误判，可跨实例取消；该实例下线后才标记中断
+	if err := cluster.Start(context.Background(), e.db, "test"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cluster.Stop)
+	e.db.Create(&cluster.Instance{ID: "peer", StartedAt: time.Now(), SeenAt: time.Now()})
+	remote := qa.Ask{BookID: bookID, UserID: reader.ID, Mode: "rag", Question: "在其他实例上", Status: "running", Runner: "peer", CreatedAt: time.Now().Add(-time.Minute)}
+	e.db.Create(&remote)
+	plugincore.FireJobQueueSweep(e.app, e.app.Jobs)
+	if e.db.First(&remote, remote.ID); remote.Status != "running" {
+		t.Fatalf("其他在线实例上的问答不应被标记中断: %+v", remote)
+	}
+	if status, _ := e.as(t, reader, http.MethodPost, fmt.Sprintf("/api/v1/qa/asks/%d/cancel", remote.ID), ""); status != http.StatusOK {
+		t.Fatalf("应可取消其他实例上的问答: %d", status)
+	}
+	e.db.Model(&cluster.Instance{}).Where("id = ?", "peer").Update("seen_at", time.Now().Add(-time.Hour))
+	plugincore.FireJobQueueSweep(e.app, e.app.Jobs)
+	if e.db.First(&remote, remote.ID); remote.Status != "failed" {
+		t.Fatalf("执行实例下线后应标记中断: %+v", remote)
 	}
 }
 

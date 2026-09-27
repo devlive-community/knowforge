@@ -233,6 +233,8 @@ type askView struct {
 	Citations []Citation  `json:"citations"`
 	Trace     []TraceStep `json:"trace"`
 	AnswerSeq int         `json:"answer_seq,omitempty"` // 进行中：快照已包含的回答片段序号
+	// AnswerSync 进行中且在其他实例上生成：快照不含部分回答，随后推送 partial 补齐（此前的 delta 应忽略）
+	AnswerSync bool `json:"answer_sync,omitempty"`
 }
 
 func toAskView(a Ask) askView {
@@ -333,7 +335,7 @@ func (b *behavior) CancelAsk(c *gin.Context) {
 		b.core.Fail(c, http.StatusNotFound, "记录不存在")
 		return
 	}
-	if rec.Status != askRunning || !cancelAsk(rec.ID) {
+	if rec.Status != askRunning || !cancelAsk(rec) {
 		b.core.Fail(c, http.StatusConflict, "该问答已结束")
 		return
 	}
@@ -418,7 +420,7 @@ func (b *behavior) DeleteAsk(c *gin.Context) {
 		b.core.Fail(c, http.StatusNotFound, "记录不存在")
 		return
 	}
-	cancelAsk(rec.ID) // 进行中的先取消（已产生的调用仍记入 AI 用量）
+	cancelAsk(rec) // 进行中的先取消（已产生的调用仍记入 AI 用量）
 	b.core.Gorm().Delete(&Ask{}, rec.ID)
 	b.core.OK(c, gin.H{"message": "已删除"})
 }

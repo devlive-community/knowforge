@@ -61,6 +61,7 @@ type Ask struct {
 	Status       string    `gorm:"size:10" json:"status"`         // running | done | failed | canceled
 	Error        string    `gorm:"size:500" json:"error"`         // 面向读者的错误说明（不含 AI 服务原始报错）
 	TraceID      string    `gorm:"size:40;index" json:"trace_id"` // 与核心 AI 用量记录的调用链 ID 一致
+	Runner       string    `gorm:"size:32" json:"-"`              // 进行中：执行生成的服务实例（多实例部署）
 	Trace        string    `gorm:"type:text" json:"-"`            // JSON []TraceStep 调用链
 	DurationMs   int64     `json:"duration_ms"`
 	QEmbedding   []byte    `json:"-"` // 问题向量（作者洞察归类用，后台计算）

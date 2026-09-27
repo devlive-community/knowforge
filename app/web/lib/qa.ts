@@ -33,6 +33,7 @@ export interface QAAsk {
   citations: QACitation[]
   trace: QATraceStep[]
   answer_seq?: number // 进行中：已包含的回答片段序号（SSE delta 去重用）
+  answer_sync?: boolean // 进行中且在其他服务实例上生成：等待 partial 补齐已生成的回答，期间忽略 delta
 }
 
 // QATraceStep 调用链中的一步（与服务端 TraceStep 一致）

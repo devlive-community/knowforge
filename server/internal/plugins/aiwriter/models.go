@@ -23,6 +23,7 @@ type Task struct {
 	Status       string     `gorm:"size:10;index" json:"status"`
 	Error        string     `gorm:"size:500" json:"error"`
 	TraceID      string     `gorm:"size:64" json:"trace_id"`
+	Runner       string     `gorm:"size:32" json:"-"` // 进行中：执行生成的服务实例（多实例部署）
 	Model        string     `gorm:"size:100" json:"model"`
 	InputTokens  int64      `json:"input_tokens"`
 	OutputTokens int64      `json:"output_tokens"`

@@ -45,6 +45,7 @@ type TranslateJob struct {
 	OutputTokens int64      `json:"output_tokens"`
 	Estimated    bool       `json:"estimated"`
 	TraceID      string     `gorm:"size:64" json:"trace_id"`
+	Runner       string     `gorm:"size:32" json:"-"` // 进行中：执行翻译的服务实例（多实例部署）
 	Error        string     `gorm:"size:500" json:"error"`
 	FinishedAt   *time.Time `json:"finished_at"`
 	CreatedAt    time.Time  `json:"created_at"`

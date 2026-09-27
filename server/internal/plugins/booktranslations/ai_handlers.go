@@ -392,6 +392,8 @@ type jobView struct {
 	Job     TranslateJob    `json:"job"`
 	Items   []TranslateItem `json:"items"`
 	Current *deltaEvent     `json:"current,omitempty"` // 进行中：当前章节已生成的译文（后续 delta 按 seq 去重）
+	// CurrentSync 进行中且在其他实例上执行：快照不含当前译文，随后推送 partial 补齐（此前的 reset/delta 应忽略）
+	CurrentSync bool `json:"current_sync,omitempty"`
 }
 
 // myJob 当前用户发起的任务（管理员可查看全部）。
@@ -424,12 +426,10 @@ func (b *behavior) PauseJob(c *gin.Context) {
 	if !ok {
 		return
 	}
-	v, live := runningJobs.Load(job.ID)
-	if job.Status != jobRunning || !live {
+	if job.Status != jobRunning || !runningJobs.Cancel(job.ID, job.Runner) { // 可能在其他实例上执行
 		b.core.Fail(c, http.StatusConflict, "任务不在进行中")
 		return
 	}
-	v.(*jobRun).cancel()
 	b.core.OK(c, gin.H{"paused": true})
 }
 
@@ -508,12 +508,18 @@ func (b *behavior) StreamJob(c *gin.Context) {
 	defer jobsHub.Unsubscribe(job.ID, ch)
 	b.core.Gorm().First(&job, job.ID)
 	view := b.view(job)
+	remote := false
 	if v, live := runningJobs.Load(job.ID); live && job.Status == jobRunning {
 		cur := v.(*jobRun).snapshot()
 		view.Current = &cur
+	} else if job.Status == jobRunning {
+		view.CurrentSync, remote = true, true // 在其他实例上执行：请求其推送 partial
 	}
 	snapshot, _ := json.Marshal(view)
 	eventhub.Write(c.Writer, "snapshot", snapshot)
+	if remote {
+		runningJobs.RequestPartial(job.ID)
+	}
 	if job.Status != jobRunning {
 		eventhub.Write(c.Writer, "done", snapshot)
 		return

@@ -53,11 +53,17 @@ func (b *behavior) StreamAsk(c *gin.Context) {
 	defer asksHub.Unsubscribe(rec.ID, ch)
 	rec, _ = load()
 	view := toAskView(rec)
+	remote := false
 	if v, ok := runningAsks.Load(rec.ID); ok && rec.Status == askRunning {
 		view.Answer, view.AnswerSeq = v.(*runState).snapshot() // 已生成的部分回答（后续 delta 按 seq 去重）
+	} else if rec.Status == askRunning {
+		view.AnswerSync, remote = true, true // 在其他实例上生成：请求其推送 partial
 	}
 	snapshot, _ := json.Marshal(view)
 	eventhub.Write(c.Writer, "snapshot", snapshot)
+	if remote {
+		runningAsks.RequestPartial(rec.ID)
+	}
 	if rec.Status != askRunning {
 		eventhub.Write(c.Writer, "done", snapshot)
 		return

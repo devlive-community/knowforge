@@ -15,9 +15,11 @@ import (
 	"gorm.io/gorm"
 
 	"knowforge/server/internal/ai"
+	"knowforge/server/internal/cluster"
 	"knowforge/server/internal/eventhub"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
+	"knowforge/server/internal/taskrun"
 )
 
 // 整本 AI 翻译在后台逐章进行：先翻译目录并在译本中建好全部章节（草稿），再逐章翻译正文；
@@ -25,7 +27,7 @@ import (
 // 进程内登记进行中的任务，服务重启后遗留的进行中任务由巡检标记为已暂停，可继续。
 
 var (
-	runningJobs sync.Map // 任务 ID → *jobRun
+	runningJobs = taskrun.New("booktranslations.jobs") // 任务 ID → *jobRun
 	jobsHub     = eventhub.New("booktranslations.jobs", 1024)
 )
 
@@ -66,6 +68,16 @@ func (r *jobRun) append(text string) {
 	r.seq++
 	r.partial.WriteString(text)
 	jobsHub.Publish(r.id, "delta", deltaEvent{ItemID: r.itemID, Seq: r.seq, Text: text})
+}
+
+// Cancel 暂停任务（taskrun.Runner）。
+func (r *jobRun) Cancel() { r.cancel() }
+
+// PublishPartial 推送当前章节的完整部分译文（在锁内推送，与 delta 保持顺序），供其他实例上的订阅者同步。
+func (r *jobRun) PublishPartial() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	jobsHub.Publish(r.id, "partial", deltaEvent{ItemID: r.itemID, Seq: r.seq, Text: r.partial.String()})
 }
 
 func (r *jobRun) snapshot() deltaEvent {
@@ -463,16 +475,17 @@ func (b *behavior) startJob(job TranslateJob) {
 	ctx, cancel := context.WithCancel(ai.WithCaller(context.Background(),
 		ai.Caller{UserID: job.UserID, Feature: featureBookTranslate, RefType: "book", RefID: job.TargetBookID, TraceID: job.TraceID}))
 	run := &jobRun{id: job.ID, cancel: cancel}
-	if _, loaded := runningJobs.LoadOrStore(job.ID, run); loaded {
+	if !runningJobs.Add(job.ID, run) {
 		cancel()
 		return
 	}
+	b.core.Gorm().Model(&TranslateJob{}).Where("id = ?", job.ID).Update("runner", cluster.Self())
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
 				b.stopJob(job.ID, jobFailed, "翻译出错，请继续或重试")
 			}
-			runningJobs.Delete(job.ID)
+			runningJobs.Remove(job.ID)
 			cancel()
 		}()
 		b.runJob(ctx, job.ID, run)
@@ -559,16 +572,16 @@ func (b *behavior) stopJob(id uint, status, errMsg string) {
 	}
 }
 
-// sweepInterruptedJobs 把不在本进程中运行的「进行中」任务标记为已暂停（服务重启等），可继续。
+// sweepInterruptedJobs 把执行实例已下线的「进行中」任务标记为已暂停（服务重启等；其他在线实例上运行的不受影响），可继续。
 func sweepInterruptedJobs(core plugincore.Core) {
 	db := core.Gorm()
 	if !db.Migrator().HasTable(&TranslateJob{}) {
 		return
 	}
-	var ids []uint
-	db.Model(&TranslateJob{}).Where("status = ? AND created_at < ?", jobRunning, time.Now().Add(-30*time.Second)).Pluck("id", &ids)
-	for _, id := range ids {
-		if _, live := runningJobs.Load(id); !live {
+	var rows []TranslateJob
+	db.Select("id, runner").Where("status = ? AND created_at < ?", jobRunning, time.Now().Add(-30*time.Second)).Find(&rows)
+	for _, r := range rows {
+		if id := r.ID; runningJobs.Orphaned(id, r.Runner) {
 			db.Model(&TranslateItem{}).Where("job_id = ? AND status = ?", id, itemRunning).Update("status", itemPending)
 			db.Model(&TranslateJob{}).Where("id = ? AND status = ?", id, jobRunning).
 				Updates(map[string]any{"status": jobPaused, "error": "服务重启，翻译已暂停，可继续"})

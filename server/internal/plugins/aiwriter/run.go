@@ -8,15 +8,17 @@ import (
 	"time"
 
 	"knowforge/server/internal/ai"
+	"knowforge/server/internal/cluster"
 	"knowforge/server/internal/eventhub"
 	"knowforge/server/internal/plugincore"
+	"knowforge/server/internal/taskrun"
 )
 
 // 任务在后台生成：不受单个 HTTP 请求（及反向代理）超时约束，也不限制时长；生成的文本片段经 SSE 推给写作台（见 stream.go），
 // 作者可随时取消（已生成的部分保留）。进程内登记进行中的任务，服务重启后遗留的进行中记录由巡检标记为中断。
 
 var (
-	running sync.Map // 任务 ID → *runState
+	running = taskrun.New("aiwriter.tasks") // 任务 ID → *runState
 	hub     = eventhub.New("aiwriter.tasks", 1024)
 )
 
@@ -43,6 +45,16 @@ func (s *runState) append(text string) {
 	hub.Publish(s.id, "delta", deltaEvent{Seq: s.seq, Text: text})
 }
 
+// Cancel 取消任务（taskrun.Runner）。
+func (s *runState) Cancel() { s.cancel() }
+
+// PublishPartial 推送已生成的完整文本（在锁内推送，与 delta 保持顺序），供其他实例上的订阅者同步。
+func (s *runState) PublishPartial() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hub.Publish(s.id, "partial", deltaEvent{Seq: s.seq, Text: s.partial.String()})
+}
+
 // snapshot 已生成的文本与序号。
 func (s *runState) snapshot() (string, int) {
 	s.mu.Lock()
@@ -50,13 +62,8 @@ func (s *runState) snapshot() (string, int) {
 	return s.partial.String(), s.seq
 }
 
-func cancelTask(id uint) bool {
-	if v, ok := running.Load(id); ok {
-		v.(*runState).cancel()
-		return true
-	}
-	return false
-}
+// cancelTask 取消进行中的任务（可能在其他实例上运行），返回是否找到。
+func cancelTask(t Task) bool { return running.Cancel(t.ID, t.Runner) }
 
 // 动作。
 const (
@@ -146,7 +153,8 @@ func buildPrompt(t Task, bookTitle, docTitle, before, after string) string {
 func (b *behavior) start(t Task, caller ai.Caller, prompt string) {
 	ctx, cancel := context.WithCancel(ai.WithCaller(context.Background(), caller))
 	st := &runState{id: t.ID, cancel: cancel}
-	running.Store(t.ID, st)
+	running.Add(t.ID, st)
+	b.core.Gorm().Model(&Task{}).Where("id = ?", t.ID).Update("runner", cluster.Self())
 	go func() {
 		started := time.Now()
 		defer func() {
@@ -154,7 +162,7 @@ func (b *behavior) start(t Task, caller ai.Caller, prompt string) {
 				text, _ := st.snapshot()
 				b.finish(t.ID, started, statusFailed, text, ai.ChatResponse{}, "生成出错，请重试")
 			}
-			running.Delete(t.ID)
+			running.Remove(t.ID)
 			cancel()
 		}()
 		resp, err := b.core.AIChatStream(ctx, ai.ChatRequest{System: systemPrompt, Messages: []ai.Message{{Role: "user", Content: prompt}}}, st.append)
@@ -193,17 +201,18 @@ func (b *behavior) finish(id uint, started time.Time, status, result string, res
 	}
 }
 
-// sweepInterrupted 把不在本进程中运行的「进行中」任务标记为中断（服务重启等）；只处理创建超过 30 秒的记录，避开刚创建、尚未登记的任务。
+// sweepInterrupted 把执行实例已下线的「进行中」任务标记为中断（服务重启等；其他在线实例上运行的不受影响）；
+// 只处理创建超过 30 秒的记录，避开刚创建、尚未登记的任务。
 func sweepInterrupted(core plugincore.Core) {
 	db := core.Gorm()
 	if !db.Migrator().HasTable(&Task{}) {
 		return
 	}
-	var ids []uint
-	db.Model(&Task{}).Where("status = ? AND created_at < ?", statusRunning, time.Now().Add(-30*time.Second)).Pluck("id", &ids)
-	for _, id := range ids {
-		if _, live := running.Load(id); !live {
-			db.Model(&Task{}).Where("id = ? AND status = ?", id, statusRunning).
+	var rows []Task
+	db.Select("id, runner").Where("status = ? AND created_at < ?", statusRunning, time.Now().Add(-30*time.Second)).Find(&rows)
+	for _, r := range rows {
+		if running.Orphaned(r.ID, r.Runner) {
+			db.Model(&Task{}).Where("id = ? AND status = ?", r.ID, statusRunning).
 				Updates(map[string]any{"status": statusFailed, "error": "服务重启，生成已中断，请重试"})
 		}
 	}

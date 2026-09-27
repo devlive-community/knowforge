@@ -70,6 +70,7 @@ export interface JobState {
   job: TranslateJob
   items: TranslateItem[]
   current?: CurrentText | null
+  current_sync?: boolean // 进行中且在其他服务实例上执行：等待 partial 补齐当前译文，期间忽略 reset/delta
 }
 
 export interface TranslateTarget {
@@ -100,15 +101,21 @@ export function applyItem(state: JobState, item: TranslateItem): JobState {
 }
 
 export function applyReset(state: JobState, ev: { item_id: number; seq: number }): JobState {
-  if (ev.seq <= (state.current?.seq ?? 0)) return state
+  if (state.current_sync || ev.seq <= (state.current?.seq ?? 0)) return state
   return { ...state, current: { item_id: ev.item_id, seq: ev.seq, text: '' } }
 }
 
 export function applyDelta(state: JobState, ev: { item_id: number; seq: number; text?: string }): JobState {
   const cur = state.current
-  if (ev.seq <= (cur?.seq ?? 0)) return state
+  if (state.current_sync || ev.seq <= (cur?.seq ?? 0)) return state
   const text = cur && cur.item_id === ev.item_id ? cur.text : ''
   return { ...state, current: { item_id: ev.item_id, seq: ev.seq, text: text + (ev.text || '') } }
+}
+
+// applyPartial 多实例：执行所在实例推送的当前章节完整译文（等待同步时直接采用；否则只采用不旧于当前的）。
+export function applyPartial(state: JobState, ev: { item_id: number; seq: number; text?: string }): JobState {
+  if (!state.current_sync && ev.seq < (state.current?.seq ?? 0)) return state
+  return { ...state, current: { item_id: ev.item_id, seq: ev.seq, text: ev.text || '' }, current_sync: false }
 }
 
 // progressPercent 进度百分比（已完成 + 失败 / 总数）。
@@ -150,6 +157,10 @@ export function useTranslateJobStream(state: JobState | null, update: (next: (s:
       source.addEventListener('delta', (e) => {
         const ev = parse<{ item_id: number; seq: number; text?: string }>(e)
         if (ev) updateRef.current((s) => applyDelta(s, ev))
+      })
+      source.addEventListener('partial', (e) => {
+        const ev = parse<{ item_id: number; seq: number; text?: string }>(e)
+        if (ev) updateRef.current((s) => applyPartial(s, ev))
       })
       source.addEventListener('done', (e) => {
         stop()

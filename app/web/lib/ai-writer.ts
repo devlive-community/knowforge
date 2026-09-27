@@ -47,6 +47,7 @@ export interface WriterTask {
   adopted_at: string | null
   created_at: string
   result_seq?: number
+  result_sync?: boolean // 进行中且在其他服务实例上生成：等待 partial 补齐已生成的文本，期间忽略 delta
 }
 
 export interface WriterStatus {
@@ -63,10 +64,16 @@ export interface WriterTarget {
 
 interface DeltaEvent { seq: number; text?: string }
 
-// applyWriterDelta 追加文本片段（快照已包含的忽略）。
+// applyWriterDelta 追加文本片段（快照已包含的忽略；等待 partial 同步期间忽略）。
 export function applyWriterDelta(task: WriterTask, ev: DeltaEvent): WriterTask {
-  if (ev.seq <= (task.result_seq ?? 0)) return task
+  if (task.result_sync || ev.seq <= (task.result_seq ?? 0)) return task
   return { ...task, result: task.result + (ev.text || ''), result_seq: ev.seq }
+}
+
+// applyWriterPartial 多实例：生成所在实例推送的完整已生成文本（等待同步时直接采用；否则只采用不旧于当前的）。
+export function applyWriterPartial(task: WriterTask, ev: DeltaEvent): WriterTask {
+  if (!task.result_sync && ev.seq < (task.result_seq ?? 0)) return task
+  return { ...task, result: ev.text || '', result_seq: ev.seq, result_sync: false }
 }
 
 // buildRequest 按动作从正文与选区确定处理对象与上下文：
@@ -128,6 +135,10 @@ export function useWriterTaskStream(task: WriterTask | null, update: (next: (t: 
       source.addEventListener('delta', (e) => {
         const ev = parse<DeltaEvent>(e)
         if (ev) updateRef.current((cur) => (cur.id === runningId ? applyWriterDelta(cur, ev) : cur))
+      })
+      source.addEventListener('partial', (e) => {
+        const ev = parse<DeltaEvent>(e)
+        if (ev) updateRef.current((cur) => (cur.id === runningId ? applyWriterPartial(cur, ev) : cur))
       })
       source.addEventListener('done', (e) => {
         stop() // 结束后关闭，不再重连
