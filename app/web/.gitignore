@@ -1,1 +1,7 @@
 .sitemap-cache/
+# 端到端测试
+e2e/.data/
+e2e/.state.json
+test-results/
+playwright-report/
+.next-e2e/

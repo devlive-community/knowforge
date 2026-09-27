@@ -324,6 +324,18 @@ cd server && KNOWFORGE_TEST_DB=mysql KNOWFORGE_TEST_DB_PORT=53306 KNOWFORGE_TEST
 
 可用的环境变量：`KNOWFORGE_TEST_DB`（`postgres` / `mysql`）、`KNOWFORGE_TEST_DB_HOST`、`KNOWFORGE_TEST_DB_PORT`、`KNOWFORGE_TEST_DB_USER`（默认 `postgres` / `root`）、`KNOWFORGE_TEST_DB_PASSWORD`。
 
+### 端到端测试
+
+`app/web/e2e` 下的 Playwright 测试会自动启动一个全新的后端（端口 6989，独立数据目录）、假 AI 服务（6990）与前端开发服务（3100），与本地开发服务互不影响；覆盖会员购买与优惠券、礼品卡、试用、邀请奖励、退款、付费墙与问答实时推送。
+
+```bash
+cd app/web
+pnpm exec playwright install chromium   # 首次运行需要下载测试浏览器
+pnpm e2e
+```
+
+失败时截图与操作记录保存在 `app/web/test-results/`，可用 `pnpm exec playwright show-trace <trace.zip>` 查看。
+
 ---
 
 ## 相关链接
