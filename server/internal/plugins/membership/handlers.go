@@ -29,6 +29,7 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	api.GET("/membership/plans", core.OptionalAuth(), feat, b.PublicPlans)
 	// 本人
 	api.GET("/users/me/membership", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyMembership)
+	api.POST("/membership/redeem", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.Redeem)
 	// 管理员
 	adminGuard := []gin.HandlerFunc{core.RequireAuth(), core.RequireAdmin(), feat, core.RequirePermissionMiddleware(PermManage)}
 	reg := func(method, path string, h gin.HandlerFunc) {
@@ -43,6 +44,11 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	reg(http.MethodPut, "/admin/membership/members/:user_id", b.AdminAdjust)
 	reg(http.MethodPost, "/admin/membership/members/:user_id/revoke", b.AdminRevoke)
 	reg(http.MethodGet, "/admin/membership/records", b.AdminListRecords)
+	reg(http.MethodGet, "/admin/membership/redeem/batches", b.AdminListBatches)
+	reg(http.MethodPost, "/admin/membership/redeem/batches", b.AdminCreateBatch)
+	reg(http.MethodPut, "/admin/membership/redeem/batches/:id", b.AdminUpdateBatch)
+	reg(http.MethodGet, "/admin/membership/redeem/batches/:id/codes", b.AdminBatchCodes)
+	reg(http.MethodPut, "/admin/membership/redeem/codes/:id", b.AdminUpdateCode)
 	reg(http.MethodGet, "/admin/membership/settings", b.AdminGetSettings)
 	reg(http.MethodPut, "/admin/membership/settings", b.AdminUpdateSettings)
 }

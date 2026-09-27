@@ -475,6 +475,12 @@ Authorization: Bearer <token>
 | POST | `/admin/membership/members/:user_id/revoke` | `{reason?}` 取消会员（立即失效，流水保留） | `membership:manage` |
 | GET | `/admin/membership/records?user_id=&page=&page_size=` | 会员流水 `items:[{record{action,plan_name,days,prev_expires_at,expires_at,source,source_ref,reason,created_at},user,operator?}]` | `membership:manage` |
 | GET/PUT | `/admin/membership/settings` | `{currency(ISO 4217), reminder_days(0–30)}`，PUT 可只传部分字段 | `membership:manage` |
+| POST | `/membership/redeem` | `{code}` 兑换码开通/续期会员（不区分大小写，可省略 `-`）；同一批次每人限用一次，失败过多（每小时 10 次）返回 429；返回 `{action: grant\|extend\|switch, plan{id,name}, expires_at}`，流水来源 `redeem` | `membership:read` |
+| GET | `/admin/membership/redeem/batches?page=&page_size=` | 兑换码批次 `items:[{id,name,plan_id,plan_name,days,kind:cards\|promo,max_uses,expires_at?,status,codes,redeemed,promo_code?}]`（不含礼品卡） | `membership:manage` |
+| POST | `/admin/membership/redeem/batches` | `{name, plan_id, days(1–3650), kind, count?(cards，1–10000), code?(promo，4–40 位字母数字下划线，缺省随机), max_uses?(promo，1–1000000), expires_at?}` 生成一批卡密或一个多人可用的推广码，返回批次 | `membership:manage` |
+| PUT | `/admin/membership/redeem/batches/:id` | `{status: active\|disabled}` 停用/启用整批 | `membership:manage` |
+| GET | `/admin/membership/redeem/batches/:id/codes?page=&page_size=[&format=csv]` | 批次内的兑换码与使用次数；`format=csv` 导出全部 | `membership:manage` |
+| PUT | `/admin/membership/redeem/codes/:id` | `{disabled}` 停用/启用单个兑换码 | `membership:manage` |
 
 ## 支付（「支付」插件，默认关闭）
 

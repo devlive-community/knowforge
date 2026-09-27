@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import Container from '@/components/Container'
 import FeatureGate from '@/components/FeatureGate'
@@ -8,7 +8,7 @@ import Seo from '@/components/Seo'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Badge, Button, Card, EmptyState, Loading, useFeedback } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Input, Loading, useFeedback } from '@/components/ui'
 import { entitlementLabel, formatEntitlement, type EntitlementDef } from '@/lib/entitlements'
 import type { MembershipPlan, MembershipRecord, MyMembership } from '@/lib/membership'
 import { checkoutAvailable, checkoutHref, durationLabel, formatPrice } from '@/lib/commerce'
@@ -34,6 +34,38 @@ function PlanEntitlements({ plan, defs }: { plan: MembershipPlan; defs: Entitlem
   )
 }
 
+// RedeemCard 输入兑换码开通或续期会员（兑换码不区分大小写，可带连字符）。
+function RedeemCard({ onRedeemed }: { onRedeemed: () => void }) {
+  const { t } = useTranslation()
+  const { showToast } = useFeedback()
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function redeem() {
+    setBusy(true)
+    try {
+      const r = await api<{ plan: { name: string }; expires_at: string }>('/membership/redeem', { method: 'POST', body: { code: code.trim() } })
+      showToast({ message: t('membership.redeem.done', { plan: r.plan.name, date: formatDate(r.expires_at) }), tone: 'success' })
+      setCode('')
+      onRedeemed()
+    } catch (e) {
+      showToast({ title: t('membership.redeem.failed'), message: (e as Error).message, tone: 'error' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Card className="mt-4 p-5">
+      <div className="text-sm font-semibold text-slate-900"><i className="fa-solid fa-ticket mr-1.5 text-amber-500" aria-hidden="true" />{t('membership.redeem.title')}</div>
+      <p className="mt-1 text-xs text-slate-500">{t('membership.redeem.hint')}</p>
+      <div className="mt-3 flex max-w-md gap-2">
+        <Input value={code} maxLength={64} placeholder="XXXX-XXXX-XXXX-XXXX" onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && code.trim() && !busy) void redeem() }} />
+        <Button className="shrink-0 whitespace-nowrap" loading={busy} disabled={!code.trim()} onClick={() => void redeem()}>{t('membership.redeem.submit')}</Button>
+      </div>
+    </Card>
+  )
+}
+
 function MyMembershipInner() {
   const user = useRequireAuth()
   const { site } = useApp()
@@ -46,12 +78,15 @@ function MyMembershipInner() {
   const [plans, setPlans] = useState<MembershipPlan[]>([])
   const [defs, setDefs] = useState<EntitlementDef[]>([])
 
+  const loadMine = useCallback(() => {
+    api<{ membership: MyMembership | null; records: MembershipRecord[]; currency: string }>('/users/me/membership').then(setMine).catch(() => {})
+  }, [])
   useEffect(() => {
     if (!user) return
-    api<{ membership: MyMembership | null; records: MembershipRecord[]; currency: string }>('/users/me/membership').then(setMine).catch(() => {})
+    loadMine()
     api<{ items: MembershipPlan[] }>('/membership/plans').then((r) => setPlans(r.items || [])).catch(() => {})
     api<{ items: EntitlementDef[] }>('/entitlements/definitions').then((r) => setDefs(r.items || [])).catch(() => {})
-  }, [user])
+  }, [user, loadMine])
 
   if (!user || !mine) return <Loading className="min-h-[60vh]" />
   const m = mine.membership
@@ -97,6 +132,8 @@ function MyMembershipInner() {
               )}
             </div>
           </Card>
+
+          <RedeemCard onRedeemed={loadMine} />
 
           {/* 可开通的方案 */}
           <h2 className="mt-8 font-bold text-slate-900">{t('membership.plans')}</h2>

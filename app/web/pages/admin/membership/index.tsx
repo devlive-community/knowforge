@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import AdminLayout from '@/components/AdminLayout'
+import RedeemPanel from '@/components/membership/RedeemPanel'
 import FeatureGate from '@/components/FeatureGate'
 import ResourceIcon from '@/components/ResourceIcon'
 import IconPicker from '@/components/IconPicker'
@@ -15,8 +16,8 @@ import type { EntitlementDef } from '@/lib/entitlements'
 import { centsFromInput, inputFromCents, type MembershipPlan, type MembershipRecord } from '@/lib/membership'
 import { durationLabel, formatPrice } from '@/lib/commerce'
 
-type Tab = 'plans' | 'members' | 'records' | 'settings'
-const TABS: Tab[] = ['plans', 'members', 'records', 'settings']
+type Tab = 'plans' | 'members' | 'redeem' | 'records' | 'settings'
+const TABS: Tab[] = ['plans', 'members', 'redeem', 'records', 'settings']
 
 interface PlanItem { plan: MembershipPlan; active_members: number }
 interface PriceRow { key: string; id?: number; duration_days: string; price: string; original: string }
@@ -81,6 +82,7 @@ function AdminMembershipInner() {
       <div className="mt-6">
         {tab === 'plans' && <PlansPanel plans={plans} currency={currency} onChanged={loadPlans} />}
         {tab === 'members' && <MembersPanel plans={plans || []} onChanged={loadPlans} />}
+        {tab === 'redeem' && (plans ? <RedeemPanel plans={plans} /> : <Loading className="py-16" />)}
         {tab === 'records' && <RecordsPanel />}
         {tab === 'settings' && <SettingsPanel onSaved={loadPlans} />}
       </div>
