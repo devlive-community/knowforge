@@ -81,8 +81,33 @@ type Case struct {
 	ReviewerID uint       `json:"reviewer_id"`
 	ReviewNote string     `gorm:"size:500" json:"review_note"`
 	ReviewedAt *time.Time `json:"reviewed_at"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+	Snapshot   StringMap  `gorm:"type:text" json:"-"` // 提交审查时的内容（AI 复核依据）
+	// AI 复核（作者不可见）
+	AIStatus       string     `gorm:"size:10" json:"ai_status"`        // 空 | queued | reviewing | done | failed
+	AIVerdict      string     `gorm:"size:12;index" json:"ai_verdict"` // safe | violation | uncertain
+	AIConfidence   float64    `json:"ai_confidence"`
+	AICategories   StringList `gorm:"type:text" json:"ai_categories"`
+	AIReason       string     `gorm:"size:500" json:"ai_reason"`
+	AIError        string     `gorm:"size:200" json:"ai_error"`
+	AIModel        string     `gorm:"size:100" json:"ai_model"`
+	AIInputTokens  int64      `json:"ai_input_tokens"`
+	AIOutputTokens int64      `json:"ai_output_tokens"`
+	AIReviewedAt   *time.Time `json:"ai_reviewed_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
+
+// StringList 以 JSON 存储的字符串列表。
+type StringList []string
+
+func (l StringList) Value() (driver.Value, error) {
+	if l == nil {
+		l = StringList{}
+	}
+	raw, err := json.Marshal([]string(l))
+	return string(raw), err
+}
+
+func (l *StringList) Scan(src any) error { return scanJSON(src, l) }
 
 func (Case) TableName() string { return "moderation_cases" }

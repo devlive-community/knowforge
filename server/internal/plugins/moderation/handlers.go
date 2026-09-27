@@ -40,6 +40,10 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	reg(http.MethodPost, "/admin/moderation/test", b.AdminTest)
 	reg(http.MethodGet, "/admin/moderation/settings", b.AdminGetSettings)
 	reg(http.MethodPut, "/admin/moderation/settings", b.AdminUpdateSettings)
+	reg(http.MethodGet, "/admin/moderation/ai-settings", b.AdminGetAISettings)
+	reg(http.MethodPut, "/admin/moderation/ai-settings", b.AdminUpdateAISettings)
+	reg(http.MethodPost, "/admin/moderation/cases/:id/ai-review", b.AdminAIReview)
+	api.GET("/admin/moderation/stream", core.RequireAuthStream(), core.RequireAdmin(), feat, core.RequirePermissionMiddleware(PermManage), b.AdminCasesStream)
 }
 
 func changedFields(fields ...string) map[string]any { return map[string]any{"changed_fields": fields} }
@@ -101,6 +105,10 @@ func (b *behavior) MyCases(c *gin.Context) {
 	q.Count(&total)
 	var rows []Case
 	q.Order("updated_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows)
+	for i := range rows { // AI 复核结果只给审核员看
+		rows[i].AIStatus, rows[i].AIVerdict, rows[i].AIConfidence, rows[i].AICategories, rows[i].AIReason, rows[i].AIError = "", "", 0, nil, "", ""
+		rows[i].AIModel, rows[i].AIInputTokens, rows[i].AIOutputTokens, rows[i].AIReviewedAt = "", 0, 0, nil
+	}
 	b.core.OK(c, plugincore.PageResult{Items: b.caseItems(rows), Total: total, Page: page, PageSize: pageSize})
 }
 
@@ -118,6 +126,12 @@ func (b *behavior) AdminListCases(c *gin.Context) {
 	if k := c.Query("kind"); k == plugincore.PublishDocument || k == plugincore.PublishBook || isUserContent(k) {
 		q = q.Where("kind = ?", k)
 	}
+	switch c.Query("ai") {
+	case "flagged": // AI 判定违规或不确定的未结记录
+		q = q.Where("ai_verdict IN ? AND status IN ?", []string{verdictViolation, verdictUncertain}, []string{StatusPending, StatusAutoPassed})
+	case "safe":
+		q = q.Where("ai_verdict = ?", verdictSafe)
+	}
 	if kw := strings.TrimSpace(c.Query("q")); kw != "" {
 		like := "%" + kw + "%"
 		q = q.Where("title LIKE ? OR user_id IN (?)", like, db.Model(&models.User{}).Select("id").Where("username LIKE ?", like))
@@ -126,9 +140,10 @@ func (b *behavior) AdminListCases(c *gin.Context) {
 	q.Count(&total)
 	var rows []Case
 	q.Order("updated_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows)
-	var pending int64
+	var pending, flagged int64
 	db.Model(&Case{}).Where("status = ?", StatusPending).Count(&pending)
-	b.core.OK(c, gin.H{"items": b.caseItems(rows), "total": total, "page": page, "page_size": pageSize, "pending": pending})
+	db.Model(&Case{}).Where("ai_verdict IN ? AND status IN ?", []string{verdictViolation, verdictUncertain}, []string{StatusPending, StatusAutoPassed}).Count(&flagged)
+	b.core.OK(c, gin.H{"items": b.caseItems(rows), "total": total, "page": page, "page_size": pageSize, "pending": pending, "ai_flagged": flagged, "ai_active": b.aiActive()})
 }
 
 func (b *behavior) findCase(c *gin.Context) (*Case, bool) {

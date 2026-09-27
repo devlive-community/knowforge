@@ -26,6 +26,13 @@ export interface ModerationCase {
   reviewed_at?: string | null
   created_at: string
   updated_at: string
+  // AI 复核（仅审核员可见）
+  ai_status?: '' | 'queued' | 'reviewing' | 'done' | 'failed'
+  ai_verdict?: '' | 'safe' | 'violation' | 'uncertain'
+  ai_confidence?: number
+  ai_categories?: string[] | null
+  ai_reason?: string
+  ai_error?: string
 }
 
 export interface ModerationCaseItem {
@@ -38,6 +45,13 @@ export interface ModerationCaseItem {
 
 export const MODERATION_STATUS_TONE: Record<ModerationStatus, 'slate' | 'amber' | 'emerald' | 'rose'> = {
   auto_passed: 'slate', pending: 'amber', approved: 'emerald', rejected: 'rose',
+}
+
+export const AI_VERDICT_TONE: Record<string, 'emerald' | 'rose' | 'amber'> = { safe: 'emerald', violation: 'rose', uncertain: 'amber' }
+
+// applyCaseEvent 用推送的最新记录替换列表中的同一条（不在当前页的忽略）。
+export function applyCaseEvent(items: ModerationCaseItem[], item: ModerationCaseItem): ModerationCaseItem[] {
+  return items.some((it) => it.case.id === item.case.id) ? items.map((it) => (it.case.id === item.case.id ? item : it)) : items
 }
 
 // caseLink 审核对象的阅读页链接（章节 → 阅读页，书籍 → 详情页）。

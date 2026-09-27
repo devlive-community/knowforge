@@ -6,13 +6,15 @@ import FeatureGate from '@/components/FeatureGate'
 import UserAvatar from '@/components/UserAvatar'
 import ModerationHits from '@/components/ModerationHits'
 import { api, formatDate } from '@/lib/api'
-import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Pagination, SegmentedTabs, Switch, Textarea, useFeedback } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Pagination, SegmentedTabs, Select, Switch, Textarea, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
-import { caseLink, MODERATION_STATUS_TONE, type ModerationCaseItem, type ModerationHit } from '@/lib/moderation'
+import { AI_VERDICT_TONE, applyCaseEvent, caseLink, MODERATION_STATUS_TONE, type ModerationCaseItem, type ModerationHit } from '@/lib/moderation'
+import { openTicketedStream } from '@/lib/event-stream'
 
-type Tab = 'pending' | 'auto' | 'handled' | 'words' | 'settings'
-const TABS: Tab[] = ['pending', 'auto', 'handled', 'words', 'settings']
-const TAB_STATUS: Record<string, string> = { pending: 'pending', auto: 'auto_passed', handled: 'handled' }
+type Tab = 'pending' | 'ai' | 'auto' | 'handled' | 'words' | 'settings'
+const TABS: Tab[] = ['pending', 'ai', 'auto', 'handled', 'words', 'settings']
+// ai：AI 判定违规或不确定的未结记录（待审核与自动通过）
+const TAB_STATUS: Record<string, string> = { pending: 'pending', ai: '', auto: 'auto_passed', handled: 'handled' }
 
 export default function AdminModeration() {
   return <FeatureGate feature="moderation"><AdminModerationInner /></FeatureGate>
@@ -23,6 +25,7 @@ function AdminModerationInner() {
   const router = useRouter()
   const tab: Tab = TABS.includes(router.query.tab as Tab) ? (router.query.tab as Tab) : 'pending' // tab 由 URL 驱动
   const [pending, setPending] = useState<number | null>(null)
+  const [flagged, setFlagged] = useState<number | null>(null)
   return (
     <AdminLayout current="moderation" breadcrumb={t('admin.nav.moderation')}>
       <div>
@@ -30,9 +33,9 @@ function AdminModerationInner() {
         <p className="mt-1.5 text-sm text-slate-500">{t('admin.moderation.description')}</p>
       </div>
       <SegmentedTabs className="mt-6" value={tab} ariaLabel={t('admin.nav.moderation')}
-        items={TABS.map((key) => ({ value: key, label: key === 'pending' && pending ? `${t('admin.moderation.tab.pending')} (${pending})` : t(`admin.moderation.tab.${key}`), href: `/admin/moderation?tab=${key}` }))} />
+        items={TABS.map((key) => ({ value: key, label: key === 'pending' && pending ? `${t('admin.moderation.tab.pending')} (${pending})` : key === 'ai' && flagged ? `${t('admin.moderation.tab.ai')} (${flagged})` : t(`admin.moderation.tab.${key}`), href: `/admin/moderation?tab=${key}` }))} />
       <div className="mt-6">
-        {TAB_STATUS[tab] && <CasesPanel key={tab} status={TAB_STATUS[tab]} onPending={setPending} />}
+        {tab in TAB_STATUS && <CasesPanel key={tab} status={TAB_STATUS[tab]} ai={tab === 'ai'} onCounts={(p, f) => { setPending(p); setFlagged(f) }} />}
         {tab === 'words' && <WordsPanel />}
         {tab === 'settings' && <SettingsPanel />}
       </div>
@@ -42,7 +45,7 @@ function AdminModerationInner() {
 
 // —— 审核队列 ——
 
-function CasesPanel({ status, onPending }: { status: string; onPending: (n: number) => void }) {
+function CasesPanel({ status, ai, onCounts }: { status: string; ai: boolean; onCounts: (pending: number, flagged: number) => void }) {
   const { t } = useTranslation()
   const { showToast, confirmAction, requestInput } = useFeedback()
   const [q, setQ] = useState('')
@@ -50,15 +53,37 @@ function CasesPanel({ status, onPending }: { status: string; onPending: (n: numb
   const [data, setData] = useState<{ items: ModerationCaseItem[]; total: number; page: number; page_size: number } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [preview, setPreview] = useState<ModerationCaseItem | null>(null)
+  const [aiActive, setAIActive] = useState(false)
 
   const load = useCallback(() => {
-    const params = new URLSearchParams({ status, page: String(page), page_size: '20' })
+    const params = new URLSearchParams({ page: String(page), page_size: '20' })
+    if (status) params.set('status', status)
+    if (ai) params.set('ai', 'flagged')
     if (q.trim()) params.set('q', q.trim())
-    api<{ items: ModerationCaseItem[]; total: number; page: number; page_size: number; pending: number }>(`/admin/moderation/cases?${params}`)
-      .then((r) => { setData(r); onPending(r.pending) })
+    api<{ items: ModerationCaseItem[]; total: number; page: number; page_size: number; pending: number; ai_flagged: number; ai_active: boolean }>(`/admin/moderation/cases?${params}`)
+      .then((r) => { setData(r); setAIActive(r.ai_active); onCounts(r.pending, r.ai_flagged) })
       .catch((e) => showToast({ title: t('admin.moderation.loadFailed'), message: (e as Error).message, tone: 'error' }))
-  }, [status, page, q, onPending, showToast, t])
+  }, [status, ai, page, q, onCounts, showToast, t])
   useEffect(() => { load() }, [load])
+
+  // AI 复核在后台进行：订阅审核队列的变化，实时更新当前页的记录
+  useEffect(() => openTicketedStream('/admin/moderation/stream', (source) => {
+    source.addEventListener('case', (e) => {
+      try {
+        const item = JSON.parse((e as MessageEvent).data) as ModerationCaseItem
+        setData((d) => (d ? { ...d, items: applyCaseEvent(d.items, item) } : d))
+      } catch { /* 忽略 */ }
+    })
+  }), [])
+
+  async function aiReview(item: ModerationCaseItem) {
+    setBusy(`${item.case.id}:ai`)
+    try {
+      const next = await api<ModerationCaseItem>(`/admin/moderation/cases/${item.case.id}/ai-review`, { method: 'POST' })
+      setData((d) => (d ? { ...d, items: applyCaseEvent(d.items, next) } : d))
+    } catch (e) { showToast({ title: t('admin.moderation.opFailed'), message: (e as Error).message, tone: 'error' }) }
+    finally { setBusy(null) }
+  }
 
   async function decide(item: ModerationCaseItem, approve: boolean) {
     let note = ''
@@ -82,7 +107,7 @@ function CasesPanel({ status, onPending }: { status: string; onPending: (n: numb
   return (
     <>
       <div className="mb-4 w-full sm:w-72"><Input value={q} placeholder={t('admin.moderation.search')} onChange={(e) => { setQ(e.target.value); setPage(1) }} /></div>
-      {data === null ? <Loading className="py-16" /> : data.items.length === 0 ? <EmptyState>{t(`admin.moderation.empty.${status}`)}</EmptyState> : (
+      {data === null ? <Loading className="py-16" /> : data.items.length === 0 ? <EmptyState>{t(ai ? 'admin.moderation.empty.ai' : `admin.moderation.empty.${status}`)}</EmptyState> : (
         <div className="space-y-3">
           {data.items.map((item) => {
             const c = item.case
@@ -104,12 +129,18 @@ function CasesPanel({ status, onPending }: { status: string; onPending: (n: numb
                   </div>
                   <span className="flex shrink-0 flex-wrap gap-2">
                     <Button size="sm" variant="ghost" onClick={() => setPreview(item)}>{t('admin.moderation.viewContent')}</Button>
+                    {aiActive && (c.status === 'pending' || c.status === 'auto_passed') && c.ai_status !== 'queued' && c.ai_status !== 'reviewing' && (
+                      <Button size="sm" variant="ghost" loading={busy === `${c.id}:ai`} disabled={!!busy} onClick={() => void aiReview(item)}>
+                        <i className="fa-solid fa-robot" aria-hidden="true" />{t('admin.moderation.ai.review')}
+                      </Button>
+                    )}
                     {(c.status === 'pending' || c.status === 'auto_passed') && <>
                       <Button size="sm" loading={busy === `${c.id}:approve`} disabled={!!busy} onClick={() => decide(item, true)}>{c.status === 'pending' ? t('admin.moderation.approve') : t('admin.moderation.confirm')}</Button>
                       <Button size="sm" variant="outline" className="text-rose-600" loading={busy === `${c.id}:reject`} disabled={!!busy} onClick={() => decide(item, false)}>{t('admin.moderation.reject')}</Button>
                     </>}
                   </span>
                 </div>
+                <AIVerdict c={c} />
                 {c.hits.length > 0 && <div className="mt-3"><ModerationHits hits={c.hits.slice(0, 5)} />{c.hits.length > 5 && <p className="mt-1 text-xs text-slate-400">{t('admin.moderation.moreHits', { count: c.hits.length - 5 })}</p>}</div>}
                 {c.review_note && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{t('moderation.reviewNote')}：{c.review_note}</p>}
               </Card>
@@ -120,6 +151,27 @@ function CasesPanel({ status, onPending }: { status: string; onPending: (n: numb
       {data && data.total > data.page_size && <div className="mt-4"><Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} /></div>}
       {preview && <ContentModal item={preview} onClose={() => setPreview(null)} />}
     </>
+  )
+}
+
+// AIVerdict AI 复核的状态与结论（仅审核员可见）。
+function AIVerdict({ c }: { c: ModerationCaseItem['case'] }) {
+  const { t } = useTranslation()
+  if (!c.ai_status) return null
+  if (c.ai_status === 'queued' || c.ai_status === 'reviewing') {
+    return <p className="mt-3 flex items-center gap-2 text-xs text-slate-500"><span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-primary-500" />{t(`admin.moderation.ai.status.${c.ai_status}`)}</p>
+  }
+  if (c.ai_status === 'failed') return <p className="mt-3 text-xs text-rose-600">{t('admin.moderation.ai.failed', { error: c.ai_error || '' })}</p>
+  return (
+    <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium text-slate-600"><i className="fa-solid fa-robot mr-1" aria-hidden="true" />{t('admin.moderation.ai.title')}</span>
+        {c.ai_verdict && <Badge tone={AI_VERDICT_TONE[c.ai_verdict]}>{t(`admin.moderation.ai.verdict.${c.ai_verdict}`)}</Badge>}
+        <span className="tabular-nums text-slate-400">{t('admin.moderation.ai.confidence', { n: Math.round((c.ai_confidence || 0) * 100) })}</span>
+        {(c.ai_categories || []).map((cat) => <Badge key={cat}>{cat}</Badge>)}
+      </div>
+      {c.ai_reason && <p className="mt-1 text-slate-600">{c.ai_reason}</p>}
+    </div>
   )
 }
 
@@ -284,7 +336,8 @@ function SettingsPanel() {
 
   if (!settings) return <Loading className="py-16" />
   return (
-    <Card className="max-w-2xl divide-y divide-slate-100">
+    <div className="max-w-2xl space-y-5">
+    <Card className="divide-y divide-slate-100">
       {SETTING_KEYS.map((key) => (
         <div key={key} className="flex items-center justify-between gap-4 px-5 py-4">
           <div className="min-w-0">
@@ -294,6 +347,70 @@ function SettingsPanel() {
           <Switch checked={settings[key]} disabled={saving === key} onChange={(v) => change(key, v)} ariaLabel={t(`admin.moderation.settings.${key}`)} />
         </div>
       ))}
+    </Card>
+    <AISettingsCard />
+    </div>
+  )
+}
+
+type AISettings = { mode: 'off' | 'advise' | 'auto_approve'; min_confidence: number; screen_passed: boolean; policy: string }
+
+// AISettingsCard AI 辅助审核：模式、自动通过所需置信度、复查自动通过的内容、站点补充规则。
+function AISettingsCard() {
+  const { t } = useTranslation()
+  const { showToast } = useFeedback()
+  const [data, setData] = useState<{ settings: AISettings; ai_available: boolean } | null>(null)
+  const [form, setForm] = useState<AISettings | null>(null)
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    api<{ settings: AISettings; ai_available: boolean }>('/admin/moderation/ai-settings')
+      .then((d) => { setData(d); setForm(d.settings) })
+      .catch((e) => showToast({ title: t('admin.moderation.loadFailed'), message: (e as Error).message, tone: 'error' }))
+  }, [showToast, t])
+
+  async function save() {
+    if (!form) return
+    setSaving(true)
+    try {
+      const d = await api<{ settings: AISettings; ai_available: boolean }>('/admin/moderation/ai-settings', { method: 'PUT', body: form })
+      setData(d)
+      setForm(d.settings)
+      showToast({ message: t('admin.moderation.ai.saved'), tone: 'success' })
+    } catch (e) { showToast({ title: t('admin.moderation.opFailed'), message: (e as Error).message, tone: 'error' }) }
+    finally { setSaving(false) }
+  }
+
+  if (!data || !form) return <Loading className="py-8" />
+  const invalid = form.min_confidence < 0.5 || form.min_confidence > 0.99
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <div className="text-sm font-semibold text-slate-900"><i className="fa-solid fa-robot mr-1.5 text-primary-500" aria-hidden="true" />{t('admin.moderation.ai.heading')}</div>
+        <p className="mt-1 text-xs text-slate-500">{t('admin.moderation.ai.hint')}</p>
+        {!data.ai_available && <p className="mt-2 text-xs text-amber-600">{t('admin.moderation.ai.needAI')}</p>}
+      </div>
+      <Field label={t('admin.moderation.ai.mode')}>
+        <Select value={form.mode} onChange={(v) => setForm({ ...form, mode: v as AISettings['mode'] })}
+          options={(['off', 'advise', 'auto_approve'] as const).map((m) => ({ value: m, label: t(`admin.moderation.ai.modes.${m}`) }))} />
+      </Field>
+      {form.mode === 'auto_approve' && (
+        <Field label={t('admin.moderation.ai.minConfidence')} hint={t('admin.moderation.ai.minConfidenceHint')}>
+          <Input type="number" min={0.5} max={0.99} step={0.01} className="w-32" value={form.min_confidence} onChange={(e) => setForm({ ...form, min_confidence: Number(e.target.value) })} />
+        </Field>
+      )}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-sm font-medium text-slate-800">{t('admin.moderation.ai.screen')}</div>
+          <p className="mt-0.5 text-xs text-slate-400">{t('admin.moderation.ai.screenHint')}</p>
+        </div>
+        <Switch checked={form.screen_passed} onChange={(v) => setForm({ ...form, screen_passed: v })} ariaLabel={t('admin.moderation.ai.screen')} />
+      </div>
+      <Field label={t('admin.moderation.ai.policy')} hint={t('admin.moderation.ai.policyHint')}>
+        <Textarea rows={3} maxLength={2000} value={form.policy} onChange={(e) => setForm({ ...form, policy: e.target.value })} placeholder={t('admin.moderation.ai.policyPlaceholder')} />
+      </Field>
+      <div className="flex justify-end">
+        <Button loading={saving} disabled={invalid} onClick={() => void save()}>{t('common.actions.save')}</Button>
+      </div>
     </Card>
   )
 }

@@ -517,7 +517,7 @@ Authorization: Bearer <token>
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/users/me/moderation-cases?page=` | 我的审核记录（待审核/已通过/已驳回，含 `hits` 与 `review_note`；不含未复审的自动通过） | `moderation:read` |
-| GET | `/admin/moderation/cases?status=pending\|auto_passed\|handled\|approved\|rejected&kind=document\|book&q=&page=` | 审核记录 `items:[{case{…,hits},user,book,doc_slug}]` + `pending` 待审核数 | `moderation:manage` |
+| GET | `/admin/moderation/cases?status=pending\|auto_passed\|handled\|approved\|rejected&kind=document\|book&ai=flagged\|safe&q=&page=` | 审核记录 `items:[{case{…,hits, ai_status, ai_verdict, ai_confidence, ai_categories, ai_reason, ai_error},user,book,doc_slug}]` + `pending` 待审核数、`ai_flagged`（AI 判定违规或不确定的未结记录数）、`ai_active`；`ai=flagged` 只看这些记录。`/users/me/moderation-cases` 不返回 AI 结论 | `moderation:manage` |
 | GET | `/admin/moderation/cases/:id/content` | 对象当前文本 `fields` 与按当前词典重新计算的 `hits` | `moderation:manage` |
 | POST | `/admin/moderation/cases/:id/approve` | 通过（待审核 → 发布；自动通过 → 确认），已处理的 409 | `moderation:manage` |
 | POST | `/admin/moderation/cases/:id/reject` | `{note}` 驳回（必填意见；自动通过的撤回发布），通知作者 | `moderation:manage` |
@@ -525,6 +525,9 @@ Authorization: Bearer <token>
 | PUT/DELETE | `/admin/moderation/words/:id` | `{enabled?, category?}` / 删除 | `moderation:manage` |
 | POST | `/admin/moderation/test` | `{text}` 用当前词典与设置试审，返回 `hits` | `moderation:manage` |
 | GET/PUT | `/admin/moderation/settings` | `{scope_documents, scope_books, skip_noise, admin_exempt, notify_pass}`，PUT 可只传部分字段 | `moderation:manage` |
+| GET/PUT | `/admin/moderation/ai-settings` | AI 辅助审核 `{settings{mode: off\|advise\|auto_approve, min_confidence(0.5–0.99，默认 0.9), screen_passed, policy(≤2000 字)}, ai_available}`，PUT 可只传部分字段。开启后每条审查记录保存提交时的内容快照，后台任务 `moderation.ai_review` 让模型结合上下文复核（命中位置作为参考，正文取前 2 万字，记为系统调用 `moderation.ai`）：待审核的都复核；`screen_passed` 开启时也复核自动通过的内容，疑似违规时标记并通知管理员（`notify.moderation.aiFlagged`），不自动撤回。`auto_approve` 模式下，待审核内容被判定安全且置信度达到 `min_confidence` 时自动通过并发布（复审人为系统，意见以「AI 复核通过」开头）；其余情况只作参考 | `moderation:manage` |
+| POST | `/admin/moderation/cases/:id/ai-review` | 重新让 AI 复核一条未结记录 → 记录（`ai_status=queued`）；已处理 409，未开启 400 | `moderation:manage` |
+| GET | `/admin/moderation/stream?ticket=` | 审核队列的实时变化（SSE）：`case`（一条记录的最新状态，含 AI 复核进度与结论）；连接建立时推 `ready`，25 秒心跳 | `moderation:manage` |
 
 ## 付费内容（「付费内容」插件，默认关闭）
 

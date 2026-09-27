@@ -7,6 +7,9 @@
 package moderation
 
 import (
+	"context"
+	"encoding/json"
+
 	"knowforge/server/internal/authz"
 	"knowforge/server/internal/i18ntext"
 	"knowforge/server/internal/plugincore"
@@ -41,10 +44,14 @@ func init() {
 	plugincore.RegisterBehavior(&behavior{})
 	plugincore.RegisterUserDataModels(&Case{})
 	plugincore.RegisterPublishGuard(guard)
+	plugincore.RegisterJob(aiReviewJob, func(core plugincore.Core) func(ctx context.Context, raw json.RawMessage) error {
+		return (&behavior{core: core}).runAIReview
+	})
 
 	i18ntext.Register("notify.moderation.held", map[string]string{"zh-CN": "「{title}」包含待审核内容，已提交人工审核", "en": `"{title}" contains flagged content and is awaiting review`})
 	i18ntext.Register("notify.moderation.pending", map[string]string{"zh-CN": "有新的内容待审核：{title}", "en": "New content awaiting review: {title}"})
 	i18ntext.Register("notify.moderation.approved", map[string]string{"zh-CN": "「{title}」已通过审核并发布", "en": `"{title}" passed review and is now published`})
 	i18ntext.Register("notify.moderation.rejected", map[string]string{"zh-CN": "「{title}」未通过审核：{note}", "en": `"{title}" did not pass review: {note}`})
+	i18ntext.Register("notify.moderation.aiFlagged", map[string]string{"zh-CN": "「{title}」已自动通过，但被 AI 标记为疑似违规，请复审", "en": `"{title}" passed automatically but AI flagged it as a possible violation. Please review it`})
 	i18ntext.Register("notify.moderation.passed", map[string]string{"zh-CN": "「{title}」已通过自动审核并发布", "en": `"{title}" passed automatic review and is now published`})
 }

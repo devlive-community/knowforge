@@ -132,20 +132,20 @@ func guard(core plugincore.Core, t plugincore.PublishTarget) plugincore.PublishV
 	}
 	hits := b.scan(t.Fields, s.SkipNoise)
 	if len(hits) == 0 {
-		b.recordCase(t, StatusAutoPassed, nil)
+		b.queueAIReview(b.recordCase(t, StatusAutoPassed, nil), StatusAutoPassed)
 		if s.NotifyPass {
 			core.NotifyI18n(t.UserID, notificationType, "notify.moderation.passed", map[string]string{"title": t.Title}, map[string]any{"link": "/user/moderation"})
 		}
 		return plugincore.PublishVerdict{}
 	}
-	b.recordCase(t, StatusPending, hits)
+	b.queueAIReview(b.recordCase(t, StatusPending, hits), StatusPending)
 	core.NotifyI18n(t.UserID, notificationType, "notify.moderation.held", map[string]string{"title": t.Title}, map[string]any{"link": "/user/moderation"})
 	b.notifyAdmins(t.Title)
 	return plugincore.PublishVerdict{Hold: true, Message: fmt.Sprintf("内容中有 %d 处需要人工审核，已提交审核，通过后将自动发布", len(hits))}
 }
 
-// recordCase 更新对象的未结记录（自动通过/待审核），没有则新建。
-func (b *behavior) recordCase(t plugincore.PublishTarget, status string, hits Hits) {
+// recordCase 更新对象的未结记录（自动通过/待审核），没有则新建；保存内容快照并清空上一次的 AI 复核结果。返回记录 ID。
+func (b *behavior) recordCase(t plugincore.PublishTarget, status string, hits Hits) uint {
 	if hits == nil {
 		hits = Hits{}
 	}
@@ -156,10 +156,13 @@ func (b *behavior) recordCase(t plugincore.PublishTarget, status string, hits Hi
 	if found {
 		db.Model(&Case{}).Where("id = ?", existing.ID).Updates(map[string]any{
 			"status": status, "hits": hits, "requested": StringMap(t.Requested), "title": t.Title, "user_id": t.UserID, "book_id": t.BookID, "updated_at": time.Now(),
+			"snapshot": StringMap(t.Fields), "ai_status": "", "ai_verdict": "", "ai_confidence": 0, "ai_categories": StringList{}, "ai_reason": "", "ai_error": "", "ai_reviewed_at": nil,
 		})
-		return
+		return existing.ID
 	}
-	db.Create(&Case{Kind: t.Kind, TargetID: t.ID, BookID: t.BookID, UserID: t.UserID, Title: t.Title, Status: status, Hits: hits, Requested: t.Requested})
+	row := Case{Kind: t.Kind, TargetID: t.ID, BookID: t.BookID, UserID: t.UserID, Title: t.Title, Status: status, Hits: hits, Requested: t.Requested, Snapshot: t.Fields}
+	db.Create(&row)
+	return row.ID
 }
 
 // notifyAdmins 通知全部启用中的管理员有内容待审核。

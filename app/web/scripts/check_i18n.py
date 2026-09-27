@@ -99,8 +99,11 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'moderation.status.': ['auto_passed', 'pending', 'approved', 'rejected'],
     'moderation.kind.': ['document', 'book'],
     'moderation.field.': ['title', 'content', 'description'],
-    'admin.moderation.tab.': ['pending', 'auto', 'handled', 'words', 'settings'],
+    'admin.moderation.tab.': ['pending', 'ai', 'auto', 'handled', 'words', 'settings'],
     'admin.moderation.empty.': ['pending', 'auto_passed', 'handled'],
+    'admin.moderation.ai.status.': ['queued', 'reviewing'],
+    'admin.moderation.ai.verdict.': ['safe', 'violation', 'uncertain'],
+    'admin.moderation.ai.modes.': ['off', 'advise', 'auto_approve'],
     'admin.moderation.settings.': ['scope_documents', 'scope_books', 'skip_noise', 'admin_exempt', 'notify_pass',
                                    'scope_documentsHint', 'scope_booksHint', 'skip_noiseHint', 'admin_exemptHint', 'notify_passHint'],
     # 付费内容：提现状态 / 收益流水类型 / 统计项 / 管理端 tab
