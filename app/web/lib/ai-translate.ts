@@ -171,3 +171,36 @@ export function useTranslateJobStream(state: JobState | null, update: (next: (s:
     })
   }, [runningId])
 }
+
+// useJobListStreams 任务列表中每个进行中的任务订阅进度（与详情页同一事件流），update 用最新的任务合计替换列表项，onFinish 在某个任务结束或暂停时调用。
+export function useJobListStreams(jobs: Pick<TranslateJob, 'id' | 'status'>[], update: (job: TranslateJob) => void, onFinish?: () => void) {
+  const updateRef = useRef(update)
+  const finishRef = useRef(onFinish)
+  updateRef.current = update
+  finishRef.current = onFinish
+  const runningKey = jobs.filter((j) => j.status === 'running').map((j) => j.id).join(',')
+
+  useEffect(() => {
+    if (!runningKey) return
+    const stops = runningKey.split(',').map(Number).map((id) => openTicketedStream(`/ai-translate/jobs/${id}/stream`, (source, stop) => {
+      const parse = <T,>(e: Event): T | null => {
+        try { return JSON.parse((e as MessageEvent).data) as T } catch { return null }
+      }
+      source.addEventListener('snapshot', (e) => {
+        const snap = parse<JobState>(e)
+        if (snap) updateRef.current(snap.job)
+      })
+      source.addEventListener('job', (e) => {
+        const job = parse<TranslateJob>(e)
+        if (job) updateRef.current(job)
+      })
+      source.addEventListener('done', (e) => {
+        stop()
+        const final = parse<JobState>(e)
+        if (final) updateRef.current(final.job)
+        finishRef.current?.()
+      })
+    }))
+    return () => stops.forEach((stop) => stop())
+  }, [runningKey])
+}

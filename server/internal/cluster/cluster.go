@@ -174,7 +174,9 @@ func (n *Node) tryLease(name string, ttl time.Duration) bool {
 	if res.Error == nil && res.RowsAffected == 1 {
 		return true
 	}
-	res = n.db.Model(&Lease{}).Where("name = ? AND (holder = ? OR expires_at < ?)", name, n.id, now).
+	// 可接手：本实例持有、已过期，或持有者已下线（进程被强制结束时来不及释放租约，不必等到过期）
+	online := n.db.Model(&Instance{}).Select("id").Where("seen_at > ?", now.Add(-aliveWithin))
+	res = n.db.Model(&Lease{}).Where("name = ? AND (holder = ? OR expires_at < ? OR holder NOT IN (?))", name, n.id, now, online).
 		Updates(map[string]any{"holder": n.id, "expires_at": now.Add(ttl)})
 	return res.Error == nil && res.RowsAffected == 1
 }

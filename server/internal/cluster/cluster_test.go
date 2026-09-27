@@ -90,6 +90,11 @@ func TestTwoNodes(t *testing.T) {
 	if !b.tryLease("sweep", time.Minute) {
 		t.Fatal("过期租约应可被接管")
 	}
+	// 持有者已下线（强制结束、来不及释放）：不必等过期即可接管
+	db.Model(&Instance{}).Where("id = ?", "b").Update("seen_at", time.Now().Add(-time.Hour))
+	if !a.tryLease("sweep", time.Hour) {
+		t.Fatal("持有者下线后应可立即接管")
+	}
 }
 
 // 未启动时：广播不做任何事、租约总是成功、只认本实例在线。

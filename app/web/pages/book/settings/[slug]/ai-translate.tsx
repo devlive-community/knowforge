@@ -8,8 +8,8 @@ import { api, formatDate } from '@/lib/api'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, Button, ButtonLink, EmptyState, Field, Input, Loading, Select, Textarea, useFeedback } from '@/components/ui'
 import {
-  TRANSLATE_LANGUAGES, progressPercent, useTranslateJobStream,
-  type GlossaryTerm, type JobState, type TranslateOverview,
+  TRANSLATE_LANGUAGES, progressPercent, useJobListStreams, useTranslateJobStream,
+  type GlossaryTerm, type JobState, type TranslateJob, type TranslateOverview,
 } from '@/lib/ai-translate'
 
 export const getServerSideProps = requireBookSettingsFeature('book-translations')
@@ -32,6 +32,11 @@ export default function BookAITranslatePage({ book }: InferGetServerSidePropsTyp
       .catch((e) => setLoadError((e as Error).message))
   }, [book.id])
   useEffect(() => { load() }, [load])
+  // 列表中进行中的任务实时更新进度（结束后重新加载概览，译本状态随之更新）
+  const updateJob = useCallback((job: TranslateJob) => {
+    setOverview((o) => (o ? { ...o, jobs: o.jobs.map((j) => (j.id === job.id ? { ...j, status: job.status, stage: job.stage, done: job.done, failed: job.failed, total: job.total } : j)) } : o))
+  }, [])
+  useJobListStreams(jobId ? [] : overview?.jobs || [], updateJob, load)
 
   const base = `/book/settings/${encodeURIComponent(book.slug)}/ai-translate`
   return (
@@ -130,6 +135,7 @@ function Overview({ bookId, bookTitle, overview, base, onChanged }: { bookId: nu
                   <Badge tone={JOB_TONE[j.status] || 'slate'}>{t(`bookSettings.aiTranslate.status.${j.status}`)}</Badge>
                   <span className="font-medium text-slate-800">{t(`bookSettings.aiTranslate.mode.${j.mode}`)} · {j.target_label}</span>
                   <span className="tabular-nums text-slate-500">{t('bookSettings.aiTranslate.progress', { done: j.done, total: j.total })}</span>
+                  {j.status === 'running' && j.stage === 'outline' && <span className="text-xs text-slate-400">{t('bookSettings.aiTranslate.stage.outline')}</span>}
                   {j.failed > 0 && <span className="text-rose-600">{t('bookSettings.aiTranslate.failedCount', { n: j.failed })}</span>}
                   <span className="ml-auto text-xs text-slate-400">{formatDate(j.created_at)}</span>
                 </Link>

@@ -283,11 +283,9 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 				a.syncLocalPluginFiles()
 			}
 			go queue.Start(workerCtx)
-			a.runMaintenance(ctx, queue)
-			nextMaintenanceCheck = currentTime().Add(maintenanceCheckEvery)
+			nextMaintenanceCheck = a.runMaintenance(ctx, queue)
 		} else if queue != nil && !currentTime().Before(nextMaintenanceCheck) {
-			a.runMaintenance(ctx, queue)
-			nextMaintenanceCheck = currentTime().Add(maintenanceCheckEvery)
+			nextMaintenanceCheck = a.runMaintenance(ctx, queue)
 		}
 		select {
 		case <-ctx.Done():
@@ -302,15 +300,17 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 	}
 }
 
-// runMaintenance 周期维护与插件巡检：多实例时只由持有「维护」租约的一个实例执行（持有者按周期续期，下线后租约过期由其他实例接手）。
-func (a *App) runMaintenance(ctx context.Context, queue *jobqueue.Queue) {
+// runMaintenance 周期维护与插件巡检（含把中断的后台任务标记为可继续）：多实例时只由持有「维护」租约的一个实例执行，
+// 持有者按周期续期；未取得租约的实例每分钟再试，持有者下线后很快由其他实例接手。返回下次检查的时间。
+func (a *App) runMaintenance(ctx context.Context, queue *jobqueue.Queue) time.Time {
 	if !cluster.TryLease("maintenance", maintenanceCheckEvery+30*time.Minute) {
-		return
+		return currentTime().Add(time.Minute)
 	}
 	a.enqueueMaintenanceIfDue(ctx, queue)
 	a.enqueueSitemapIfDue(ctx, queue)
 	a.enqueueNotificationBackfillIfNeeded(ctx, queue)
 	plugincore.FireJobQueueSweep(a, queue)
+	return currentTime().Add(maintenanceCheckEvery)
 }
 
 // enqueueEmail 在生产应用中写入持久化队列。测试或安装后尚未重启的极短窗口内
