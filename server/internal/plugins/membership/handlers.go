@@ -31,6 +31,7 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	api.GET("/users/me/membership", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyMembership)
 	api.GET("/users/me/membership/gifts", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyGifts)
 	api.POST("/membership/redeem", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.Redeem)
+	api.POST("/membership/plans/:id/trial", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.StartTrial)
 	// 管理员
 	adminGuard := []gin.HandlerFunc{core.RequireAuth(), core.RequireAdmin(), feat, core.RequirePermissionMiddleware(PermManage)}
 	reg := func(method, path string, h gin.HandlerFunc) {
@@ -126,11 +127,13 @@ func (b *behavior) MyMembership(c *gin.Context) {
 		if active {
 			daysLeft = int(m.ExpiresAt.Sub(now).Hours()/24) + 1
 		}
-		out = gin.H{"plan": plan, "started_at": m.StartedAt, "expires_at": m.ExpiresAt, "active": active, "days_left": daysLeft}
+		out = gin.H{"plan": plan, "started_at": m.StartedAt, "expires_at": m.ExpiresAt, "active": active, "days_left": daysLeft, "trial": m.Trial}
 	}
 	var records []Record
 	db.Where("user_id = ?", u.ID).Order("id DESC").Limit(20).Find(&records)
-	b.core.OK(c, gin.H{"membership": out, "records": records, "currency": b.currency()})
+	blocker := b.trialBlocker(u)
+	b.core.OK(c, gin.H{"membership": out, "records": records, "currency": b.currency(),
+		"trial": gin.H{"eligible": blocker == nil, "needs_verified_email": errors.Is(blocker, errTrialUnverified)}})
 }
 
 // AdminListPlans GET /admin/membership/plans 全部方案（含归档）、价格、多语言内容与会员数。
@@ -173,6 +176,7 @@ type planRequest struct {
 	Entitlements models.EntitlementMap                     `json:"entitlements"`
 	Status       string                                    `json:"status"`
 	SortOrder    int                                       `json:"sort_order"`
+	TrialDays    int                                       `json:"trial_days"`
 	Prices       []priceInput                              `json:"prices"`
 	Translations map[string]plugincore.ResourceTranslation `json:"translations"`
 }
@@ -193,6 +197,9 @@ func (req *planRequest) validate() error {
 	}
 	if err := plugincore.ValidateEntitlementMap(req.Entitlements); err != nil {
 		return err
+	}
+	if req.TrialDays < 0 || req.TrialDays > maxTrialDays {
+		return fmt.Errorf("试用天数需在 0 到 %d 之间（0 为不提供试用）", maxTrialDays)
 	}
 	if len(req.Prices) > maxPricesPerPlan {
 		return fmt.Errorf("每个方案最多 %d 档价格", maxPricesPerPlan)
@@ -311,7 +318,7 @@ func (b *behavior) AdminCreatePlan(c *gin.Context) {
 	}
 	actor := b.core.CurrentUser(c).ID
 	plan := Plan{Name: req.Name, Description: req.Description, IconType: req.IconType, IconValue: req.IconValue, Color: req.Color,
-		Entitlements: req.Entitlements, Status: req.Status, SortOrder: req.SortOrder}
+		Entitlements: req.Entitlements, Status: req.Status, SortOrder: req.SortOrder, TrialDays: req.TrialDays}
 	if err := b.core.Gorm().Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&plan).Error; err != nil {
 			return err
@@ -328,7 +335,7 @@ func (b *behavior) AdminCreatePlan(c *gin.Context) {
 		b.failSave(c, err)
 		return
 	}
-	b.core.RecordAudit(c, "membership.plan_created", "membership_plan", auditID(plan.ID), plan.Name, changedFields("name", "entitlements", "prices", "status"))
+	b.core.RecordAudit(c, "membership.plan_created", "membership_plan", auditID(plan.ID), plan.Name, changedFields("name", "entitlements", "prices", "status", "trial_days"))
 	b.respondPlan(c, plan.ID)
 }
 
@@ -356,7 +363,7 @@ func (b *behavior) AdminUpdatePlan(c *gin.Context) {
 	if err := b.core.Gorm().Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&Plan{}).Where("id = ?", plan.ID).Updates(map[string]any{
 			"name": req.Name, "description": req.Description, "icon_type": req.IconType, "icon_value": req.IconValue,
-			"color": req.Color, "entitlements": req.Entitlements, "status": req.Status, "sort_order": req.SortOrder,
+			"color": req.Color, "entitlements": req.Entitlements, "status": req.Status, "sort_order": req.SortOrder, "trial_days": req.TrialDays,
 		}).Error; err != nil {
 			return err
 		}
@@ -368,7 +375,7 @@ func (b *behavior) AdminUpdatePlan(c *gin.Context) {
 		b.failSave(c, err)
 		return
 	}
-	b.core.RecordAudit(c, "membership.plan_updated", "membership_plan", auditID(plan.ID), req.Name, changedFields("name", "entitlements", "prices", "status"))
+	b.core.RecordAudit(c, "membership.plan_updated", "membership_plan", auditID(plan.ID), req.Name, changedFields("name", "entitlements", "prices", "status", "trial_days"))
 	b.respondPlan(c, plan.ID)
 }
 
@@ -475,7 +482,7 @@ func (b *behavior) AdminListMembers(c *gin.Context) {
 	users, plans := b.userBriefs(ids), b.planBriefs()
 	items := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
-		items = append(items, gin.H{"user": users[r.UserID], "plan": plans[r.PlanID], "started_at": r.StartedAt, "expires_at": r.ExpiresAt, "active": r.ExpiresAt.After(now)})
+		items = append(items, gin.H{"user": users[r.UserID], "plan": plans[r.PlanID], "started_at": r.StartedAt, "expires_at": r.ExpiresAt, "active": r.ExpiresAt.After(now), "trial": r.Trial})
 	}
 	b.core.OK(c, plugincore.PageResult{Items: items, Total: total, Page: page, PageSize: pageSize})
 }
@@ -563,7 +570,7 @@ func (b *behavior) AdminAdjust(c *gin.Context) {
 		if !exists || m.PlanID != plan.ID || !m.ExpiresAt.After(now) {
 			m.StartedAt = now
 		}
-		m.UserID, m.PlanID, m.ExpiresAt = u.ID, plan.ID, req.ExpiresAt
+		m.UserID, m.PlanID, m.ExpiresAt, m.Trial = u.ID, plan.ID, req.ExpiresAt, false
 		if err := saveMembership(tx, &m, exists); err != nil {
 			return err
 		}
@@ -650,20 +657,22 @@ func (b *behavior) AdminListRecords(c *gin.Context) {
 // —— 设置 ——
 
 type settingsPayload struct {
-	Currency     string `json:"currency"`
-	ReminderDays int    `json:"reminder_days"`
+	Currency           string `json:"currency"`
+	ReminderDays       int    `json:"reminder_days"`
+	TrialVerifiedEmail bool   `json:"trial_verified_email"`
 }
 
 // AdminGetSettings GET /admin/membership/settings
 func (b *behavior) AdminGetSettings(c *gin.Context) {
-	b.core.OK(c, settingsPayload{Currency: b.currency(), ReminderDays: b.reminderDays()})
+	b.core.OK(c, settingsPayload{Currency: b.currency(), ReminderDays: b.reminderDays(), TrialVerifiedEmail: b.trialNeedsVerifiedEmail()})
 }
 
 // AdminUpdateSettings PUT /admin/membership/settings {currency?, reminder_days?}
 func (b *behavior) AdminUpdateSettings(c *gin.Context) {
 	var req struct {
-		Currency     *string `json:"currency"`
-		ReminderDays *int    `json:"reminder_days"`
+		Currency      *string `json:"currency"`
+		ReminderDays  *int    `json:"reminder_days"`
+		TrialVerified *bool   `json:"trial_verified_email"`
 	}
 	if c.ShouldBindJSON(&req) != nil {
 		b.core.Fail(c, http.StatusBadRequest, "参数错误")
@@ -692,6 +701,13 @@ func (b *behavior) AdminUpdateSettings(c *gin.Context) {
 			return
 		}
 		fields = append(fields, "reminder_days")
+	}
+	if req.TrialVerified != nil {
+		if err := b.core.SetSetting(cfgTrialVerified, strconv.FormatBool(*req.TrialVerified), "会员：试用需先验证邮箱"); err != nil {
+			b.core.Fail(c, http.StatusInternalServerError, "保存失败: "+err.Error())
+			return
+		}
+		fields = append(fields, "trial_verified_email")
 	}
 	sort.Strings(fields)
 	b.core.RecordAudit(c, "membership.settings_updated", "membership", "settings", "会员设置", changedFields(fields...))

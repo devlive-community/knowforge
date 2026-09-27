@@ -11,7 +11,7 @@ import UserAvatar from '@/components/UserAvatar'
 import EntitlementEditor from '@/components/EntitlementEditor'
 import LocalizedFields, { type ResourceTranslations } from '@/components/LocalizedFields'
 import { api, formatDate } from '@/lib/api'
-import { Badge, Button, Card, DateTimePicker, EmptyState, Field, Input, Loading, Modal, Pagination, Select, SegmentedTabs, useFeedback } from '@/components/ui'
+import { Badge, Button, Card, DateTimePicker, EmptyState, Field, Input, Loading, Modal, Pagination, Select, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import type { EntitlementDef } from '@/lib/entitlements'
 import { centsFromInput, inputFromCents, type MembershipPlan, type MembershipRecord } from '@/lib/membership'
@@ -29,6 +29,7 @@ interface PlanForm {
   color: string
   status: 'active' | 'archived'
   sort_order: number
+  trial_days: string
   entitlements: Record<string, number>
   prices: PriceRow[]
   translations: ResourceTranslations
@@ -39,6 +40,7 @@ interface MemberItem {
   started_at: string
   expires_at: string
   active: boolean
+  trial: boolean
 }
 interface RecordItem { record: MembershipRecord; user?: UserLite; operator?: UserLite }
 
@@ -107,13 +109,13 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
   }, [])
 
   function openNew() {
-    setForm({ icon_type: 'fa', icon_value: 'fa-crown', color: '', status: 'active', sort_order: (plans?.length || 0) + 1, entitlements: {},
+    setForm({ icon_type: 'fa', icon_value: 'fa-crown', color: '', status: 'active', sort_order: (plans?.length || 0) + 1, trial_days: '0', entitlements: {},
       prices: [newRow({ duration_days: '30' }), newRow({ duration_days: '365' })],
       translations: { [defaultLocale]: { fields: {}, revision: 0, publish: true } } })
   }
   function openEdit(p: MembershipPlan) {
     setForm({ id: p.id, icon_type: p.icon_type || 'fa', icon_value: p.icon_value || 'fa-crown', color: p.color || '', status: p.status,
-      sort_order: p.sort_order, entitlements: { ...(p.entitlements || {}) },
+      sort_order: p.sort_order, trial_days: String(p.trial_days || 0), entitlements: { ...(p.entitlements || {}) },
       prices: p.prices.map((pr) => newRow({ id: pr.id, duration_days: String(pr.duration_days), price: inputFromCents(pr.price_cents), original: inputFromCents(pr.original_price_cents) })),
       translations: Object.fromEntries(Object.entries(p.translations || {}).map(([code, entry]) => [code, { ...entry, publish: false }])) })
   }
@@ -127,7 +129,7 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
     setSaving(true)
     try {
       await api(form.id ? `/admin/membership/plans/${form.id}` : '/admin/membership/plans', { method: form.id ? 'PUT' : 'POST', body: {
-        icon_type: form.icon_type, icon_value: form.icon_value, color: form.color, status: form.status, sort_order: form.sort_order,
+        icon_type: form.icon_type, icon_value: form.icon_value, color: form.color, status: form.status, sort_order: form.sort_order, trial_days: Number(form.trial_days) || 0,
         entitlements: form.entitlements,
         prices: form.prices.map((r) => ({ id: r.id, duration_days: Number(r.duration_days) || 0, price_cents: centsFromInput(r.price), original_price_cents: centsFromInput(r.original) })),
         translations: Object.fromEntries(Object.entries(form.translations).filter(([, entry]) => entry.dirty)),
@@ -172,6 +174,7 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
                     {durationLabel(t, pr.duration_days)} · <span className="font-medium text-slate-900">{formatPrice(pr.price_cents, currency, locale)}</span>
                   </span>
                 ))}
+                {p.trial_days > 0 && <span className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs text-sky-700">{t('membership.trial.days', { n: p.trial_days })}</span>}
               </div>
               <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
                 <span>{t('admin.membership.plan.stats', { members: active_members, privileges: Object.keys(p.entitlements || {}).length })}</span>
@@ -201,6 +204,10 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
               <Field label={t('admin.membership.plan.sortOrder')}><Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) || 0 })} /></Field>
               <Field label={t('admin.membership.plan.color')}><Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="#f59e0b" /></Field>
             </div>
+            <Field label={t('admin.membership.plan.trialDays')} hint={t('admin.membership.plan.trialDaysHint')}>
+              <Input type="number" min={0} max={365} value={form.trial_days} onChange={(e) => setForm({ ...form, trial_days: e.target.value })}
+                trailing={<span className="text-xs text-slate-400">{t('admin.membership.plan.daysUnit')}</span>} />
+            </Field>
             <Field label={t('admin.membership.plan.icon')}>
               <IconPicker value={{ icon_type: form.icon_type, icon_value: form.icon_value }} onChange={(v) => setForm({ ...form, icon_type: v.icon_type || 'fa', icon_value: v.icon_value })} fallback="fa-crown" />
             </Field>
@@ -307,7 +314,7 @@ function MembersPanel({ plans, onChanged }: { plans: PlanItem[]; onChanged: () =
                   <td className="px-4 py-3 text-slate-700">{m.plan?.name || '—'}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(m.started_at)}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(m.expires_at)}</td>
-                  <td className="px-4 py-3"><Badge tone={m.active ? 'emerald' : 'slate'}>{m.active ? t('admin.membership.member.active') : t('admin.membership.member.expired')}</Badge></td>
+                  <td className="px-4 py-3"><span className="flex flex-wrap gap-1.5"><Badge tone={m.active ? 'emerald' : 'slate'}>{m.active ? t('admin.membership.member.active') : t('admin.membership.member.expired')}</Badge>{m.trial && <Badge tone="sky">{t('membership.trial.badge')}</Badge>}</span></td>
                   <td className="px-4 py-3 text-right"><span className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => setAdjusting(m)}>{t('admin.membership.member.adjust')}</Button>
                     <Button variant="ghost" size="sm" className="text-rose-600" loading={revoking === m.user.id} onClick={() => revoke(m)}>{t('admin.membership.member.revoke')}</Button>
@@ -457,10 +464,10 @@ function RecordsPanel() {
 function SettingsPanel({ onSaved }: { onSaved: () => void }) {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
-  const [form, setForm] = useState<{ currency: string; reminder_days: number } | null>(null)
+  const [form, setForm] = useState<{ currency: string; reminder_days: number; trial_verified_email: boolean } | null>(null)
   const [saving, setSaving] = useState(false)
   useEffect(() => {
-    api<{ currency: string; reminder_days: number }>('/admin/membership/settings').then(setForm)
+    api<{ currency: string; reminder_days: number; trial_verified_email: boolean }>('/admin/membership/settings').then(setForm)
       .catch((e) => showToast({ title: t('admin.membership.loadFailed'), message: (e as Error).message, tone: 'error' }))
   }, [showToast, t])
 
@@ -485,6 +492,10 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
         <Input type="number" min={0} max={30} value={form.reminder_days} onChange={(e) => setForm({ ...form, reminder_days: Math.max(0, Math.min(30, Number(e.target.value) || 0)) })}
           trailing={<span className="text-xs text-slate-400">{t('admin.membership.plan.daysUnit')}</span>} />
       </Field>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-sm"><span className="font-medium text-slate-800">{t('admin.membership.settings.trialVerified')}</span><span className="mt-0.5 block text-xs text-slate-400">{t('admin.membership.settings.trialVerifiedHint')}</span></span>
+        <Switch checked={form.trial_verified_email} onChange={(v) => setForm({ ...form, trial_verified_email: v })} ariaLabel={t('admin.membership.settings.trialVerified')} />
+      </div>
       <div className="flex justify-end"><Button loading={saving} onClick={save}>{t('common.actions.save')}</Button></div>
     </Card>
   )

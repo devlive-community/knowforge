@@ -19,6 +19,7 @@ export interface MembershipPlan {
   entitlements?: Record<string, number> | null
   status: 'active' | 'archived'
   sort_order: number
+  trial_days: number // 免费试用天数（0 为不提供）
   prices: MembershipPrice[]
   translations?: ResourceTranslations
 }
@@ -45,6 +46,13 @@ export interface MyMembership {
   expires_at: string
   active: boolean
   days_left: number
+  trial: boolean // 试用中
+}
+
+/** 我能否领取免费试用 */
+export interface TrialInfo {
+  eligible: boolean
+  needs_verified_email: boolean
 }
 
 /** 我购买的礼品卡（status：unused 未兑换 | redeemed 已兑换 | void 已作废，作废时不返回兑换码） */

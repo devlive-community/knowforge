@@ -24,6 +24,8 @@ const (
 	cfgEnabled         = "membership_enabled"
 	cfgCurrency        = "membership_currency"
 	cfgReminderDays    = "membership_reminder_days"
+	cfgTrialVerified   = "membership_trial_verified_email"
+	maxTrialDays       = 365
 	defaultCurrency    = "CNY"
 	defaultReminder    = 3
 	maxReminderDays    = 30
@@ -43,8 +45,8 @@ func init() {
 		Kind:        plugins.KindFeature,
 		Builtin:     true,
 		EnabledKey:  cfgEnabled,
-		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}},
-		Tables:      []string{"membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
+		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}, &TrialUse{}},
+		Tables:      []string{"membership_trial_uses", "membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
 		AdminPerms:  []authz.Permission{PermManage},
 		UserPerms:   []authz.Permission{PermRead},
 	})
@@ -60,5 +62,8 @@ func init() {
 	i18ntext.Register("notify.membership.expired", map[string]string{"zh-CN": "你的「{plan}」会员已到期", "en": "Your {plan} membership has expired"})
 	i18ntext.Register("notify.membership.giftReady", map[string]string{"zh-CN": "你购买的「{plan}」礼品卡已生成，可在「我的会员」复制兑换码送给他人", "en": "Your {plan} gift card is ready. Copy its code from My membership to give it away"})
 	i18ntext.Register("notify.membership.giftRedeemed", map[string]string{"zh-CN": "你送出的「{plan}」礼品卡已被兑换", "en": "Your {plan} gift card has been redeemed"})
+	i18ntext.Register("notify.membership.trialStarted", map[string]string{"zh-CN": "你已开始「{plan}」免费试用，{date} 结束", "en": "Your free {plan} trial has started and ends on {date}"})
+	i18ntext.Register("notify.membership.trialExpiring", map[string]string{"zh-CN": "你的「{plan}」试用将于 {date} 结束，购买后可继续使用，剩余试用天数会累加", "en": "Your {plan} trial ends on {date}. Buy now to keep it; remaining trial days carry over"})
+	i18ntext.Register("notify.membership.trialExpired", map[string]string{"zh-CN": "你的「{plan}」试用已结束，购买后即可继续使用", "en": "Your {plan} trial has ended. Buy a membership to keep using it"})
 	i18ntext.Register("notify.membership.revoked", map[string]string{"zh-CN": "你的「{plan}」会员已被取消", "en": "Your {plan} membership has been cancelled"})
 }

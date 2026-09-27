@@ -131,7 +131,7 @@ func couponFor(tx *gorm.DB, u *models.User, product plugincore.Product, raw stri
 	}
 	if cp.NewMembersOnly && product.Kind == productKind {
 		var n int64
-		tx.Model(&Record{}).Where("user_id = ?", u.ID).Count(&n)
+		tx.Model(&Record{}).Where("user_id = ? AND source <> ?", u.ID, sourceTrial).Count(&n) // 试用不算开通过
 		if n > 0 {
 			return cp, 0, errCouponNewOnly
 		}

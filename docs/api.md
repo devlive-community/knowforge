@@ -465,7 +465,7 @@ Authorization: Bearer <token>
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/membership/plans` | 启用中的方案 `items:[{id,name,description,icon_*,color,entitlements,prices:[{id,duration_days,price_cents,original_price_cents}]}]` + `currency` | 公开 |
-| GET | `/users/me/membership` | 我的会员 `membership{plan,started_at,expires_at,active,days_left}`（无则 null，含最近一次已到期）+ 最近 20 条 `records` + `currency` | `membership:read` |
+| GET | `/users/me/membership` | 我的会员 `membership{plan,started_at,expires_at,active,days_left,trial}`（无则 null，含最近一次已到期）+ 最近 20 条 `records` + `currency` + `trial{eligible,needs_verified_email}`（能否领取免费试用） | `membership:read` |
 | GET | `/admin/membership/plans` | 全部方案（含归档）`items:[{plan{...,translations},active_members}]` | `membership:manage` |
 | POST/PUT | `/admin/membership/plans[/:id]` | `{translations 或 name/description, icon_type, icon_value, color, status: active\|archived, sort_order, entitlements, prices:[{id?,duration_days,price_cents,original_price_cents}]}`；价格按请求整体替换（带 id 更新、新增、缺失删除），时长不可重复，售价 > 0，划线价为 0 或不低于售价；启用需有已发布的默认语言名称 | `membership:manage` |
 | DELETE | `/admin/membership/plans/:id` | 仅可删除无人持有的方案（否则 409，请归档）；归档方案不能再开通，已有会员不受影响 | `membership:manage` |
@@ -474,7 +474,8 @@ Authorization: Bearer <token>
 | PUT | `/admin/membership/members/:user_id` | `{plan_id, expires_at(RFC3339，晚于当前且不超过 10 年), reason?}` 直接设置方案与到期时间 | `membership:manage` |
 | POST | `/admin/membership/members/:user_id/revoke` | `{reason?}` 取消会员（立即失效，流水保留） | `membership:manage` |
 | GET | `/admin/membership/records?user_id=&page=&page_size=` | 会员流水 `items:[{record{action,plan_name,days,prev_expires_at,expires_at,source,source_ref,reason,created_at},user,operator?}]` | `membership:manage` |
-| GET/PUT | `/admin/membership/settings` | `{currency(ISO 4217), reminder_days(0–30)}`，PUT 可只传部分字段 | `membership:manage` |
+| GET/PUT | `/admin/membership/settings` | `{currency(ISO 4217), reminder_days(0–30), trial_verified_email}`，PUT 可只传部分字段 | `membership:manage` |
+| POST | `/membership/plans/:id/trial` | 领取方案的免费试用（方案 `trial_days>0`）：每人一次，仅限从未开通过会员的用户，默认需已验证邮箱；开通后会员 `trial=true`（流水来源 `trial`），试用中购买同一方案在剩余试用期后顺延并转正；返回 `{plan, expires_at, trial}` | `membership:read` |
 | POST | `/membership/redeem` | `{code}` 兑换码开通/续期会员（不区分大小写，可省略 `-`）；同一批次每人限用一次，失败过多（每小时 10 次）返回 429；返回 `{action: grant\|extend\|switch, plan{id,name}, expires_at}`，流水来源 `redeem` | `membership:read` |
 | GET | `/users/me/membership/gifts?page=&page_size=` | 我购买的礼品卡 `items:[{id,code(作废时为空),plan_name,days,order_no,status:unused\|redeemed\|void,redeemed_at?,redeemed_by_me,created_at}]`。礼品卡经支付插件购买（商品 `kind=membership_gift`，`sku`=价格 ID），支付成功后生成属于购买者的一次性兑换码，被他人兑换时通知购买者；退款并撤销时未兑换的按比例缩短天数（退完作废），已兑换的从兑换者的会员中按比例扣回 | `membership:read` |
 | GET | `/admin/membership/coupons?page=&page_size=` | 优惠券 `items:[{id,code,name,type:percent\|amount,percent_off,amount_off_cents,min_amount_cents,currency,plan_ids,include_gifts,new_members_only,max_uses,per_user_limit,starts_at?,expires_at?,status,used,reserved}]` + `currency` | `membership:manage` |

@@ -19,6 +19,7 @@ type Plan struct {
 	Entitlements models.EntitlementMap `gorm:"type:text" json:"entitlements"`
 	Status       string                `gorm:"size:20;default:'active';index" json:"status"` // active | archived（归档后不再开通/售卖，已有会员不受影响）
 	SortOrder    int                   `gorm:"default:0" json:"sort_order"`
+	TrialDays    int                   `gorm:"default:0" json:"trial_days"` // 免费试用天数（0 为不提供试用）
 	CreatedAt    time.Time             `json:"created_at"`
 	UpdatedAt    time.Time             `json:"updated_at"`
 
@@ -48,6 +49,7 @@ type UserMembership struct {
 	PlanID    uint      `gorm:"index;not null" json:"plan_id"`
 	StartedAt time.Time `json:"started_at"`
 	ExpiresAt time.Time `gorm:"index" json:"expires_at"`
+	Trial     bool      `gorm:"default:false" json:"trial"` // 试用中（购买、兑换或管理员调整后不再是试用）
 	// RemindedAt / ExpiredNoticeAt 到期提醒、到期通知的发送时间；有效期变化时清空以便下一周期重新提醒
 	RemindedAt      *time.Time `json:"-"`
 	ExpiredNoticeAt *time.Time `json:"-"`

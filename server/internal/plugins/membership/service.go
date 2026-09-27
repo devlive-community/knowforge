@@ -98,6 +98,7 @@ func applyGrant(tx *gorm.DB, g grant, now time.Time) (UserMembership, Plan, stri
 	default:
 		m.UserID, m.PlanID, m.StartedAt, m.ExpiresAt = g.UserID, plan.ID, now, addDays(now, g.Days)
 	}
+	m.Trial = g.Source == sourceTrial
 	if err := saveMembership(tx, &m, found); err != nil {
 		return m, plan, "", err
 	}
@@ -116,7 +117,7 @@ func saveMembership(tx *gorm.DB, m *UserMembership, exists bool) error {
 		return tx.Create(m).Error
 	}
 	return tx.Model(&UserMembership{}).Where("user_id = ?", m.UserID).Updates(map[string]any{
-		"plan_id": m.PlanID, "started_at": m.StartedAt, "expires_at": m.ExpiresAt,
+		"plan_id": m.PlanID, "started_at": m.StartedAt, "expires_at": m.ExpiresAt, "trial": m.Trial,
 		"reminded_at": nil, "expired_notice_at": nil, "updated_at": time.Now(),
 	}).Error
 }
@@ -143,7 +144,7 @@ func sweep(core plugincore.Core, _ *jobqueue.Queue) {
 	b := &behavior{core: core}
 	db := core.Gorm()
 	now := time.Now()
-	notify := func(q *gorm.DB, key, column string) {
+	notify := func(q *gorm.DB, key, trialKey, column string) {
 		var rows []UserMembership
 		if q.Limit(500).Find(&rows).Error != nil {
 			return
@@ -158,13 +159,17 @@ func sweep(core plugincore.Core, _ *jobqueue.Queue) {
 			if res.Error != nil || res.RowsAffected != 1 {
 				continue
 			}
-			core.NotifyI18n(m.UserID, notificationType, key, map[string]string{"plan": plan.Name, "date": formatDate(m.ExpiresAt)}, map[string]any{"link": notificationLink})
+			k := key
+			if m.Trial {
+				k = trialKey
+			}
+			core.NotifyI18n(m.UserID, notificationType, k, map[string]string{"plan": plan.Name, "date": formatDate(m.ExpiresAt)}, map[string]any{"link": notificationLink})
 		}
 	}
 	if days := b.reminderDays(); days > 0 {
-		notify(db.Where("reminded_at IS NULL AND expires_at > ? AND expires_at <= ?", now, addDays(now, days)), "notify.membership.expiring", "reminded_at")
+		notify(db.Where("reminded_at IS NULL AND expires_at > ? AND expires_at <= ?", now, addDays(now, days)), "notify.membership.expiring", "notify.membership.trialExpiring", "reminded_at")
 	}
-	notify(db.Where("expired_notice_at IS NULL AND expires_at <= ? AND expires_at > ?", now, addDays(now, -expiredNoticeRange)), "notify.membership.expired", "expired_notice_at")
+	notify(db.Where("expired_notice_at IS NULL AND expires_at <= ? AND expires_at > ?", now, addDays(now, -expiredNoticeRange)), "notify.membership.expired", "notify.membership.trialExpired", "expired_notice_at")
 }
 
 // —— 设置 ——
