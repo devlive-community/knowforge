@@ -21,6 +21,8 @@ const (
 	entUploadMaxMB      = "upload.max_mb"
 	entCustomFooter     = "export.custom_footer"
 	cfgCustomFooter     = "entitlement_export_custom_footer"
+	entPrivateBooksMax  = "books.private_max"
+	cfgPrivateBooksMax  = "entitlement_books_private_max"
 
 	cfgEntBooksMax         = "entitlement_books_max"
 	cfgEntCollaboratorsMax = "entitlement_collaborators_max"
@@ -94,15 +96,37 @@ func init() {
 	})
 }
 
+func init() {
+	// 私有书籍数量（is_public=false，含导入/复制/采集/翻译新建的私有草稿，不含回收站）；基础为不限，与升级前一致
+	plugincore.RegisterEntitlement(plugincore.EntitlementDef{
+		Key: entPrivateBooksMax, Kind: plugincore.EntitlementLimit, Unit: "books", Min: 0, Max: 100000, AllowUnlimited: true, Order: 11,
+		Base: func(core plugincore.Core) int64 { return settingLimit(core, cfgPrivateBooksMax, plugincore.Unlimited) },
+		SetBase: func(core plugincore.Core, v int64) error {
+			return core.SetSetting(cfgPrivateBooksMax, strconv.FormatInt(v, 10), "权益：私有书籍数量上限（基础）")
+		},
+	})
+}
+
 // entitlement 当前用户某项权益的生效值。
 func (a *App) entitlement(u *models.User, key string) int64 {
 	return plugincore.EntitlementValue(a, u, key)
 }
 
-// EnsureBookQuota 校验用户是否还能创建书籍（书籍数量上限，不含回收站中的书）；超限返回可展示的错误。
+// EnsureBookQuota 校验用户是否还能新建一本私有书籍（书籍数量与私有书籍数量上限，不含回收站中的书）；超限返回可展示的错误。
+// 导入、复制、采集、翻译等新建的都是私有草稿，经此校验。
 func (a *App) EnsureBookQuota(u *models.User) error {
+	return a.ensureBookQuota(u, true)
+}
+
+// ensureBookQuota 校验书籍数量上限；private 为真时另校验私有书籍数量上限。
+func (a *App) ensureBookQuota(u *models.User, private bool) error {
 	if u == nil {
 		return nil
+	}
+	if private {
+		if err := a.ensurePrivateBookQuota(u, 0); err != nil {
+			return err
+		}
 	}
 	limit := a.entitlement(u, entBooksMax)
 	if limit == plugincore.Unlimited {
@@ -116,9 +140,28 @@ func (a *App) EnsureBookQuota(u *models.User) error {
 	return nil
 }
 
-// failBookQuota 书籍数量超限时写 403 并返回 true。
+// ensurePrivateBookQuota 用户还能否再有一本私有书籍（exclude 为正在转为私有的书，不重复计数）。
+func (a *App) ensurePrivateBookQuota(u *models.User, exclude uint) error {
+	limit := a.entitlement(u, entPrivateBooksMax)
+	if limit == plugincore.Unlimited {
+		return nil
+	}
+	var count int64
+	a.DB.Model(&models.Book{}).Where("user_id = ? AND is_public = ? AND id <> ?", u.ID, false, exclude).Count(&count)
+	if !plugincore.WithinLimit(limit, count) {
+		return fmt.Errorf("已达到私有书籍数量上限（%d 本），可以把书籍设为公开，或升级等级、开通会员获得更多私有书籍", limit)
+	}
+	return nil
+}
+
+// failBookQuota 新建私有书籍超限时写 403 并返回 true。
 func (a *App) failBookQuota(c *gin.Context, u *models.User) bool {
-	if err := a.EnsureBookQuota(u); err != nil {
+	return a.failBookQuotaFor(c, u, true)
+}
+
+// failBookQuotaFor 新建书籍超限（private 为真时含私有书籍数量）时写 403 并返回 true。
+func (a *App) failBookQuotaFor(c *gin.Context, u *models.User, private bool) bool {
+	if err := a.ensureBookQuota(u, private); err != nil {
 		fail(c, http.StatusForbidden, err.Error())
 		return true
 	}

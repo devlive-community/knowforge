@@ -344,7 +344,7 @@ func (a *App) CreateBook(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "请填写书籍标题")
 		return
 	}
-	if a.failBookQuota(c, currentUser(c)) {
+	if a.failBookQuotaFor(c, currentUser(c), req.IsPublic == nil || !*req.IsPublic) {
 		return
 	}
 	if req.Status != nil && !bookStatuses[*req.Status] {
@@ -555,6 +555,16 @@ func (a *App) UpdateBook(c *gin.Context) {
 		book.Status = *req.Status
 	}
 	if req.IsPublic != nil {
+		// 公开改为私有：按书籍所有者的私有书籍数量上限校验
+		if oldPublic && !*req.IsPublic {
+			var owner models.User
+			if a.DB.First(&owner, book.UserID).Error == nil {
+				if err := a.ensurePrivateBookQuota(&owner, book.ID); err != nil {
+					fail(c, http.StatusForbidden, err.Error())
+					return
+				}
+			}
+		}
 		book.IsPublic = *req.IsPublic
 	}
 	if req.LoginRequired != nil {

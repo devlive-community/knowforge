@@ -4632,4 +4632,6 @@ export const zh: Record<string, string> = {
   'entitlement.unit.exports': '{n} 次',
   'entitlement.unitShort.exports': '次',
   'export.footer.notIncluded': '当前等级/会员不含自定义页脚，导出时固定为「Powered by {siteName}」',
+  'entitlement.books.private_max.label': '私有书籍数量',
+  'entitlement.books.private_max.hint': '最多可以有多少本不公开的书（导入、复制、采集、翻译新建的私有草稿也计入，回收站中的不计）；公开书籍不受此限',
 }

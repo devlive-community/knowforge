@@ -4632,4 +4632,6 @@ export const en: Record<string, string> = {
   'entitlement.unit.exports': '{n} exports',
   'entitlement.unitShort.exports': 'exports',
   'export.footer.notIncluded': 'Your level or membership doesn\'t include a custom footer, so exports use "Powered by {siteName}"',
+  'entitlement.books.private_max.label': 'Private books',
+  'entitlement.books.private_max.hint': 'How many non-public books a user can have (private drafts from imports, copies, crawls and translations count; trashed books don\'t). Public books aren\'t limited by this',
 }
