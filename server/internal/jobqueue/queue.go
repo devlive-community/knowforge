@@ -217,8 +217,15 @@ func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
 		return true, fmt.Errorf("reload background job: %w", err)
 	}
 	hbCtx, stopHeartbeat := context.WithCancel(ctx)
-	defer stopHeartbeat()
-	go q.heartbeat(hbCtx, candidate.ID)
+	hbDone := make(chan struct{})
+	go func() {
+		defer close(hbDone)
+		q.heartbeat(hbCtx, candidate.ID)
+	}()
+	defer func() { // 返回前等心跳停止，之后不再有写入
+		stopHeartbeat()
+		<-hbDone
+	}()
 
 	q.mu.RLock()
 	handler := q.handlers[candidate.Type]
