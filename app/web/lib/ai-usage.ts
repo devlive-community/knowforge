@@ -41,3 +41,6 @@ export function aiFeatureLabel(t: TFn, feature: string): string {
   const v = t(k)
   return v === k ? feature : v
 }
+
+// AIUsageRef AI 调用记录的关联对象（服务端按功能解析，不可见或无法解析时为 null）。
+export interface AIUsageRef { kind: 'translation' | 'qa' | 'book' | 'moderation_case' | string; title: string; link: string }

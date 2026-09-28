@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AdminLayout from '@/components/AdminLayout'
 import { api, formatDate } from '@/lib/api'
-import { aiFeatureLabel, formatCost, formatTokens, type UsageAgg } from '@/lib/ai-usage'
+import { aiFeatureLabel, formatCost, formatTokens, type AIUsageRef, type UsageAgg } from '@/lib/ai-usage'
+import AIUsageRefLink from '@/components/ai/AIUsageRefLink'
 import { dateStamp, downloadAuthed } from '@/lib/download'
 import { Badge, Button, Card, EmptyState, Input, Loading, Pagination, SegmentedTabs, Select, Tooltip, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
@@ -26,6 +27,7 @@ interface LogItem {
     duration_ms: number; status: 'ok' | 'error'; error: string; created_at: string
   }
   username: string
+  ref: AIUsageRef | null
 }
 
 const PERIODS = ['7', '30', '90']
@@ -268,7 +270,7 @@ function UsageLogs({ features, days }: { features: string[]; days: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {data.items.map(({ log: l, username }) => (
+              {data.items.map(({ log: l, username, ref }) => (
                 <tr key={l.id} className="align-top">
                   <td className="whitespace-nowrap py-2 pr-3 text-slate-500">{formatDate(l.created_at)}</td>
                   <td className="py-2 pr-3 text-slate-700">{l.user_id ? (username || `#${l.user_id}`) : t('admin.aiUsage.system')}</td>
@@ -280,6 +282,7 @@ function UsageLogs({ features, days }: { features: string[]; days: string }) {
                           className="ml-1.5 text-xs text-slate-400 hover:text-primary-600"><i className="fa-solid fa-diagram-project" aria-hidden="true" /></button>
                       </Tooltip>
                     )}
+                    {ref && <div className="max-w-[16rem]"><AIUsageRefLink refInfo={ref} /></div>}
                   </td>
                   <td className="py-2 pr-3 text-slate-500">{l.model || '-'}<span className="ml-1 text-xs text-slate-400">· {t(KIND_LABEL[l.kind])}</span></td>
                   <td className="whitespace-nowrap py-2 pr-3 text-right tabular-nums text-slate-700">

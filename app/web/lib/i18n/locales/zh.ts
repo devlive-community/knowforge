@@ -5138,4 +5138,9 @@ export const zh: Record<string, string> = {
   'admin.achievements.metric.membership.total_days.desc': '购买、兑换、邀请奖励与管理员开通的会员天数合计，扣除退款扣回的天数（试用不算，需启用会员插件）',
   'admin.achievements.metric.membership.purchases.label': '购买会员次数',
   'admin.achievements.metric.membership.purchases.desc': '付款开通或续费会员的订单数（需启用会员插件）',
+  'aiUsage.ref.translation': '翻译任务',
+  'aiUsage.ref.qa': '书籍问答',
+  'aiUsage.ref.book': '书籍',
+  'aiUsage.ref.moderation_case': '内容审核',
+  'aiUsage.ref.other': '关联',
 }

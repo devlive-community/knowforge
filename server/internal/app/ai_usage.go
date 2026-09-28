@@ -249,6 +249,8 @@ type userTraceView struct {
 	Characters   int64          `json:"characters"`
 	DurationMs   int64          `json:"duration_ms"` // 各次调用耗时之和
 	Items        []userCallView `json:"items"`
+	// Ref 关联对象（如翻译任务、书籍问答），无法解析或不可见时为 null
+	Ref *plugincore.AIUsageRef `json:"ref"`
 }
 
 // MyAIUsageLogs GET /users/me/ai-usage/logs?page=&page_size=&feature=&trace_id= 我的 AI 调用记录，按调用链分组（新→旧）。
@@ -301,12 +303,30 @@ func (a *App) MyAIUsageLogs(c *gin.Context) {
 		}
 	}
 	items := make([]*userTraceView, 0, len(groups))
+	refs := aiUsageRefCache{}
 	for _, g := range groups {
 		if t := byTrace[g.TraceID]; t != nil {
+			t.Ref = refs.resolve(a, u, t.Feature, t.RefType, t.RefID, t.TraceID)
 			items = append(items, t)
 		}
 	}
 	ok(c, plugincore.PageResult{Items: items, Total: total, Page: page, PageSize: pageSize})
+}
+
+// aiUsageRefCache 同一页内相同关联只解析一次。
+type aiUsageRefCache map[string]*plugincore.AIUsageRef
+
+func (m aiUsageRefCache) resolve(a *App, viewer *models.User, feature, refType string, refID uint, traceID string) *plugincore.AIUsageRef {
+	key := feature + "|" + refType + "|" + strconv.FormatUint(uint64(refID), 10)
+	if strings.HasPrefix(feature, "translate.") {
+		key += "|" + traceID // 翻译任务按调用链区分
+	}
+	if ref, done := m[key]; done {
+		return ref
+	}
+	ref := plugincore.ResolveAIUsageRef(a, viewer, plugincore.AIUsageRefInput{Feature: feature, RefType: refType, RefID: refID, TraceID: traceID})
+	m[key] = ref
+	return ref
 }
 
 // —— 管理端 ——
@@ -476,8 +496,10 @@ func (a *App) AdminAIUsageLogs(c *gin.Context) {
 		}
 	}
 	items := make([]gin.H, 0, len(rows))
+	refs := aiUsageRefCache{}
+	viewer := currentUser(c)
 	for _, r := range rows {
-		items = append(items, gin.H{"log": r, "username": names[r.UserID]})
+		items = append(items, gin.H{"log": r, "username": names[r.UserID], "ref": refs.resolve(a, viewer, r.Feature, r.RefType, r.RefID, r.TraceID)})
 	}
 	ok(c, plugincore.PageResult{Items: items, Total: total, Page: page, PageSize: pageSize})
 }

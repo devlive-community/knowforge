@@ -5,7 +5,8 @@ import Seo from '@/components/Seo'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { aiFeatureLabel, formatTokens, type MyAIUsage } from '@/lib/ai-usage'
+import { aiFeatureLabel, formatTokens, type AIUsageRef, type MyAIUsage } from '@/lib/ai-usage'
+import AIUsageRefLink from '@/components/ai/AIUsageRefLink'
 import { dateStamp, downloadAuthed } from '@/lib/download'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, Select, Tooltip, useFeedback } from '@/components/ui'
 
@@ -37,6 +38,7 @@ interface TraceView {
   characters: number
   duration_ms: number
   items: CallView[]
+  ref: AIUsageRef | null
 }
 
 function secs(ms: number) {
@@ -194,6 +196,7 @@ function TraceItem({ trace: tr, defaultOpen }: { trace: TraceView; defaultOpen: 
           <span>{secs(tr.duration_ms)}</span>
         </span>
       </button>
+      {tr.ref && <div className="-mt-1.5 px-4 pb-2.5 pl-10"><AIUsageRefLink refInfo={tr.ref} /></div>}
       {open && (
         <ol className="space-y-1.5 border-t border-slate-100 px-4 py-3 text-xs">
           {tr.items.map((c, i) => (

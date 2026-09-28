@@ -78,6 +78,8 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'account.tokens.scope.': ['all', 'custom', 'read'],
     'account.tokens.scopeHint.': ['all', 'custom'],
     # 访问令牌权限：t(`account.tokens.resource.${resource}`) / t(`account.tokens.action.${action}`)（Go 测试校验覆盖全部可选权限）
+    # AIUsageRefLink: t(`aiUsage.ref.${kind}`)，服务端关联类型取值域（未知类型回退 other）
+    'aiUsage.ref.': ['translation', 'qa', 'book', 'moderation_case', 'other'],
     'account.tokens.resource.': ['book', 'bookAnalytics', 'document', 'documentRevision', 'trash', 'tag', 'search', 'notification', 'collaborator', 'comment', 'report', 'reaction', 'readingProgress', 'annotation', 'user', 'site', 'stats', 'upload', 'achievement', 'follow', 'growth', 'collect', 'aiwriter', 'booklists', 'booktrans', 'chapterguide', 'paid', 'payment', 'qa', 'webhooks', 'membership', 'moderation'],
     'account.tokens.action.': ['read', 'create', 'update', 'delete', 'export', 'import', 'restore', 'manage', 'use', 'order', 'ai'],
     'account.tokens.status.': ['revoked', 'expired'],

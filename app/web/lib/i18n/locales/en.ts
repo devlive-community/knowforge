@@ -5138,4 +5138,9 @@ export const en: Record<string, string> = {
   'admin.achievements.metric.membership.total_days.desc': 'Days of membership from purchases, codes, referral rewards and admin grants, minus days taken back by refunds; trials don\'t count (requires the Membership plugin)',
   'admin.achievements.metric.membership.purchases.label': 'Membership purchases',
   'admin.achievements.metric.membership.purchases.desc': 'Paid membership orders, new or renewal (requires the Membership plugin)',
+  'aiUsage.ref.translation': 'Translation',
+  'aiUsage.ref.qa': 'Book Q&A',
+  'aiUsage.ref.book': 'Book',
+  'aiUsage.ref.moderation_case': 'Moderation',
+  'aiUsage.ref.other': 'Related',
 }
