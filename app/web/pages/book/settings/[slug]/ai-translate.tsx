@@ -156,11 +156,27 @@ function NewTranslation({ bookId, bookTitle, overview, disabled, base, onChanged
   const router = useRouter()
   const [lang, setLang] = useState('en')
   const [title, setTitle] = useState('')
+  const [slug, setSlug] = useState('')
+  const [edited, setEdited] = useState({ title: false, slug: false }) // 作者改过的字段不再被预设覆盖
   const [instructions, setInstructions] = useState('')
   const [terms, setTerms] = useState<GlossaryTerm[] | null>(null)
   const [savingTerms, setSavingTerms] = useState(false)
   const [starting, setStarting] = useState(false)
   const label = TRANSLATE_LANGUAGES.find((l) => l.code === lang)?.label || lang
+
+  // 按插件管理页的预设预填书名与访问路径（切换语言时更新未手动修改的字段）
+  useEffect(() => {
+    let active = true
+    api<{ title: string; slug: string }>(`/books/${bookId}/ai-translate/preset`, { params: { lang, label } })
+      .then((p) => {
+        if (!active) return
+        setTitle((v) => (edited.title ? v : p.title))
+        setSlug((v) => (edited.slug ? v : p.slug))
+      })
+      .catch(() => { /* 忽略：保留当前输入 */ })
+    return () => { active = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在切换语言时预填，edited 变化不应重新请求
+  }, [bookId, lang, label])
 
   useEffect(() => {
     setTerms(null)
@@ -186,7 +202,7 @@ function NewTranslation({ bookId, bookTitle, overview, disabled, base, onChanged
     setStarting(true)
     try {
       const d = await api<JobState>(`/books/${bookId}/ai-translate/jobs`, {
-        method: 'POST', body: { target_lang: lang, target_label: label, title: title.trim(), instructions: instructions.trim() },
+        method: 'POST', body: { target_lang: lang, target_label: label, title: title.trim(), slug: slug.trim(), instructions: instructions.trim() },
       })
       onChanged()
       void router.push(`${base}?job=${d.job.id}`)
@@ -207,8 +223,17 @@ function NewTranslation({ bookId, bookTitle, overview, disabled, base, onChanged
           <Select value={lang} onChange={setLang} searchable options={TRANSLATE_LANGUAGES.map((l) => ({ value: l.code, label: l.label }))} />
         </Field>
         <Field label={t('bookSettings.aiTranslate.bookTitle')} hint={t('bookSettings.aiTranslate.bookTitleHint')}>
-          <Input value={title} maxLength={255} onChange={(e) => setTitle(e.target.value)} placeholder={`${bookTitle}（${label}）`} />
+          <Input value={title} maxLength={255} onChange={(e) => { setTitle(e.target.value); setEdited((x) => ({ ...x, title: true })) }} placeholder={`${bookTitle}（${label}）`} />
         </Field>
+        <div className="sm:col-span-2">
+          <Field label={t('bookSettings.aiTranslate.slug')} hint={t('bookSettings.aiTranslate.slugHint')}>
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 font-mono text-xs text-slate-400">/book/detail/</span>
+              <Input className="min-w-0 flex-1" value={slug} maxLength={198} aria-label={t('bookSettings.aiTranslate.slug')}
+                onChange={(e) => { setSlug(e.target.value.toLowerCase()); setEdited((x) => ({ ...x, slug: true })) }} placeholder={t('bookSettings.aiTranslate.slugPlaceholder')} />
+            </div>
+          </Field>
+        </div>
         <div className="sm:col-span-2">
           <Field label={t('bookSettings.aiTranslate.instructions')} hint={t('bookSettings.aiTranslate.instructionsHint')}>
             <Textarea rows={2} maxLength={1000} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder={t('bookSettings.aiTranslate.instructionsPlaceholder')} />

@@ -480,6 +480,15 @@ Authorization: Bearer kf_pat_…
 
 书单卡片字段：`id,user_id,title,description,is_public,item_count,follower_count,created_at,updated_at,owner{id,username,nickname,avatar},covers[{book_id,title,cover_image}]（前 4 本可读书籍）,following`。
 
+## 书籍翻译预设（「多语言版本」插件）
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/books/:id/ai-translate/preset?lang=&label=` | 新建译本表单的预填值 `{title, slug}`：按预设模板生成（`title` 为空表示由 AI 翻译原书名，`slug` 已被占用时追加数字） | `booktrans:ai` + 可编辑原书 |
+| GET / PUT | `/admin/book-translations/presets` | 模板 `{default:{title, slug}, languages:{<语言代码>:{title, slug}}}`，占位符 `{title}` `{language}` `{slug}` `{code}`；默认路径模板 `{slug}-{code}`；语言中留空的项沿用默认 | 管理员 |
+
+新建译本 `POST /books/:id/ai-translate/jobs` 另接受 `title?`、`slug?`：不传按预设；`title` 传空串由 AI 翻译书名；`slug` 需为小写字母、数字和中划线且未被占用（否则 400 / 409），传空串自动生成。
+
 ## 反向链接（「反向链接」插件，默认关闭）
 
 章节正文用 `[[章节标题或slug]]`、`[[目标|显示文字]]`、跨书 `[[书籍slug/章节slug]]` 或 `[文字](doc:章节slug)` 链接其他章节（代码中的不算）。同书目标先按 slug、再按标题（忽略大小写）匹配；链接按「目标书籍 + 目标文字」保存，查询时与章节当前的 slug/标题匹配，因此目标改名后按新标题生效。来源章节保存、发布、书籍复制时重建其链接，插件启用时为全部已有章节建立索引。
