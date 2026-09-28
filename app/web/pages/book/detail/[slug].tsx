@@ -36,6 +36,8 @@ import {
 import type { Book, BookAccess, Document, User } from '@/lib/types'
 import FeedButton from '@/components/FeedButton'
 import { bookFeedPath, feedsEnabled } from '@/lib/feeds'
+import EmbedModal from '@/components/EmbedModal'
+import { embedEnabled } from '@/lib/embed'
 
 interface BookDetailProps {
   installed: boolean
@@ -134,6 +136,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
   // 私有/草稿书 SSR 无令牌取不到，挂载后携带本地令牌客户端重试（避免默认空白）
   const [book, setBook] = useState<Book | null>(ssrBook ?? null)
   const [copyOpen, setCopyOpen] = useState(false)
+  const [embedOpen, setEmbedOpen] = useState(false)
   const [bookViews, setBookViews] = useState(ssrBook?.view_count || 0)
   const countedBook = useRef<number | null>(null)
   const [tree, setTree] = useState<Document[]>(ssrTree || [])
@@ -529,6 +532,12 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
                     <ShareIcon className="h-4 w-4" />
                   </Button></Tooltip>
                 {feedsEnabled(site) && book.is_public && <FeedButton path={bookFeedPath(book.slug)} className="w-full sm:w-auto" />}
+                {embedEnabled(site) && book.is_public && (
+                  <Tooltip content={t('embed.button')} className="w-full sm:w-auto"><Button type="button" variant="outline" onClick={() => setEmbedOpen(true)} aria-label={t('embed.button')}
+                    className="w-full !px-0 text-slate-500 sm:w-[var(--control-height)]">
+                    <i className="fa-solid fa-code" aria-hidden="true" />
+                  </Button></Tooltip>
+                )}
                 <BookExportButton book={book} className="w-full sm:w-auto" />
               </div>
               {user && (
@@ -710,6 +719,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
       )}
 
       <BookCopyDialog book={book} tree={tree} open={copyOpen} onClose={() => setCopyOpen(false)} />
+      {embedOpen && <EmbedModal book={book} tree={tree} onClose={() => setEmbedOpen(false)} />}
     </div>
   )
 }

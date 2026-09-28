@@ -15,7 +15,7 @@ import SiteHead from '@/components/SiteHead'
 import type { ReactNode } from 'react'
 import type { SiteConfig } from '@/lib/types'
 
-const bareRoutes = ['/install', '/login', '/register', '/book/writer', '/book/reader', '/book/print', '/admin']
+const bareRoutes = ['/install', '/login', '/register', '/book/writer', '/book/reader', '/book/print', '/admin', '/embed']
 
 const noindexRoutes = ['/books', '/book/writer', '/user/profile', '/user/security', '/user/achievements', '/admin']
 
