@@ -51,14 +51,14 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
                      'reading.annotation', 'creation.book_created', 'creation.chapter_created',
                      'community.comment_received', 'community.reaction', 'community.reaction_received',
                      'account.registered', 'account.email_verified', 'account.two_factor_enabled',
-                     'account.oauth_bound', 'account.invited_user', 'checkin.daily', 'checkin.streak_bonus',
+                     'account.oauth_bound', 'account.invited_user', 'checkin.daily', 'checkin.streak_bonus', 'membership.purchased',
                      'achievement.unlocked', 'admin.adjust'],
     # admin growth: 规则说明 t(`admin.growth.ruleDesc.${rule_key}`)（xpCatalog 全部规则）与规则分组
     'admin.growth.ruleDesc.': ['reading.chapter', 'creation.chapter_published', 'community.comment', 'reading.time',
                                'reading.annotation', 'creation.book_created', 'creation.chapter_created',
                                'community.comment_received', 'community.reaction', 'community.reaction_received',
                                'account.registered', 'account.email_verified', 'account.two_factor_enabled',
-                               'account.oauth_bound', 'account.invited_user', 'checkin.daily', 'checkin.streak_bonus'],
+                               'account.oauth_bound', 'account.invited_user', 'checkin.daily', 'checkin.streak_bonus', 'membership.purchased'],
     'admin.growth.ruleGroup.': ['checkin', 'reading', 'creation', 'community', 'account', 'other'],
     # CheckinCard: t(`growth.checkin.stat.${k}`)
     'growth.checkin.stat.': ['streak', 'total', 'longest'],

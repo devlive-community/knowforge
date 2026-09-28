@@ -168,7 +168,24 @@ func metricByKey(key string) (achievementMetric, bool) {
 			return metric, true
 		}
 	}
+	if m, ok := plugincore.UserMetricByKey(key); ok {
+		return fromUserMetric(m), true
+	}
 	return achievementMetric{}, false
+}
+
+// fromUserMetric 其他插件经 plugincore 登记的用户指标（如会员累计天数）。
+func fromUserMetric(m plugincore.UserMetric) achievementMetric {
+	return achievementMetric{Key: m.Key, Label: m.Label, Category: m.Category, Description: m.Description,
+		Aggregation: m.Aggregation, Unit: m.Unit, Windows: m.Windows, AllowedFilters: []string{}}
+}
+
+// metricAvailable 插件登记的指标需其所属插件可用（内置指标恒为可用）。
+func (am *behavior) metricAvailable(key string) bool {
+	if m, ok := plugincore.UserMetricByKey(key); ok {
+		return m.Available == nil || m.Available(am.core)
+	}
+	return true
 }
 
 func (am *behavior) AdminAchievementMetrics(c *gin.Context) {
@@ -184,6 +201,12 @@ func (am *behavior) AdminAchievementMetrics(c *gin.Context) {
 			metric.AllowedFilters = []string{}
 		}
 		items = append(items, metric)
+	}
+	// 其他插件登记的指标：所属插件可用时才出现
+	for _, m := range plugincore.UserMetrics() {
+		if m.Available == nil || m.Available(am.core) {
+			items = append(items, fromUserMetric(m))
+		}
 	}
 	am.core.OK(c, gin.H{"items": items})
 }
@@ -890,7 +913,12 @@ func (am *behavior) evaluateAchievementMetric(userID uint, rule models.Achieveme
 			}
 		}
 	default:
-		err = fmt.Errorf("不支持的成就指标")
+		m, ok := plugincore.UserMetricByKey(rule.MetricKey)
+		if !ok {
+			err = fmt.Errorf("不支持的成就指标")
+		} else if m.Available == nil || m.Available(am.core) {
+			value, err = m.Value(am.core, userID, achievementWindowStart(rule))
+		}
 	}
 	return value, err
 }

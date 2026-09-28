@@ -40,6 +40,8 @@ type EntitlementDef struct {
 	SetBase func(core Core, value int64) error `json:"-"`
 	// Available 功能当前是否可用（如所属插件已启用）；nil 表示始终可用。
 	Available func(core Core) bool `json:"-"`
+	// AdminUsesBase 管理员也按来源与基础值计算（用于加成类权益：管理员「不受限制」不等于取最大加成）。
+	AdminUsesBase bool `json:"-"`
 }
 
 // EntitlementSource 权益来源（如成长等级、会员方案）。
@@ -162,7 +164,7 @@ func ResolveEntitlements(core Core, u *models.User) map[string]ResolvedEntitleme
 		switch {
 		case def.Available != nil && !def.Available(core):
 			out[def.Key] = ResolvedEntitlement{Key: def.Key, Value: 0, Source: "unavailable"}
-		case isAdmin:
+		case isAdmin && !def.AdminUsesBase:
 			v := int64(1)
 			if def.Kind == EntitlementLimit {
 				v = def.Max
@@ -173,7 +175,7 @@ func ResolveEntitlements(core Core, u *models.User) map[string]ResolvedEntitleme
 			out[def.Key] = ResolvedEntitlement{Key: def.Key, Value: v, Source: "admin"}
 		}
 	}
-	if u != nil && !isAdmin {
+	if u != nil {
 		for _, src := range entitlementSources {
 			values, exclusive := src.Resolve(core, u)
 			for key, v := range values {

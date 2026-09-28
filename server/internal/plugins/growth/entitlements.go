@@ -1,6 +1,8 @@
 package growth
 
 import (
+	"strconv"
+
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
@@ -54,4 +56,39 @@ func init() {
 			return out
 		},
 	})
+}
+
+// —— 经验加成：会员方案或等级可给出 growth.xp_bonus（百分比），按规则获得的经验按比例放大 ——
+
+const (
+	entXPBonus     = "growth.xp_bonus"
+	cfgXPBonusBase = "entitlement_growth_xp_bonus"
+	maxXPBonus     = 300
+)
+
+func init() {
+	plugincore.RegisterEntitlement(plugincore.EntitlementDef{
+		Key: entXPBonus, Kind: plugincore.EntitlementLimit, Unit: "percent", Min: 0, Max: maxXPBonus, Order: 90,
+		// 管理员「不受限制」不等于取最大加成：按来源与基础值计算
+		AdminUsesBase: true,
+		Available:     func(core plugincore.Core) bool { return core.PluginEnabled(plugins.KeyGrowth) },
+		Base: func(core plugincore.Core) int64 {
+			if v, err := strconv.ParseInt(core.GetSetting(cfgXPBonusBase), 10, 64); err == nil && v >= 0 && v <= maxXPBonus {
+				return v
+			}
+			return 0
+		},
+		SetBase: func(core plugincore.Core, v int64) error {
+			return core.SetSetting(cfgXPBonusBase, strconv.FormatInt(v, 10), "权益：经验加成百分比（基础）")
+		},
+	})
+}
+
+// xpBonus 用户当前的经验加成百分比（0 为无加成）。
+func (b *behavior) xpBonus(userID uint) int64 {
+	var u models.User
+	if b.core.Gorm().First(&u, userID).Error != nil {
+		return 0
+	}
+	return plugincore.EntitlementValue(b.core, &u, entXPBonus)
 }

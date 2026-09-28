@@ -140,6 +140,7 @@ func saveMembership(tx *gorm.DB, m *UserMembership, exists bool) error {
 
 // notifyChange 开通/续期/调整后通知用户。
 func (b *behavior) notifyChange(userID uint, plan Plan, action string, expires time.Time) {
+	emitChanged(b.core, userID)
 	key := "notify.membership.updated"
 	if action == ActionGrant || action == ActionSwitch {
 		key = "notify.membership.granted"
@@ -180,6 +181,9 @@ func sweep(core plugincore.Core, _ *jobqueue.Queue) {
 				k = trialKey
 			}
 			core.NotifyI18n(m.UserID, notificationType, k, map[string]string{"plan": plan.Name, "date": formatDate(m.ExpiresAt)}, map[string]any{"link": notificationLink})
+			if column == "expired_notice_at" {
+				emitChanged(core, m.UserID) // 已到期：会员指标变化
+			}
 		}
 	}
 	b.sweepRenewals(now) // 续费计划先处理（已处理的周期不再发普通到期提醒）

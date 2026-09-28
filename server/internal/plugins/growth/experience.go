@@ -116,6 +116,8 @@ var xpCatalog = []xpTrigger{
 	// 签到为新功能，规则默认启用（不存在「升级后行为突变」的顾虑）
 	{RuleKey: "checkin.daily", Activity: "checkin.created", Label: "每日签到", BaseXP: 5, Enabled: true, SortOrder: 16},
 	{RuleKey: "checkin.streak_bonus", Activity: "checkin.streak_milestone", Label: "连续签到奖励", BaseXP: 20, Enabled: true, SortOrder: 17},
+	// 会员插件在订单付款开通/续期后发出 membership.purchased（来源 ID 为订单号），退款撤销时收回
+	{RuleKey: "membership.purchased", Activity: "membership.purchased", Label: "购买会员", BaseXP: 50, Enabled: true, SortOrder: 18},
 }
 
 // ensureExperienceRules 为目录中缺失的触发器补建规则（已存在的规则不改动，保留管理员的配置）。
@@ -144,9 +146,10 @@ func (b *behavior) ensureExperienceRules() {
 // 以「规则键:来源 ID」定位原经验流水（与发放时的默认去重键一致），给各自的获得者记一条等额负经验，
 // 流水保留可追溯；防止「发了删、删了再发」刷经验。书籍/章节不在此列（作者整理内容不应被扣经验）。
 var xpRevocations = map[string][]string{
-	"comment.deleted":    {"community.comment", "community.comment_received"},
-	"reaction.deleted":   {"community.reaction", "community.reaction_received"},
-	"annotation.deleted": {"reading.annotation"},
+	"comment.deleted":     {"community.comment", "community.comment_received"},
+	"reaction.deleted":    {"community.reaction", "community.reaction_received"},
+	"annotation.deleted":  {"reading.annotation"},
+	"membership.refunded": {"membership.purchased"},
 }
 
 // revokedReason 收回经验的流水说明（前端按 growth.reason.<值> 显示多语言文案）。
@@ -193,7 +196,7 @@ func (b *behavior) grantOnce(userID uint, ruleKey, sourceType, sourceID string, 
 // revokeEvents 为每条正经验流水记一条等额负流水（去重键 revoke:<原键>，每条只收回一次）。
 func (b *behavior) revokeEvents(granted []models.ExperienceEvent, reason string) {
 	for _, g := range granted {
-		b.recordExperience(g.UserID, g.RuleKey, g.SourceType, g.SourceID, "revoke:"+g.DedupeKey, -g.FinalXP, reason)
+		b.recordEvent(g.UserID, g.RuleKey, g.SourceType, g.SourceID, "revoke:"+g.DedupeKey, -g.BaseXP, -g.FinalXP, reason)
 	}
 }
 
@@ -215,7 +218,8 @@ func (b *behavior) awardForActivity(ev plugincore.ActivityEvent) {
 	}
 }
 
-// awardExperience 按「经验规则」给固定事件发经验：读取 base_xp，并执行每人每日上限。
+// awardExperience 按「经验规则」给固定事件发经验：读取 base_xp，按用户的经验加成权益（growth.xp_bonus，百分比）
+// 放大，并执行每人每日上限（上限按规则基础经验累计，加成不会让人更早触顶）。
 func (b *behavior) awardExperience(userID uint, ruleKey, sourceType, sourceID, dedupeKey string) {
 	if !b.core.PluginEnabled(plugins.KeyGrowth) || userID == 0 {
 		return
@@ -229,22 +233,31 @@ func (b *behavior) awardExperience(userID uint, ruleKey, sourceType, sourceID, d
 		var todaySum int64
 		db.Model(&models.ExperienceEvent{}).
 			Where("user_id = ? AND rule_key = ? AND created_at >= ?", userID, ruleKey, dayStart(time.Now())).
-			Select("COALESCE(SUM(final_xp),0)").Scan(&todaySum)
+			Select("COALESCE(SUM(base_xp),0)").Scan(&todaySum)
 		if todaySum >= int64(r.DailyCap) {
 			return // 已达每日上限，不再入账
 		}
 	}
-	b.recordExperience(userID, ruleKey, sourceType, sourceID, dedupeKey, r.BaseXP, "")
+	final := r.BaseXP
+	if bonus := b.xpBonus(userID); bonus > 0 && final > 0 {
+		final = r.BaseXP * (100 + int(bonus)) / 100
+	}
+	b.recordEvent(userID, ruleKey, sourceType, sourceID, dedupeKey, r.BaseXP, final, "")
 }
 
 // recordExperience 幂等记账一条经验流水并重算资料。dedupeKey 唯一，重复/并发只落一条。
 func (b *behavior) recordExperience(userID uint, ruleKey, sourceType, sourceID, dedupeKey string, xp int, reason string) {
-	if !b.core.PluginEnabled(plugins.KeyGrowth) || userID == 0 || xp == 0 || dedupeKey == "" {
+	b.recordEvent(userID, ruleKey, sourceType, sourceID, dedupeKey, xp, xp, reason)
+}
+
+// recordEvent 同 recordExperience，基础经验与实得经验（含加成）分别记录。
+func (b *behavior) recordEvent(userID uint, ruleKey, sourceType, sourceID, dedupeKey string, baseXP, finalXP int, reason string) {
+	if !b.core.PluginEnabled(plugins.KeyGrowth) || userID == 0 || finalXP == 0 || dedupeKey == "" {
 		return
 	}
 	ev := models.ExperienceEvent{
 		UserID: userID, RuleKey: ruleKey, SourceType: sourceType, SourceID: sourceID,
-		DedupeKey: dedupeKey, BaseXP: xp, FinalXP: xp, Reason: reason,
+		DedupeKey: dedupeKey, BaseXP: baseXP, FinalXP: finalXP, Reason: reason,
 	}
 	res := b.core.Gorm().Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "dedupe_key"}}, DoNothing: true}).Create(&ev)
 	if res.Error != nil || res.RowsAffected == 0 {

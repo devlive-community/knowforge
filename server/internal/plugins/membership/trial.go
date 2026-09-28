@@ -82,6 +82,7 @@ func (b *behavior) StartTrial(c *gin.Context) {
 		b.core.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	emitChanged(b.core, u.ID)
 	b.core.NotifyI18n(u.ID, notificationType, "notify.membership.trialStarted", map[string]string{"plan": plan.Name, "date": formatDate(m.ExpiresAt)}, map[string]any{"link": notificationLink})
 	b.core.OK(c, gin.H{"plan": gin.H{"id": plan.ID, "name": plan.Name}, "expires_at": m.ExpiresAt, "trial": true})
 }

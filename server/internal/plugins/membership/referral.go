@@ -115,6 +115,7 @@ type bonusNotice struct {
 }
 
 func (n bonusNotice) send(core plugincore.Core) {
+	emitChanged(core, n.userID)
 	core.NotifyI18n(n.userID, notificationType, n.key, map[string]string{"plan": n.plan.Name, "days": strconv.Itoa(n.days), "date": formatDate(n.expire)},
 		map[string]any{"link": notificationLink})
 }

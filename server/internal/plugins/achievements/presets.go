@@ -99,6 +99,11 @@ var presetAchievements = func() []presetAchievement {
 		// —— 成长（需启用成长插件）——
 		p("growth.level.5", "account", "preset.growth.level", 1, "rare", "fa-star", 0, "growth.current_level", 5, "小有所成", "Rising Star", "成长等级达到 Lv.5", "Reach growth level 5"),
 		p("growth.level.10", "account", "preset.growth.level", 2, "legendary", "fa-crown", 0, "growth.current_level", 10, "登峰造极", "Top Tier", "成长等级达到 Lv.10", "Reach growth level 10"),
+		// —— 会员（指标由会员插件登记，会员插件启用时才可安装）——
+		p("membership.days.1", "account", "preset.membership.days", 1, "rare", "fa-crown", 20, "membership.total_days", 1, "尊享之始", "Welcome Aboard", "首次成为会员", "Become a member for the first time"),
+		p("membership.days.365", "account", "preset.membership.days", 2, "epic", "fa-gem", 100, "membership.total_days", 365, "年度会员", "Member of the Year", "累计成为会员 365 天", "Be a member for 365 days in total"),
+		p("membership.days.1000", "account", "preset.membership.days", 3, "legendary", "fa-chess-king", 300, "membership.total_days", 1000, "千日相伴", "A Thousand Days", "累计成为会员 1000 天", "Be a member for 1,000 days in total"),
+		p("membership.purchases.3", "account", "preset.membership.purchases", 1, "rare", "fa-heart", 50, "membership.purchases", 3, "忠实支持", "Loyal Supporter", "累计购买或续费会员 3 次", "Buy or renew a membership 3 times"),
 	}
 	for i := range list {
 		list[i].SortOrder = (i + 1) * 10
@@ -146,7 +151,7 @@ func (am *behavior) installPresets(keys []string, actorID uint) (int, error) {
 	}
 	installed := 0
 	for _, preset := range presetAchievements {
-		if have[preset.Key] || (len(want) > 0 && !want[preset.Key]) {
+		if have[preset.Key] || (len(want) > 0 && !want[preset.Key]) || !am.metricAvailable(preset.Metric) {
 			continue
 		}
 		req := presetRequest(preset, defaultLocale)
@@ -218,6 +223,9 @@ func (am *behavior) AdminListPresets(c *gin.Context) {
 	}
 	items := make([]presetItem, 0, len(presetAchievements))
 	for _, preset := range presetAchievements {
+		if !am.metricAvailable(preset.Metric) && !have[preset.Key] {
+			continue // 所属插件未启用的预设不列出（如会员）
+		}
 		items = append(items, presetItem{
 			Key: preset.Key, Category: preset.Category, Series: preset.Series, Tier: preset.Tier, Rarity: preset.Rarity,
 			Icon: preset.Icon, RewardXP: preset.RewardXP, Metric: preset.Metric, Target: preset.Target,

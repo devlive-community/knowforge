@@ -82,6 +82,7 @@ func fulfillOrder(core plugincore.Core, userID uint, orderNo string, payload map
 	}
 	b := &behavior{core: core}
 	b.notifyChange(userID, plan, action, m.ExpiresAt)
+	emitPurchased(core, userID, orderNo)
 	b.rewardPurchase(userID, orderNo) // 被邀请人首次购买：邀请奖励（按被邀请人幂等）
 	return nil
 }
@@ -111,6 +112,7 @@ func refundOrder(core plugincore.Core, ev plugincore.RefundEvent) error {
 		return nil
 	}
 	var ds []deduction
+	processed := false
 	err := core.Gorm().Transaction(func(tx *gorm.DB) error {
 		var n int64
 		tx.Model(&Record{}).Where("source = ? AND source_ref = ?", refundSource, ev.RefundNo).Count(&n)
@@ -126,10 +128,14 @@ func refundOrder(core plugincore.Core, ev plugincore.RefundEvent) error {
 		}
 		d, err := deductDays(tx, ev.UserID, proportionalDays(granted.Days, ev)+bonus, ev.RefundNo, "订单 %s 退款，扣回 %d 天", ev.OrderNo, now)
 		ds = append(append(ds, d), inviter...)
+		processed = err == nil
 		return err
 	})
 	if err != nil {
 		return err
+	}
+	if processed {
+		emitRefunded(core, ev.UserID, ev.OrderNo, ev.RefundNo)
 	}
 	for _, d := range ds {
 		d.notify(core)
@@ -184,6 +190,7 @@ func (d deduction) notify(core plugincore.Core) {
 		return
 	}
 	if d.ended {
+		emitChanged(core, d.userID)
 		core.NotifyI18n(d.userID, notificationType, "notify.membership.revoked", map[string]string{"plan": d.plan.Name}, map[string]any{"link": notificationLink})
 	} else {
 		(&behavior{core: core}).notifyChange(d.userID, d.plan, ActionAdjust, d.expires)

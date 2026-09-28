@@ -22,7 +22,7 @@ interface Growth {
   xp_to_next?: number
   progress_percent: number
 }
-interface XPEvent { id: number; rule_key: string; final_xp: number; reason?: string; created_at: string }
+interface XPEvent { id: number; rule_key: string; base_xp: number; final_xp: number; reason?: string; created_at: string }
 
 export default function MyGrowthPage() {
   return <FeatureGate feature="growth"><MyGrowthInner /></FeatureGate>
@@ -141,7 +141,7 @@ function MyGrowthInner() {
                       <li key={e.id} className="flex items-center justify-between gap-3 py-2.5">
                         <span className="min-w-0">
                           <span className="block truncate text-sm text-slate-700">{growthRuleLabel(t, e.rule_key)}</span>
-                          <span className="text-xs text-slate-400">{new Date(e.created_at).toLocaleString()}{e.reason ? ` · ${growthReasonLabel(t, e.reason)}` : ''}</span>
+                          <span className="text-xs text-slate-400">{new Date(e.created_at).toLocaleString()}{e.reason ? ` · ${growthReasonLabel(t, e.reason)}` : ''}{e.base_xp > 0 && e.final_xp > e.base_xp ? ` · ${t('growth.ledgerBonus', { n: e.final_xp - e.base_xp })}` : ''}</span>
                         </span>
                         <span className={`shrink-0 text-sm font-semibold ${e.final_xp >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{e.final_xp >= 0 ? '+' : ''}{e.final_xp}</span>
                       </li>

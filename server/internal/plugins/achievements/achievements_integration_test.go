@@ -552,6 +552,23 @@ func TestPresetAchievements(t *testing.T) {
 	if int(total) != achievements.PresetCount() {
 		t.Fatalf("重复启用不应重复安装预设，实际 %d", total)
 	}
+
+	// 会员预设依赖会员插件登记的指标：启用会员后才列出，可补装
+	e.enable(t, "membership")
+	_, payload = e.do(t, http.MethodGet, "/api/v1/admin/achievement-presets", "", e.token)
+	pending := 0
+	for _, it := range payload["data"].(map[string]any)["items"].([]any) {
+		if item := it.(map[string]any); item["installed"] == false {
+			pending++
+		}
+	}
+	if pending != achievements.AllPresetCount()-achievements.PresetCount() || pending == 0 {
+		t.Fatalf("启用会员后应列出未安装的会员预设，实际 %d", pending)
+	}
+	_, payload = e.do(t, http.MethodPost, "/api/v1/admin/achievement-presets/install", `{}`, e.token)
+	if int(payload["data"].(map[string]any)["installed"].(float64)) != pending {
+		t.Fatalf("应安装全部会员预设: %v", payload)
+	}
 }
 
 // 后台创建/更新成就时保存奖励经验（修复：此前请求结构缺少 reward_xp，表单填写的奖励经验不会生效），并校验范围。

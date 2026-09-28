@@ -629,6 +629,7 @@ func (b *behavior) AdminRevoke(c *gin.Context) {
 		b.core.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	emitChanged(b.core, u.ID)
 	if m.ExpiresAt.After(time.Now()) {
 		b.core.NotifyI18n(u.ID, notificationType, "notify.membership.revoked", map[string]string{"plan": plan.Name}, map[string]any{"link": notificationLink})
 	}
