@@ -178,4 +178,40 @@ func TestBookVersionsGroupedListing(t *testing.T) {
 	if len(items) != 1 || items[0].(map[string]any)["version"] != "v1.2" {
 		t.Fatalf("版本列表第 2 页错误: %v", items)
 	}
+
+	// 译本继承原书的版本组：同一版本的多个语言只算一个版本，版本切换优先当前语言
+	_, created := request(http.MethodPost, "/api/v1/books", map[string]any{
+		"title": "Manual v1.10", "status": "published", "is_public": true, "version": "v1.10", "version_group": "manual",
+		"version_is_latest": true, "language": "English",
+	}, token)
+	enID := int(created["data"].(map[string]any)["id"].(float64))
+	if items, _ := page("/api/v1/books?group_versions=true"); len(items) == 2 {
+		for _, it := range items {
+			if b := it.(map[string]any); b["version_group"] == "manual" && int(b["version_count"].(float64)) != 3 {
+				t.Fatalf("译本不应增加版本数: %v", b)
+			}
+		}
+	}
+	for _, id := range []int{latestID, enID} {
+		status, resp := request(http.MethodGet, fmt.Sprintf("/api/v1/books/%d/versions", id), nil, "")
+		if status != http.StatusOK {
+			t.Fatalf("读取版本失败: %d", status)
+		}
+		variants := resp["data"].(map[string]any)["items"].([]any)
+		current := 0
+		for _, v := range variants {
+			if v.(map[string]any)["version"] == "v1.10" {
+				if !v.(map[string]any)["current"].(bool) {
+					t.Fatalf("v1.10 应为当前书籍（%d）: %v", id, v)
+				}
+				current++
+			}
+		}
+		if len(variants) != 3 || current != 1 {
+			t.Fatalf("每个版本号应只出现一次（%d）: %v", id, variants)
+		}
+	}
+	if _, total := page(fmt.Sprintf("/api/v1/books/%d/versions/books", enID)); total != 3 {
+		t.Fatalf("版本弹框应按版本号去重，实际 %d", total)
+	}
 }

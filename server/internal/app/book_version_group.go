@@ -1,36 +1,49 @@
 package app
 
 import (
+	"strconv"
+	"strings"
+
 	"gorm.io/gorm"
 
 	"knowforge/server/internal/models"
 )
 
 // groupBookVersions 「版本聚合」：在 query 的筛选范围内，同一 version_group 只保留一本代表书
-// （优先标记为「最新版」的，其次 id 最大即最新创建的），返回收窄后的查询与各版本组在该范围内的可见版本数。
+// （优先标记为「最新版」的，其次 id 最大即最新创建的），返回收窄后的查询与各版本组在该范围内的可见版本数
+// （按版本号去重：译本继承原书的版本组，同一版本的多个语言只算一个版本；未填版本号的书各算一个）。
 // 聚合在数据库侧完成，分页总数与每页条数都基于聚合后的结果，翻页不会出现空页/重复。
 func (a *App) groupBookVersions(query *gorm.DB) (*gorm.DB, map[string]int) {
 	type versionRow struct {
 		ID              uint
 		VersionGroup    string
+		Version         string
 		VersionIsLatest bool
 	}
 	var rows []versionRow
 	counts := map[string]int{}
 	if err := query.Session(&gorm.Session{}).
-		Select("books.id, books.version_group, books.version_is_latest").
+		Select("books.id, books.version_group, books.version, books.version_is_latest").
 		Where("books.version_group <> ''").
 		Find(&rows).Error; err != nil {
 		return query, counts
 	}
 	reps := map[string]versionRow{}
 	seen := map[uint]bool{}
+	versions := map[string]bool{}
 	for _, r := range rows {
 		if seen[r.ID] { // 联表（标签/协作）可能产生重复行
 			continue
 		}
 		seen[r.ID] = true
-		counts[r.VersionGroup]++
+		v := strings.TrimSpace(r.Version)
+		if v == "" {
+			v = "id:" + strconv.FormatUint(uint64(r.ID), 10)
+		}
+		if !versions[r.VersionGroup+"\x00"+v] {
+			versions[r.VersionGroup+"\x00"+v] = true
+			counts[r.VersionGroup]++
+		}
 		cur, exists := reps[r.VersionGroup]
 		if !exists || (r.VersionIsLatest && !cur.VersionIsLatest) || (r.VersionIsLatest == cur.VersionIsLatest && r.ID > cur.ID) {
 			reps[r.VersionGroup] = r

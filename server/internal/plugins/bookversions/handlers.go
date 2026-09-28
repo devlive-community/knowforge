@@ -25,19 +25,59 @@ type bookVariant struct {
 	FirstDocSlug string `json:"first_doc_slug"`
 }
 
-// bookGroupSiblings 返回版本组内取相同非空值、且对当前用户可见的书籍（含自身）。
+// dedupeVersions 版本组内每个版本号只保留一本：译本会继承原书的版本组，同一版本的多个语言不应重复出现。
+// 优先当前书籍，其次与当前书籍同语言的，否则取最早创建的（通常是原书）；未填版本号的书各自保留。保持输入顺序。
+func dedupeVersions(books []models.Book, current *models.Book) []models.Book {
+	pick := map[string]int{}
+	key := func(b *models.Book) string {
+		if v := strings.TrimSpace(b.Version); v != "" {
+			return "v:" + v
+		}
+		return "id:" + strconv.FormatUint(uint64(b.ID), 10)
+	}
+	rank := func(b *models.Book) int {
+		switch {
+		case b.ID == current.ID:
+			return 0
+		case b.Language == current.Language:
+			return 1
+		default:
+			return 2
+		}
+	}
+	for i := range books {
+		k := key(&books[i])
+		j, ok := pick[k]
+		if !ok || rank(&books[i]) < rank(&books[j]) || (rank(&books[i]) == rank(&books[j]) && books[i].ID < books[j].ID) {
+			pick[k] = i
+		}
+	}
+	out := make([]models.Book, 0, len(pick))
+	for i := range books {
+		if pick[key(&books[i])] == i {
+			out = append(out, books[i])
+		}
+	}
+	return out
+}
+
+// bookGroupSiblings 返回版本组内对当前用户可见的书籍（含自身），每个版本号一本（见 dedupeVersions）。
 func bookGroupSiblings(core plugincore.Core, u *models.User, book *models.Book, column, value string) []bookVariant {
 	if strings.TrimSpace(value) == "" {
 		return []bookVariant{}
 	}
-	var books []models.Book
-	core.Gorm().Where(column+" = ?", value).Order("id ASC").Find(&books)
+	var all []models.Book
+	core.Gorm().Where(column+" = ?", value).Order("id ASC").Find(&all)
+	readable := make([]models.Book, 0, len(all))
+	for i := range all {
+		if core.CanReadBook(u, &all[i]) {
+			readable = append(readable, all[i])
+		}
+	}
+	books := dedupeVersions(readable, book)
 	out := make([]bookVariant, 0, len(books))
 	for i := range books {
 		b := &books[i]
-		if !core.CanReadBook(u, b) {
-			continue
-		}
 		var firstDocSlug string
 		core.Gorm().Model(&models.Document{}).Where("book_id = ? AND status = ?", b.ID, "published").
 			Order("sort_order ASC, created_at ASC").Limit(1).Pluck("slug", &firstDocSlug)
@@ -129,6 +169,7 @@ func (b *behavior) ListBookVersionBooks(c *gin.Context) {
 				books = append(books, all[i])
 			}
 		}
+		books = dedupeVersions(books, book)
 	}
 	asc := core.GetSetting("book_versions_sort") == "asc"
 	sort.SliceStable(books, func(i, j int) bool {
