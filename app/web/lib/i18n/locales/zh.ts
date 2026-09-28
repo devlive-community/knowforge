@@ -5194,4 +5194,7 @@ export const zh: Record<string, string> = {
   'admin.bookTranslations.preview': '示例（原书「示例书」/sample-book）：书名 {title}，访问路径 {slug}',
   'admin.bookTranslations.aiTitle': '由 AI 翻译',
   'admin.bookTranslations.autoSlug': '自动生成',
+  'webhooks.event.sale.completed': '作品被购买',
+  'webhooks.event.question.received': '收到读者提问',
+  'webhooks.event.membership.changed': '我的会员变化',
 }

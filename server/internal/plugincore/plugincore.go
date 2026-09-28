@@ -230,6 +230,9 @@ type ActivityEvent struct {
 	SourceType string
 	SourceID   string
 	DedupeKey  string
+	// Data 可选的事件详情（如售出金额、提问标题），供需要对外转发的订阅方使用（如 Webhook），
+	// 使其无需依赖发出方插件的数据模型；其他订阅方可忽略。
+	Data map[string]any
 }
 
 // ActivityHandler 活动订阅回调；失败不得反向影响主业务。

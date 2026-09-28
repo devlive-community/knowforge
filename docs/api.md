@@ -506,7 +506,7 @@ Authorization: Bearer kf_pat_…
 { "id": 123, "event": "chapter.published", "created_at": "2026-09-27T12:00:00Z", "data": { "book": {…}, "chapter": {…} } }
 ```
 
-- 事件：`chapter.published`（`data.book`、`data.chapter`）、`comment.received`（另含 `data.comment{id,content,author,created_at}`，正文截取 500 字）、`reaction.received`（`data.book`、`data.reaction{id,type: like\|favorite,user,created_at}`）、`ping`（测试）；`book`/`chapter` 含 `id,slug,title,url`
+- 事件：`chapter.published`（`data.book`、`data.chapter`）、`comment.received`（另含 `data.comment{id,content,author,created_at}`，正文截取 500 字）、`reaction.received`（`data.book`、`data.reaction{id,type: like\|favorite,user,created_at}`）、`sale.completed`（作品被购买，需「付费内容」插件：`data.book`、`data.chapter`（购买整本时为 null）、`data.sale{order_no,title,amount_cents,net_cents,currency,sold_at}`，`net_cents` 为作者到手金额）、`question.received`（书籍收到公开提问，需「问答」插件：`data.book`、`data.chapter`、`data.question{id,title,body,url,created_at,author}`，正文截取 500 字）、`membership.changed`（自己的会员变化，需「会员」插件：`data{status: active\|ended\|expired, trial, plan{id,name}, expires_at}`，不限定书籍）、`ping`（测试）；`book`/`chapter` 含 `id,slug,title,url`
 - 请求头：`X-KnowForge-Event`、`X-KnowForge-Delivery`（投递 ID，同 `id`）、`X-KnowForge-Timestamp`（Unix 秒）、`X-KnowForge-Signature: sha256=<hex>`，其中签名为 `HMAC-SHA256(密钥, 时间戳 + "." + 请求体)`；接收端应校验签名并拒绝过旧的时间戳
 - 返回 2xx 视为成功；否则按退避（5 秒起翻倍）重试，共 5 次；单次请求超时 10 秒，不跟随重定向。连续 10 次投递失败的订阅自动停用并通知用户
 - 默认拒绝投递到内网、本机、链路本地等地址（连接时校验解析结果，防止 SSRF）；内网部署可设置环境变量 `KNOWFORGE_WEBHOOK_ALLOW_PRIVATE=true`
@@ -661,7 +661,7 @@ Authorization: Bearer kf_pat_…
 | POST | `/admin/paid/withdrawals/:id/pay` / `reject` | 确认已线下打款 / 驳回（需原因，金额退回余额），通知作者 | `paid:manage` |
 | GET/PUT | `/admin/paid/settings` | `{currency, commission_percent(0–90), min_withdrawal_cents, max_price_cents, allow_authors, upgrade_link(站内路径)}` | `paid:manage` |
 
-## 书籍问答（「书籍问答」插件，默认关闭）
+## 书籍问答（「问答」插件，默认关闭）
 
 读者就某本书的内容提问：AI 只依据本书（读者有权阅读全文的已发布章节）作答并标注出处；也可在社区问答中向作者和其他读者提问。模型经核心「AI 服务」（`/admin/ai`）调用，插件不接触密钥。
 - **索引**：已发布章节按 H2/H3 小节切分（锚点 `h-N` 与阅读页一致，过长小节按段落再切，约 900 字），关键词检索用中日韩单字+二元组与拉丁词的 BM25；配置了嵌入模型时后台任务 `qa.index` 为分块计算向量，检索改为「向量 + 关键词」各半的混合打分。内容变化（章节 ID/更新时间摘要）时提问前自动重建，未变化的分块复用已算好的向量。
@@ -760,7 +760,7 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 
 ## 语义搜索与相关推荐
 
-核心只经 `plugincore.RegisterSemanticProvider` 询问插件登记的语义检索能力（能力可提供 `Allowed` 按用户判定能否使用语义搜索，问答插件据权益 `qa.semantic_search` 判定）（目前由「书籍问答」插件的「全站语义搜索与相关推荐」提供，管理员开启且配置了嵌入模型时可用），返回的章节与书籍再按当前用户的可见性与内容门禁过滤；没有可用能力时各接口返回空列表。
+核心只经 `plugincore.RegisterSemanticProvider` 询问插件登记的语义检索能力（能力可提供 `Allowed` 按用户判定能否使用语义搜索，问答插件据权益 `qa.semantic_search` 判定）（目前由「问答」插件的「全站语义搜索与相关推荐」提供，管理员开启且配置了嵌入模型时可用），返回的章节与书籍再按当前用户的可见性与内容门禁过滤；没有可用能力时各接口返回空列表。
 - **索引**：开启后为所有公开书籍建立问答分块的向量索引（巡检补齐；公开书籍的章节发布或修改后约 2 分钟重建，连续修改只重建一次），并为每本书、每个章节保存分块向量的均值。向量化为系统调用（功能 `qa.index`）。
 - **检索**：先用书籍向量选出最相关的 20 本读者可读的书，再在这些书中按分块相似度取每章最相关的一处（未解锁的付费章节不参与）。搜索词的向量化为系统调用（功能 `qa.search`），相同搜索词复用向量。
 - **相关推荐**：相关书籍比较书籍向量（不含同一作品的其他语言/版本，只推荐公开书籍）；相关章节先选相关的书（含本书），再比较章节向量。相似度低于 0.2 的不推荐。书籍详情页优先展示相关书籍，没有时回退到同标签书籍。

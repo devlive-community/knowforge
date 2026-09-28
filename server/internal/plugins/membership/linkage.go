@@ -65,11 +65,14 @@ func init() {
 	})
 }
 
-// emitChanged 会员状态变化（开通、续期、调整、取消、到期）：成就据此重新评估会员指标。
-func emitChanged(core plugincore.Core, userID uint) {
+// emitChanged 会员状态变化（开通、续期、调整、取消、到期）：成就据此重新评估会员指标，Webhook 转发给用户。
+// status 为 active（有效）| ended（被取消或扣回至结束）| expired（到期）。
+func emitChanged(core plugincore.Core, userID uint, plan Plan, status string, expires time.Time, trial bool) {
 	plugincore.FireActivity(core, plugincore.ActivityEvent{
 		UserID: userID, Type: activityChanged, SourceType: "membership", SourceID: strconv.FormatUint(uint64(userID), 10),
 		DedupeKey: fmt.Sprintf("%s:%d:%d", activityChanged, userID, time.Now().UnixNano()),
+		Data: map[string]any{"status": status, "trial": trial, "plan": map[string]any{"id": plan.ID, "name": plan.Name},
+			"expires_at": expires.UTC().Format(time.RFC3339)},
 	})
 }
 

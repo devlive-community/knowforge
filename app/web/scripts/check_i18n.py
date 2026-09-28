@@ -73,7 +73,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
                      'export.pdf_monthly', 'export.custom_footer', 'books.private_max', 'versions.keep', 'qa.semantic_search', 'storage.total_mb', 'api.tokens_max', 'webhooks.max'],
     'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks'],
     'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks'],
-    'webhooks.event.': ['chapter.published', 'comment.received', 'reaction.received'],
+    'webhooks.event.': ['chapter.published', 'comment.received', 'reaction.received', 'sale.completed', 'question.received', 'membership.changed'],
     'webhooks.deliveryStatus.': ['pending', 'success', 'failed'],
     'account.tokens.scope.': ['all', 'custom', 'read'],
     'account.tokens.scopeHint.': ['all', 'custom'],

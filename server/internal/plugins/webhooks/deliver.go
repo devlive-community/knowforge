@@ -159,6 +159,67 @@ func (b *behavior) onReaction(ev plugincore.ActivityEvent) {
 	})
 }
 
+// dataUint 读取活动详情中的 ID（发出方写入的是 uint）。
+func dataUint(data map[string]any, key string) uint {
+	switch v := data[key].(type) {
+	case uint:
+		return v
+	case int:
+		return uint(v)
+	case float64:
+		return uint(v)
+	}
+	return 0
+}
+
+// bookAndChapter 活动详情中的书籍与章节（章节可无）。
+func (b *behavior) bookAndChapter(data map[string]any) (*models.Book, map[string]any, bool) {
+	var book models.Book
+	if b.core.Gorm().First(&book, dataUint(data, "book_id")).Error != nil {
+		return nil, nil, false
+	}
+	var chapter map[string]any
+	var doc models.Document
+	if id := dataUint(data, "doc_id"); id > 0 && b.core.Gorm().First(&doc, id).Error == nil {
+		chapter = b.chapterInfo(&book, &doc)
+	}
+	return &book, chapter, true
+}
+
+// onSale 作品被购买：金额为订单金额与作者到手金额（最小货币单位）。
+func (b *behavior) onSale(ev plugincore.ActivityEvent) {
+	book, chapter, ok := b.bookAndChapter(ev.Data)
+	if !ok {
+		return
+	}
+	b.emit(ev.UserID, book.ID, EventSaleCompleted, map[string]any{
+		"book": b.bookInfo(book), "chapter": chapter,
+		"sale": map[string]any{"order_no": ev.Data["order_no"], "title": ev.Data["title"], "amount_cents": ev.Data["amount_cents"],
+			"net_cents": ev.Data["net_cents"], "currency": ev.Data["currency"], "sold_at": ev.Data["sold_at"]},
+	})
+}
+
+// onQuestion 书籍收到公开提问。
+func (b *behavior) onQuestion(ev plugincore.ActivityEvent) {
+	book, chapter, ok := b.bookAndChapter(ev.Data)
+	if !ok {
+		return
+	}
+	question, _ := ev.Data["question"].(map[string]any)
+	if question == nil {
+		return
+	}
+	out := make(map[string]any, len(question))
+	for k, v := range question {
+		out[k] = v
+	}
+	if link, ok := out["link"].(string); ok && strings.HasPrefix(link, "/") {
+		out["url"] = b.siteURL() + link // 与书籍、章节一致给出完整地址
+	}
+	delete(out, "link")
+	b.emit(ev.UserID, book.ID, EventQuestionReceived, map[string]any{"book": b.bookInfo(book), "chapter": chapter, "question": out})
+}
+
 // emit 为用户订阅了该事件（且范围包含该书）的启用中订阅创建投递。
 func (b *behavior) emit(userID, bookID uint, event string, data map[string]any) {
 	if userID == 0 || !b.core.PluginEnabled(pluginKey) {

@@ -40,11 +40,14 @@ const (
 	EventChapterPublished = "chapter.published"
 	EventCommentReceived  = "comment.received"
 	EventReactionReceived = "reaction.received"
+	EventSaleCompleted    = "sale.completed"     // 作品被购买（付费内容插件）
+	EventQuestionReceived = "question.received"  // 书籍收到公开提问（书籍问答插件）
+	EventMembership       = "membership.changed" // 自己的会员开通、续期、调整、取消或到期（会员插件）
 	EventPing             = "ping"
 )
 
 // Events 可订阅的事件（有序，供前端展示）。
-var Events = []string{EventChapterPublished, EventCommentReceived, EventReactionReceived}
+var Events = []string{EventChapterPublished, EventCommentReceived, EventReactionReceived, EventSaleCompleted, EventQuestionReceived, EventMembership}
 
 // Hook 一个 Webhook 订阅。
 type Hook struct {
@@ -134,6 +137,12 @@ func init() {
 			b.onComment(ev)
 		case "reaction.received":
 			b.onReaction(ev)
+		case "paid.sold":
+			b.onSale(ev)
+		case "qa.question_received":
+			b.onQuestion(ev)
+		case "membership.changed":
+			b.emit(ev.UserID, 0, EventMembership, ev.Data)
 		}
 	})
 

@@ -141,6 +141,18 @@ func notifyAsked(core plugincore.Core, q *Question) {
 	}
 	core.NotifyI18n(book.UserID, "comment", "notify.qa.asked", map[string]string{"book": book.Title, "title": q.Title},
 		map[string]any{"link": questionLink(&book, q.ID)})
+	// 书籍收到公开提问：供 Webhook 等订阅方转发（UserID 为作者）
+	id := strconv.FormatUint(uint64(q.ID), 10)
+	body := []rune(q.Body)
+	if len(body) > 500 {
+		body = append(body[:500], '…')
+	}
+	var asker models.User
+	core.Gorm().Select("id", "username", "nickname").First(&asker, q.UserID)
+	plugincore.FireActivity(core, plugincore.ActivityEvent{UserID: book.UserID, Type: "qa.question_received", SourceType: "qa_question", SourceID: id,
+		DedupeKey: "qa.question_received:" + id, Data: map[string]any{"book_id": book.ID, "doc_id": q.DocID, "question": map[string]any{
+			"id": q.ID, "title": q.Title, "body": string(body), "link": questionLink(&book, q.ID), "created_at": q.CreatedAt,
+			"author": map[string]any{"id": asker.ID, "username": asker.Username, "nickname": asker.Nickname}}}})
 }
 
 func notifyAnswered(core plugincore.Core, a *Answer) {

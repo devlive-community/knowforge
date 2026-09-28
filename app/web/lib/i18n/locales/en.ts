@@ -5194,4 +5194,7 @@ export const en: Record<string, string> = {
   'admin.bookTranslations.preview': 'Example (source "示例书" / sample-book): title {title}, path {slug}',
   'admin.bookTranslations.aiTitle': 'translated by AI',
   'admin.bookTranslations.autoSlug': 'generated',
+  'webhooks.event.sale.completed': 'Content sold',
+  'webhooks.event.question.received': 'Question received',
+  'webhooks.event.membership.changed': 'My membership changed',
 }

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"gorm.io/gorm"
@@ -450,6 +451,10 @@ func fulfill(core plugincore.Core, userID uint, orderNo string, payload map[stri
 	db.Select("id, title").First(&book, bookID)
 	core.NotifyI18n(authorID, "system", "notify.paid.sold", map[string]string{"book": book.Title, "title": title, "amount": formatMoney(amount-commission, currency)},
 		map[string]any{"link": "/user/earnings"})
+	// 作品售出：供 Webhook 等订阅方转发（UserID 为作者）
+	plugincore.FireActivity(core, plugincore.ActivityEvent{UserID: authorID, Type: "paid.sold", SourceType: "order", SourceID: orderNo, DedupeKey: "paid.sold:" + orderNo,
+		Data: map[string]any{"book_id": bookID, "doc_id": docID, "title": title, "order_no": orderNo, "amount_cents": amount,
+			"net_cents": amount - commission, "currency": currency, "sold_at": time.Now().UTC().Format(time.RFC3339)}})
 	return nil
 }
 

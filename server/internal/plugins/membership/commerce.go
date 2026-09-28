@@ -190,7 +190,7 @@ func (d deduction) notify(core plugincore.Core) {
 		return
 	}
 	if d.ended {
-		emitChanged(core, d.userID)
+		emitChanged(core, d.userID, d.plan, "ended", d.expires, false)
 		core.NotifyI18n(d.userID, notificationType, "notify.membership.revoked", map[string]string{"plan": d.plan.Name}, map[string]any{"link": notificationLink})
 	} else {
 		(&behavior{core: core}).notifyChange(d.userID, d.plan, ActionAdjust, d.expires)
