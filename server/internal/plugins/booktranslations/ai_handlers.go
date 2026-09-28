@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"knowforge/server/internal/ai"
+	"knowforge/server/internal/authz"
 	"knowforge/server/internal/eventhub"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
@@ -36,6 +37,12 @@ func (b *behavior) registerAIRoutes(api *gin.RouterGroup, core plugincore.Core) 
 	api.GET("/books/:id/ai-translate/glossary", with(b.GetGlossary)...)
 	api.PUT("/books/:id/ai-translate/glossary", with(b.PutGlossary)...)
 	api.POST("/books/:id/ai-translate/jobs", with(b.CreateJob)...)
+	api.GET("/books/:id/ai-translate/preset", with(b.PresetForBook)...)
+	admin := func(h gin.HandlerFunc) []gin.HandlerFunc {
+		return []gin.HandlerFunc{core.RequireAuth(), core.RequireAdmin(), feat, core.RequirePermissionMiddleware(authz.SiteUpdate), h}
+	}
+	api.GET("/admin/book-translations/presets", admin(b.AdminGetPresets)...)
+	api.PUT("/admin/book-translations/presets", admin(b.AdminUpdatePresets)...)
 	api.GET("/ai-translate/jobs/:id", with(b.GetJob)...)
 	api.GET("/ai-translate/jobs/:id/stream", core.RequireAuthStream(), feat, use, b.StreamJob)
 	api.POST("/ai-translate/jobs/:id/pause", with(b.PauseJob)...)
@@ -232,7 +239,8 @@ func (b *behavior) PutGlossary(c *gin.Context) {
 	b.core.OK(c, gin.H{"terms": terms})
 }
 
-// CreateJob POST /books/:id/ai-translate/jobs {target_lang, target_label, title?, instructions?, target_book_id?}
+// CreateJob POST /books/:id/ai-translate/jobs {target_lang, target_label, title?, slug?, instructions?, target_book_id?}
+// 新建译本时 title / slug 不传则按预设模板生成（见 presets.go）；title 传空串表示由 AI 翻译原书名，slug 传空串表示自动生成。
 // 不带 target_book_id 时新建译本（私有草稿书，与原书同一翻译分组）并翻译全书；带 target_book_id 时同步该译本（只翻译原文新增或修改的章节）。
 func (b *behavior) CreateJob(c *gin.Context) {
 	book, u, ok := b.sourceBook(c)
@@ -240,11 +248,12 @@ func (b *behavior) CreateJob(c *gin.Context) {
 		return
 	}
 	var req struct {
-		TargetLang   string `json:"target_lang"`
-		TargetLabel  string `json:"target_label"`
-		Title        string `json:"title"`
-		Instructions string `json:"instructions"`
-		TargetBookID uint   `json:"target_book_id"`
+		TargetLang   string  `json:"target_lang"`
+		TargetLabel  string  `json:"target_label"`
+		Title        *string `json:"title"`
+		Slug         *string `json:"slug"`
+		Instructions string  `json:"instructions"`
+		TargetBookID uint    `json:"target_book_id"`
 	}
 	if c.ShouldBindJSON(&req) != nil {
 		b.core.Fail(c, http.StatusBadRequest, "参数错误")
@@ -269,6 +278,7 @@ func (b *behavior) CreateJob(c *gin.Context) {
 	var todo []sourceDoc
 	changedIDs := map[uint]bool{}
 	var dst models.Book
+	wantSlug := "" // 新建译本的访问路径（空则沿用自动生成的）
 	if req.TargetBookID != 0 {
 		// 同步：沿用上次任务的目标语言与要求（未指定时）
 		var last TranslateJob
@@ -309,7 +319,24 @@ func (b *behavior) CreateJob(c *gin.Context) {
 			b.core.Fail(c, http.StatusBadRequest, "这本书还没有章节")
 			return
 		}
-		job.Mode, job.TargetLang, job.TargetLabel, job.BookTitle = modeFull, req.TargetLang, req.TargetLabel, truncate(req.Title, 255)
+		presetTitle, presetSlug := b.presets().presetFor(req.TargetLang).render(book, req.TargetLang, req.TargetLabel)
+		title := presetTitle
+		if req.Title != nil {
+			title = strings.TrimSpace(*req.Title)
+		}
+		wantSlug = b.availableSlug(presetSlug)
+		if req.Slug != nil {
+			wantSlug = strings.TrimSpace(*req.Slug)
+			if wantSlug != "" && !bookSlugRe.MatchString(wantSlug) {
+				b.core.Fail(c, http.StatusBadRequest, "访问路径仅支持小写字母、数字和中划线")
+				return
+			}
+			if wantSlug != "" && b.slugTaken(wantSlug, 0) {
+				b.core.Fail(c, http.StatusConflict, "访问路径已被占用")
+				return
+			}
+		}
+		job.Mode, job.TargetLang, job.TargetLabel, job.BookTitle = modeFull, req.TargetLang, req.TargetLabel, truncate(title, 255)
 		todo = docs
 	}
 	var need int64
@@ -340,7 +367,11 @@ func (b *behavior) CreateJob(c *gin.Context) {
 			return
 		}
 		dst = created
-		db.Model(&models.Book{}).Where("id = ?", dst.ID).Updates(map[string]any{"language": truncate(job.TargetLabel, 32), "trans_group": book.TransGroup})
+		updates := map[string]any{"language": truncate(job.TargetLabel, 32), "trans_group": book.TransGroup}
+		if wantSlug != "" && !b.slugTaken(wantSlug, dst.ID) {
+			updates["slug"], dst.Slug = wantSlug, wantSlug
+		}
+		db.Model(&models.Book{}).Where("id = ?", dst.ID).Updates(updates)
 		job.TargetBookID = dst.ID
 	}
 	job.Total = len(todo)

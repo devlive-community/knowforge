@@ -5170,4 +5170,5 @@ export const en: Record<string, string> = {
   'admin.settings.ai.modelPrices.recalcDone': 'Done. {n} records changed',
   'admin.audit.actions.ai.model_prices_updated': 'Updated per-model prices',
   'admin.audit.actions.ai.cost_recalculated': 'Recomputed AI costs',
+  'admin.audit.actions.book_translations.presets_updated': 'Updated new translation presets',
 }

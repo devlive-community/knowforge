@@ -5170,4 +5170,5 @@ export const zh: Record<string, string> = {
   'admin.settings.ai.modelPrices.recalcDone': '已重算，{n} 条记录的费用有变化',
   'admin.audit.actions.ai.model_prices_updated': '修改按模型单价',
   'admin.audit.actions.ai.cost_recalculated': '重算 AI 费用',
+  'admin.audit.actions.book_translations.presets_updated': '修改新建译本预设',
 }
