@@ -10,6 +10,7 @@ export function embedEnabled(site: SiteConfig | Record<string, unknown>): boolea
 }
 
 export const bookEmbedPath = (bookSlug: string) => `/embed/book/${encodeURIComponent(bookSlug)}`
+export const bookCardEmbedPath = (bookSlug: string) => `/embed/card/${encodeURIComponent(bookSlug)}`
 export const docEmbedPath = (bookSlug: string, docSlug: string) => `/embed/doc/${encodeURIComponent(bookSlug)}/${encodeURIComponent(docSlug)}`
 
 function escapeAttr(s: string): string {

@@ -5072,4 +5072,10 @@ export const zh: Record<string, string> = {
   'entitlement.booklists.max.hint': '最多可以创建多少个书单；0 表示不开放',
   'entitlement.unit.lists': '{n} 个',
   'entitlement.unitShort.lists': '个',
+  'embed.bookCard': '书籍信息卡片（不含目录）',
+  'embed.card.author': '作者：{name}',
+  'embed.card.chapters': '{n} 章',
+  'embed.card.views': '{n} 次阅读',
+  'embed.card.updated': '{date} 更新',
+  'embed.card.read': '开始阅读',
 }

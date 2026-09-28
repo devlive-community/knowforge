@@ -5072,4 +5072,10 @@ export const en: Record<string, string> = {
   'entitlement.booklists.max.hint': 'How many book lists a user can create; 0 turns it off',
   'entitlement.unit.lists': '{n} lists',
   'entitlement.unitShort.lists': 'lists',
+  'embed.bookCard': 'Book card (no contents)',
+  'embed.card.author': 'By {name}',
+  'embed.card.chapters': '{n} chapters',
+  'embed.card.views': '{n} reads',
+  'embed.card.updated': 'Updated {date}',
+  'embed.card.read': 'Start reading',
 }
