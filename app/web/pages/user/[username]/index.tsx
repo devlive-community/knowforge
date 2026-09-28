@@ -17,6 +17,8 @@ import { ArrowRightIcon, BookIcon, CalendarIcon, EyeIcon, GitHubIcon, GridIcon, 
 import TagChips from '@/components/TagChips'
 import type { AchievementGrant, Book, PageResult, User } from '@/lib/types'
 import { useTranslation } from '@/lib/i18n'
+import FeedButton from '@/components/FeedButton'
+import { feedsEnabled, userFeedPath } from '@/lib/feeds'
 
 interface UserProfile {
   id: number
@@ -100,6 +102,8 @@ function ProfileLevelBadge({ username }: { username: string }) {
 }
 
 function AuthorProfileCard({ profile, siteUrl, share, t }: { profile: UserProfile; siteUrl: string; share: () => void; t: (key: string, vars?: Record<string, string>) => string }) {
+  const { site } = useApp()
+  const feeds = feedsEnabled(site)
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="grid items-center gap-5 px-5 py-6 sm:px-8 lg:grid-cols-[160px_1fr_300px] lg:gap-8">
@@ -141,6 +145,7 @@ function AuthorProfileCard({ profile, siteUrl, share, t }: { profile: UserProfil
                 <GitHubIcon className="h-4 w-4" /> {t('user.home.visitGithub')}
               </a>
             )}
+            {feeds && <FeedButton path={userFeedPath(profile.username)} />}
             <Tooltip content={t('user.home.shareProfile')}><button onClick={share}
               className="flex items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-700"
               style={{ width: 'var(--control-height)', height: 'var(--control-height)' }}>
@@ -257,6 +262,7 @@ export default function UserHome({ site, siteUrl, profile, books, sort, achievem
         description={profile.bio || `${siteName} user ${profile.username}, ${profile.public_book_count} public books.`}
         url={profileUrl}
         jsonLd={jsonLd}
+        rss={feedsEnabled(site) ? { title: profile.nickname || profile.username, href: userFeedPath(profile.username) } : undefined}
       />
 
       <div className="py-6">

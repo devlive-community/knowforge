@@ -4973,4 +4973,7 @@ export const en: Record<string, string> = {
   'paid.tier.everyone': 'everyone',
   'paid.settings.freeTierEmpty': 'No membership plan or growth level grants an access tier yet, so free reading for members isn\'t available',
   'paid.paywall.freeFor': 'Free to read for {who}',
+  'feeds.subscribe': 'RSS feed (copy the feed URL)',
+  'feeds.copied': 'Feed URL copied. Paste it into your RSS reader to subscribe',
+  'feeds.copyFailed': 'Couldn\'t copy. Copy the feed URL manually',
 }

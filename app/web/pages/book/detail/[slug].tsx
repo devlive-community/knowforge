@@ -34,6 +34,8 @@ import {
   GlobeIcon, HeartIcon, HelpCircleIcon, LinkIcon, ShareIcon, BookmarkIcon, ClockIcon, GearIcon,
 } from '@/components/icons'
 import type { Book, BookAccess, Document, User } from '@/lib/types'
+import FeedButton from '@/components/FeedButton'
+import { bookFeedPath, feedsEnabled } from '@/lib/feeds'
 
 interface BookDetailProps {
   installed: boolean
@@ -397,6 +399,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
         url={bookUrl}
         image={book.cover_image || undefined}
         jsonLd={jsonLd}
+        rss={feedsEnabled(site) ? { title: book.title, href: bookFeedPath(book.slug) } : undefined}
       />
 
       <Container className="!py-0">
@@ -525,6 +528,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
                   className="w-full !px-0 text-slate-500 sm:w-[var(--control-height)]">
                     <ShareIcon className="h-4 w-4" />
                   </Button></Tooltip>
+                {feedsEnabled(site) && book.is_public && <FeedButton path={bookFeedPath(book.slug)} className="w-full sm:w-auto" />}
                 <BookExportButton book={book} className="w-full sm:w-auto" />
               </div>
               {user && (

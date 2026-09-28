@@ -10,6 +10,7 @@ import (
 	_ "knowforge/server/internal/plugins/bookversions"
 	_ "knowforge/server/internal/plugins/chapterguide"
 	_ "knowforge/server/internal/plugins/contentcollect"
+	_ "knowforge/server/internal/plugins/feeds"
 	_ "knowforge/server/internal/plugins/growth"
 	_ "knowforge/server/internal/plugins/membership"
 	_ "knowforge/server/internal/plugins/moderation"

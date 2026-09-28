@@ -4973,4 +4973,7 @@ export const zh: Record<string, string> = {
   'paid.tier.everyone': '所有读者',
   'paid.settings.freeTierEmpty': '管理员还没有为会员方案或成长等级设置「内容访问等级」权益，暂时不能按会员免费',
   'paid.paywall.freeFor': '{who}可免费阅读本书',
+  'feeds.subscribe': 'RSS 订阅（复制订阅地址）',
+  'feeds.copied': '订阅地址已复制，粘贴到 RSS 阅读器即可订阅',
+  'feeds.copyFailed': '复制失败，请手动复制订阅地址',
 }

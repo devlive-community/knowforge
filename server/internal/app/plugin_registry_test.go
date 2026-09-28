@@ -11,7 +11,7 @@ import (
 func TestPluginSelfRegistration(t *testing.T) {
 	want := []string{
 		pluginPDFExport, pluginAchievements, pluginBookTranslations, pluginBookVersions,
-		pluginWatermark, pluginBookFollow, pluginGrowth, pluginContentCollect, pluginTags, plugins.KeyMembership, plugins.KeyPayment, plugins.KeyPaidContent, plugins.KeyModeration, plugins.KeyQA, plugins.KeyAIWriter, plugins.KeyChapterGuide, plugins.KeyWebhooks,
+		pluginWatermark, pluginBookFollow, pluginGrowth, pluginContentCollect, pluginTags, plugins.KeyMembership, plugins.KeyPayment, plugins.KeyPaidContent, plugins.KeyModeration, plugins.KeyQA, plugins.KeyAIWriter, plugins.KeyChapterGuide, plugins.KeyWebhooks, plugins.KeyFeeds,
 	}
 	if len(pluginRegistry) != len(want) {
 		t.Fatalf("插件数量应为 %d，实际 %d", len(want), len(pluginRegistry))
