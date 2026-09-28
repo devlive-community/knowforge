@@ -160,7 +160,8 @@ export function Select({ options, value, onChange, className, placeholder, disab
     <ul
       ref={menuRef}
       role="listbox"
-      className="fixed z-[160] max-h-60 space-y-0.5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+      data-floating-layer=""
+      className="fixed z-[310] max-h-60 space-y-0.5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
       style={{
         top: menuPosition?.top ?? 0,
         left: menuPosition?.left ?? 0,

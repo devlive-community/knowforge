@@ -84,7 +84,7 @@ export default function Tooltip({ content, placement = 'top', children, classNam
     <span
       ref={tooltipRef}
       role="tooltip"
-      className="pointer-events-none fixed z-[200] w-max max-w-[calc(100vw-1rem)] whitespace-normal rounded-md bg-slate-900 px-2 py-1 text-center text-xs font-medium text-white shadow-lg"
+      className="pointer-events-none fixed z-[320] w-max max-w-[calc(100vw-1rem)] whitespace-normal rounded-md bg-slate-900 px-2 py-1 text-center text-xs font-medium text-white shadow-lg"
       style={{
         animation: 'tooltip-in 120ms ease-out',
         left: position?.left ?? 0,

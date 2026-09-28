@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from '@/lib/i18n'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@/components/icons'
 import { Select } from './Input'
+import { insideFloatingLayer, usePopoverPosition } from './usePopoverPosition'
 
 // DateTimePicker 日期时间选择器：替代原生 datetime-local，风格与全站控件一致（主题化）。
 // value / onChange 使用 'YYYY-MM-DDTHH:mm'（与 <input type="datetime-local"> 一致），留空表示未设置。
@@ -27,7 +28,6 @@ export default function DateTimePicker({ value, onChange, placeholder, ariaLabel
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
   const parsed = parseValue(value)
   const now = new Date()
@@ -39,21 +39,12 @@ export default function DateTimePicker({ value, onChange, placeholder, ariaLabel
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  useLayoutEffect(() => {
-    if (!open) return
-    const place = () => {
-      const r = triggerRef.current?.getBoundingClientRect()
-      if (r) setPos({ top: r.bottom + 6, left: r.left, width: r.width })
-    }
-    place()
-    window.addEventListener('resize', place); window.addEventListener('scroll', place, true)
-    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
-  }, [open])
+  const popStyle = usePopoverPosition(open, triggerRef, popRef)
 
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
-      if (triggerRef.current?.contains(e.target as Node) || popRef.current?.contains(e.target as Node)) return
+      if (triggerRef.current?.contains(e.target as Node) || popRef.current?.contains(e.target as Node) || insideFloatingLayer(e.target)) return
       setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
@@ -106,9 +97,8 @@ export default function DateTimePicker({ value, onChange, placeholder, ariaLabel
             className="shrink-0 rounded p-0.5 text-slate-300 hover:bg-slate-100 hover:text-slate-500"><CloseIcon className="h-3.5 w-3.5" /></span>
         )}
       </button>
-      {open && pos && typeof document !== 'undefined' && createPortal(
-        <div ref={popRef} className="fixed z-[210] w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
-          style={{ top: pos.top, left: Math.min(pos.left, (typeof window !== 'undefined' ? window.innerWidth : 9999) - 300) }}>
+      {open && typeof document !== 'undefined' && createPortal(
+        <div ref={popRef} data-floating-layer="" className="fixed z-[300] w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl" style={popStyle}>
           <div className="mb-2 flex items-center justify-between">
             <button type="button" aria-label={t('dtp.prevMonth')} onClick={prevMonth} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><ChevronLeftIcon className="h-4 w-4" /></button>
             <span className="text-sm font-medium text-slate-800">{monthLabel}</span>

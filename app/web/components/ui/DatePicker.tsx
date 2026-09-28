@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '@/components/icons'
 import { useTranslation } from '../../lib/i18n'
 import { ControlSize, sizedControlStyle } from './controlSize'
+import { insideFloatingLayer, usePopoverPosition } from './usePopoverPosition'
 
 interface DatePickerProps {
   value: string // 'YYYY-MM-DD' 或 ''
@@ -45,6 +47,8 @@ export function DatePicker({ value, onChange, placeholder, className = '', size 
     return { y: base.y, m: base.m }
   })
   const wrapRef = useRef<HTMLDivElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  const popStyle = usePopoverPosition(open, wrapRef, popRef)
 
   useEffect(() => {
     if (!open) return
@@ -54,7 +58,11 @@ export function DatePicker({ value, onChange, placeholder, className = '', size 
 
   useEffect(() => {
     if (!open) return
-    function onDocClick(e: MouseEvent) { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false) }
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as Node
+      if (wrapRef.current?.contains(target) || popRef.current?.contains(target) || insideFloatingLayer(target)) return
+      setOpen(false)
+    }
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDocClick)
     document.addEventListener('keydown', onKey)
@@ -105,8 +113,8 @@ export function DatePicker({ value, onChange, placeholder, className = '', size 
         )}
       </button>
 
-      {open && (
-        <div className="absolute left-0 z-30 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg" role="dialog">
+      {open && typeof document !== 'undefined' && createPortal(
+        <div ref={popRef} data-floating-layer="" className="fixed z-[300] w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg" role="dialog" style={popStyle}>
           <div className="mb-2 flex items-center justify-between">
             <button type="button" aria-label={t('ui.datepicker.prevMonth')} onClick={() => setView((v) => v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 })}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><ChevronLeftIcon className="h-4 w-4" /></button>
@@ -143,7 +151,8 @@ export function DatePicker({ value, onChange, placeholder, className = '', size 
               <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-xs text-slate-400 hover:text-slate-600">{t('ui.datepicker.clearText')}</button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
