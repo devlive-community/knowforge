@@ -5174,7 +5174,7 @@ export const en: Record<string, string> = {
   'bookSettings.aiTranslate.slug': 'Access path',
   'bookSettings.aiTranslate.slugHint': 'The translation\'s URL path (lowercase letters, digits and hyphens), pre-filled from the plugin presets. Leave empty to generate one',
   'bookSettings.aiTranslate.slugPlaceholder': 'Leave empty to generate',
-  'admin.nav.bookTranslations': 'Book translations',
+  'admin.nav.bookTranslations': 'Book languages',
   'admin.bookTranslations.description': 'Templates for the title and access path pre-filled when an author creates a translation; authors can still change them.',
   'admin.bookTranslations.loadFailed': 'Couldn\'t load presets',
   'admin.bookTranslations.saved': 'Presets saved',

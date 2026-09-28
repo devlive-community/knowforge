@@ -480,7 +480,7 @@ Authorization: Bearer kf_pat_…
 
 书单卡片字段：`id,user_id,title,description,is_public,item_count,follower_count,created_at,updated_at,owner{id,username,nickname,avatar},covers[{book_id,title,cover_image}]（前 4 本可读书籍）,following`。
 
-## 书籍翻译预设（「多语言版本」插件）
+## 新建译本预设（「书籍多语言」插件）
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |

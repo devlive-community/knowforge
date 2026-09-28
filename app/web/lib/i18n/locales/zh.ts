@@ -5174,7 +5174,7 @@ export const zh: Record<string, string> = {
   'bookSettings.aiTranslate.slug': '访问路径',
   'bookSettings.aiTranslate.slugHint': '译本书籍的访问路径（小写字母、数字和中划线），按插件预设预填；留空则自动生成',
   'bookSettings.aiTranslate.slugPlaceholder': '留空则自动生成',
-  'admin.nav.bookTranslations': '书籍翻译',
+  'admin.nav.bookTranslations': '书籍多语言',
   'admin.bookTranslations.description': '新建译本时预填的书名与访问路径模板；作者新建译本时仍可修改。',
   'admin.bookTranslations.loadFailed': '加载预设失败',
   'admin.bookTranslations.saved': '预设已保存',
