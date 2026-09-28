@@ -42,6 +42,61 @@ let headingSeq = 0
 
 // 渲染时的当前书籍 slug，用于把 `doc:` 内部链接补全为阅读地址（渲染是同步的，模块级变量安全）
 let currentBookSlug = ''
+// 渲染时的当前书籍章节索引，用于按标题或 slug 解析 [[双向链接]]；null 表示调用方未提供
+let currentDocs: WikiDoc[] | null = null
+
+// WikiDoc 解析 [[双向链接]] 用的章节索引项。
+export interface WikiDoc { slug: string; title: string }
+
+interface WikiTreeNode { slug: string; title: string; children?: WikiTreeNode[] | null }
+
+// wikiDocsFromTree 把章节树展平为 [[双向链接]] 的章节索引。
+export function wikiDocsFromTree(nodes: WikiTreeNode[] | null | undefined): WikiDoc[] {
+  return (nodes || []).flatMap((n) => [{ slug: n.slug, title: n.title }, ...wikiDocsFromTree(n.children)])
+}
+
+const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+// resolveWikiLink 解析 [[目标]] 的目标：含 “/” 为跨书的 书籍slug/章节slug；否则在本书章节中先按 slug、再按标题（忽略大小写）匹配。
+// 未提供章节索引时把目标当作本书章节 slug。无法解析返回 null。
+export function resolveWikiLink(target: string, bookSlug: string, docs: WikiDoc[] | null): { href: string; title?: string } | null {
+  const ref = target.trim()
+  if (!ref) return null
+  const href = (b: string, d: string) => `/book/reader/${encodeURIComponent(b)}/${encodeURIComponent(d)}`
+  const slash = ref.indexOf('/')
+  if (slash >= 0) {
+    const b = ref.slice(0, slash).trim()
+    const d = ref.slice(slash + 1).trim()
+    return b && d ? { href: href(b, d) } : null
+  }
+  if (!bookSlug) return null
+  if (!docs) return { href: href(bookSlug, ref) }
+  const lower = ref.toLowerCase()
+  const hit = docs.find((d) => d.slug.toLowerCase() === lower) || docs.find((d) => d.title.trim().toLowerCase() === lower)
+  return hit ? { href: href(bookSlug, hit.slug), title: hit.title } : null
+}
+
+// 双向链接：[[章节标题或slug]]、[[目标|显示文字]]、跨书 [[书籍slug/章节slug]]；无法解析的渲染为「缺失链接」样式。
+const wikiLinkExtension: TokenizerAndRendererExtension = {
+  name: 'wikilink',
+  level: 'inline',
+  start(src: string): number | undefined {
+    const i = src.indexOf('[[')
+    return i >= 0 ? i : undefined
+  },
+  tokenizer(src: string) {
+    const m = /^\[\[([^\[\]\n|]+)(?:\|([^\[\]\n]+))?\]\]/.exec(src)
+    if (!m) return undefined
+    return { type: 'wikilink', raw: m[0], target: m[1].trim(), label: (m[2] || '').trim() } as Tokens.Generic
+  },
+  renderer(token: Tokens.Generic) {
+    const target = token.target as string
+    const hit = resolveWikiLink(target, currentBookSlug, currentDocs)
+    const text = escapeText((token.label as string) || hit?.title || target)
+    if (!hit) return `<span class="md-wikilink-missing">${text}</span>`
+    return `<a href="${hit.href}" class="md-doc-link md-wikilink">${text}</a>`
+  },
+}
 
 const renderer: Renderer = new marked.Renderer()
 
@@ -95,7 +150,7 @@ renderer.link = (href: string | null, _title: string | null, text: string): stri
   return `<a href="${raw}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${text}</a>`
 }
 
-marked.use({ renderer, extensions: [alertExtension, ...markdownExtensions], breaks: true, gfm: true })
+marked.use({ renderer, extensions: [alertExtension, wikiLinkExtension, ...markdownExtensions], breaks: true, gfm: true })
 
 // buildTocHtml 用 H2/H3 标题构建 [toc] 占位的目录内容（自身产出的安全 HTML）
 function buildTocHtml(headings: Heading[]): string {
@@ -115,11 +170,13 @@ function buildTocHtml(headings: Heading[]): string {
 }
 
 // renderMarkdown 渲染 Markdown 为经过 XSS 净化的 HTML（SSR 与客户端共用）。
-// options.bookSlug 提供当前书籍上下文，用于把 `doc:章节slug` 内部链接补全为阅读地址。
-export function renderMarkdown(source: string | null | undefined, options?: { bookSlug?: string }): string {
+// options.bookSlug 提供当前书籍上下文，用于把 `doc:章节slug` 内部链接补全为阅读地址；
+// options.docs 为本书章节索引，用于按标题解析 [[双向链接]]（不提供时 [[目标]] 按章节 slug 处理）。
+export function renderMarkdown(source: string | null | undefined, options?: { bookSlug?: string; docs?: WikiDoc[] }): string {
   if (!source) return ''
   headingSeq = 0 // 与 extractHeadings 保持相同的编号顺序
   currentBookSlug = options?.bookSlug || ''
+  currentDocs = options?.docs || null
   const html = marked.parse(source, { async: false }) as string
   let out = DOMPurify.sanitize(html, { ADD_ATTR: ['target', 'rel', 'id'] })
   // [toc] 扩展：用文档标题填充占位（须与 marked 解析使用同一份 source）

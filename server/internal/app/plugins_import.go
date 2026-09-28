@@ -5,6 +5,7 @@ package app
 import (
 	_ "knowforge/server/internal/plugins/achievements"
 	_ "knowforge/server/internal/plugins/aiwriter"
+	_ "knowforge/server/internal/plugins/backlinks"
 	_ "knowforge/server/internal/plugins/bookfollow"
 	_ "knowforge/server/internal/plugins/booktranslations"
 	_ "knowforge/server/internal/plugins/bookversions"

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { api, formatDate, API_BASE, getToken } from '@/lib/api'
 import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { renderMarkdown, bindMarkdownInteractivity, headingPlainText } from '@/lib/markdown'
+import { renderMarkdown, bindMarkdownInteractivity, headingPlainText, wikiDocsFromTree } from '@/lib/markdown'
 import Seo from '@/components/Seo'
 import DocTreeIcon from '@/components/DocTreeIcon'
 import { Button, Input, Textarea, Select, Field, Badge, Checkbox, ContextMenu, ContextMenuItem, EmptyState, Loading, SegmentedTabs, Switch, Tooltip, Modal, useFeedback } from '@/components/ui'
@@ -133,6 +133,7 @@ export default function Writer({ user }: WriterProps) {
 
   const [book, setBook] = useState<Book | null>(null)
   const [tree, setTree] = useState<Document[]>([])
+  const wikiDocs = useMemo(() => wikiDocsFromTree(tree), [tree])
   const [current, setCurrent] = useState<Document | null>(null)
   const [documentLoading, setDocumentLoading] = useState(false)
   const [tab, setTab] = useState<TabKey>('toc')
@@ -153,8 +154,8 @@ export default function Writer({ user }: WriterProps) {
   const [preview, setPreview] = useState(false)
   const [splitPreview, setSplitPreview] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
-  // 斜杠命令菜单
-  const [slash, setSlash] = useState({ open: false, start: 0, query: '', top: 0, left: 0, index: 0 })
+  // 斜杠命令菜单；mode 为 link 时是输入 [[ 后弹出的章节选择（插入双向链接）
+  const [slash, setSlash] = useState({ open: false, start: 0, query: '', top: 0, left: 0, index: 0, mode: 'cmd' as 'cmd' | 'link' })
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [fontSize, setFontSize] = useState(14) // 编辑区字号（px），本地记忆
   const [draftRecovery, setDraftRecovery] = useState<{ content: string; ts: number } | null>(null)
@@ -256,17 +257,26 @@ export default function Writer({ user }: WriterProps) {
     if (!q) return items
     return items.filter((c) => t(c.labelKey).includes(slash.query) || c.kw.includes(q) || c.key.includes(q))
   }, [slash.query, t, collectEnabled, aiOn])
+  // [[ 章节选择：按标题或 slug 过滤本书其他章节
+  const filteredLinks = useMemo(() => {
+    if (!slash.open || slash.mode !== 'link') return []
+    const q = slash.query.trim().toLowerCase()
+    return wikiDocs
+      .filter((d) => d.slug !== current?.slug && (!q || d.title.toLowerCase().includes(q) || d.slug.toLowerCase().includes(q)))
+      .slice(0, 8)
+  }, [slash.open, slash.mode, slash.query, wikiDocs, current?.slug])
+  const menuCount = slash.mode === 'link' ? filteredLinks.length : filteredSlash.length
   const previewRef = useRef<HTMLDivElement>(null)
   // 预览内容防抖：输入时避免每键全量重渲染 Markdown
   const [previewHtml, setPreviewHtml] = useState('')
   useEffect(() => {
     if (!preview && !splitPreview) return
     const timer = setTimeout(() => {
-      setPreviewHtml(renderMarkdown(content, { bookSlug }))
+      setPreviewHtml(renderMarkdown(content, { bookSlug, docs: wikiDocs }))
       if (previewRef.current) bindMarkdownInteractivity(previewRef.current)
     }, 300)
     return () => clearTimeout(timer)
-  }, [content, preview, splitPreview, bookSlug])
+  }, [content, preview, splitPreview, bookSlug, wikiDocs])
 
   // 预览里的任务复选框可点击：点击第 idx 个复选框即翻转正文里第 idx 个任务项标记。
   useEffect(() => {
@@ -1119,6 +1129,13 @@ export default function Writer({ user }: WriterProps) {
     const value = el.value
     const lineStart = value.lastIndexOf('\n', pos - 1) + 1
     const before = value.slice(lineStart, pos)
+    const link = before.match(/\[\[([^[\]|\n]*)$/) // 未闭合的 "[[查询"：弹出章节选择
+    if (link) {
+      const start = lineStart + (link.index ?? 0)
+      const c = caretCoordinates(el, start)
+      setSlash({ open: true, start, query: link[1], top: c.top + c.lineHeight, left: c.left, index: 0, mode: 'link' })
+      return
+    }
     const m = before.match(/(^|\s)(?:\/|\$\.)([^\s/]*)$/) // 行首或空白后的 "/查询" 或 "$.查询" 宏（查询内无空格）
     if (!m) {
       setSlash((s) => (s.open ? { ...s, open: false } : s))
@@ -1126,11 +1143,28 @@ export default function Writer({ user }: WriterProps) {
     }
     const slashOffset = lineStart + (m.index ?? 0) + m[1].length
     const c = caretCoordinates(el, slashOffset)
-    setSlash({ open: true, start: slashOffset, query: m[2], top: c.top + c.lineHeight, left: c.left, index: 0 })
+    setSlash({ open: true, start: slashOffset, query: m[2], top: c.top + c.lineHeight, left: c.left, index: 0, mode: 'cmd' })
   }
 
   function closeSlash() {
     setSlash((s) => (s.open ? { ...s, open: false } : s))
+  }
+
+  // selectLink 把已输入的 "[[查询" 替换为指向所选章节的双向链接（标题在本书唯一时用标题，否则用 slug）。
+  function selectLink(doc: { slug: string; title: string }) {
+    const el = textareaRef.current
+    if (!el) return
+    const value = el.value
+    const end = el.selectionStart
+    const title = doc.title.trim()
+    const unique = title && !title.includes('|') && wikiDocs.filter((d) => d.title.trim().toLowerCase() === title.toLowerCase()).length === 1
+    // 光标后紧跟自动配对的 "]]" 时一并替换，避免重复
+    const tail = value.slice(end, end + 2) === ']]' ? 2 : 0
+    const insert = `[[${unique ? title : doc.slug}]]`
+    setContent(value.slice(0, slash.start) + insert + value.slice(end + tail))
+    setSlash((s) => ({ ...s, open: false }))
+    const caret = slash.start + insert.length
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(caret, caret) })
   }
 
   // selectSlash 删除已输入的 "/查询" 再执行对应插入动作。
@@ -1214,10 +1248,16 @@ export default function Writer({ user }: WriterProps) {
   function onEditorKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     const el = textareaRef.current
     if (!el) return
-    if (slash.open && filteredSlash.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSlash((s) => ({ ...s, index: Math.min(s.index + 1, filteredSlash.length - 1) })); return }
+    if (slash.open && menuCount > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlash((s) => ({ ...s, index: Math.min(s.index + 1, menuCount - 1) })); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSlash((s) => ({ ...s, index: Math.max(0, s.index - 1) })); return }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectSlash(filteredSlash[Math.min(slash.index, filteredSlash.length - 1)]); return }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const i = Math.min(slash.index, menuCount - 1)
+        if (slash.mode === 'link') selectLink(filteredLinks[i])
+        else selectSlash(filteredSlash[i])
+        return
+      }
       if (e.key === 'Escape') { e.preventDefault(); closeSlash(); return }
     }
     if (e.key === 'Escape' && focusMode && !findOpen) { e.preventDefault(); setFocusMode(false); return }
@@ -1738,7 +1778,22 @@ export default function Writer({ user }: WriterProps) {
           </div>
 
           {/* 斜杠命令菜单：fixed 定位于光标处，不受编辑卡片 overflow-hidden 裁剪 */}
-          {slash.open && filteredSlash.length > 0 && (
+          {slash.open && slash.mode === 'link' && filteredLinks.length > 0 && (
+            <div role="listbox" aria-label={t('writer.wikiLink.menu')}
+              className="fixed z-[60] max-h-72 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
+              style={{ top: slash.top, left: Math.min(slash.left, (typeof window !== 'undefined' ? window.innerWidth : 9999) - 300) }}>
+              <div className="px-3 pb-1 pt-0.5 text-xs text-slate-400">{t('writer.wikiLink.menu')}</div>
+              {filteredLinks.map((d, i) => (
+                <button key={d.slug} type="button" role="option" aria-selected={i === Math.min(slash.index, filteredLinks.length - 1)}
+                  onMouseDown={(e) => { e.preventDefault(); selectLink(d) }}
+                  className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left ${i === Math.min(slash.index, filteredLinks.length - 1) ? 'bg-primary-50 text-primary-700' : 'text-slate-700 hover:bg-slate-50'}`}>
+                  <span className="min-w-0 flex-1 truncate">{d.title}</span>
+                  <span className="shrink-0 truncate font-mono text-xs text-slate-400">{d.slug}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {slash.open && slash.mode === 'cmd' && filteredSlash.length > 0 && (
             <div className="fixed z-[60] max-h-72 w-52 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
               style={{ top: slash.top, left: Math.min(slash.left, (typeof window !== 'undefined' ? window.innerWidth : 9999) - 220) }}>
               {filteredSlash.map((c, i) => (

@@ -2,7 +2,7 @@ import type { GetServerSideProps, InferGetServerSidePropsType } from 'next'
 import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { authHeaderFrom, isInstalled, serverApi, getSiteConfig } from '@/lib/server-api'
-import { renderMarkdown } from '@/lib/markdown'
+import { renderMarkdown, wikiDocsFromTree } from '@/lib/markdown'
 import { resolveMediaUrl } from '@/lib/media'
 import { useTranslation } from '@/lib/i18n'
 import type { Book, Document } from '@/lib/types'
@@ -31,9 +31,10 @@ export const getServerSideProps: GetServerSideProps<PrintProps> = async ({ req, 
   if (!book) return { notFound: true }
   const tree = await serverApi<Document[]>(`/books/${book.id}/documents`, { headers: auth }).catch(() => [] as Document[])
   const flat = flatten(tree)
+  const docs = wikiDocsFromTree(tree)
   const chapters: Chapter[] = await Promise.all(flat.map(async ({ doc, level }) => {
     const full = await serverApi<Document>(`/documents/${doc.id}`, { headers: auth }).catch(() => null)
-    return { id: doc.id, title: doc.title, level, html: renderMarkdown(full?.content || '', { bookSlug: book.slug }) }
+    return { id: doc.id, title: doc.title, level, html: renderMarkdown(full?.content || '', { bookSlug: book.slug, docs }) }
   }))
   const style: PrintStyle = {
     pageSize: String(query.page_size || 'A4'),

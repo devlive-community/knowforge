@@ -7,7 +7,7 @@ export default async function globalSetup() {
   })
   const token = installed.token
   const as = (p: string, method: string, body?: unknown) => api(p, { token, method, body })
-  for (const key of ['payment', 'membership', 'paid-content', 'qa', 'webhooks', 'feeds', 'embed']) {
+  for (const key of ['payment', 'membership', 'paid-content', 'qa', 'webhooks', 'feeds', 'embed', 'backlinks']) {
     await as(`/admin/plugins/${key}/install`, 'POST')
   }
   // 测试会注册很多用户：只放宽注册限流（按 IP，默认每小时 5 次），其余限流保持默认

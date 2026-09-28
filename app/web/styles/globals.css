@@ -249,6 +249,8 @@ body {
 .markdown-body li { @apply my-1; }
 .markdown-body blockquote { @apply my-4 border-l-4 border-slate-300 bg-slate-100 px-4 py-2 text-slate-600; }
 .markdown-body a { @apply text-primary-600 hover:underline; }
+/* 双向链接：无法解析的目标（章节不存在或未发布） */
+.markdown-body .md-wikilink-missing { @apply cursor-help text-slate-400 underline decoration-dashed underline-offset-2; }
 .markdown-body img { @apply my-4 max-w-full rounded-lg; }
 .markdown-body hr { @apply my-6 border-slate-200; }
 .markdown-body table { @apply my-4 w-full border-collapse text-sm; }

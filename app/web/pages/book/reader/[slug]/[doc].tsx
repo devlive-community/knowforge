@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next'
 import { serverApi, getSiteConfig, siteUrlFrom, authHeaderFrom, excerptFrom, isInstalled, getSSRUser } from '@/lib/server-api'
-import { renderMarkdown, extractHeadings, bindMarkdownInteractivity, fillChildrenToc } from '@/lib/markdown'
+import { renderMarkdown, extractHeadings, bindMarkdownInteractivity, fillChildrenToc, wikiDocsFromTree } from '@/lib/markdown'
 import { API_BASE, formatDate, formatNumber, api } from '@/lib/api'
 import { resolveMediaUrl } from '@/lib/media'
 import Seo from '@/components/Seo'
@@ -20,6 +20,8 @@ import PaywallCard from '@/components/PaywallCard'
 import QADrawer, { type QATab } from '@/components/qa/QADrawer'
 import ChapterGuideCard from '@/components/chapter-guide/ChapterGuideCard'
 import RelatedChapters from '@/components/RelatedChapters'
+import Backlinks from '@/components/Backlinks'
+import { backlinksEnabled } from '@/lib/backlinks'
 import { chapterGuideEnabled } from '@/lib/chapter-guide'
 import { qaEnabled, citationHref, type QACitation } from '@/lib/qa'
 import ReportButton from '@/components/ReportButton'
@@ -106,7 +108,7 @@ export const getServerSideProps: GetServerSideProps<ReaderProps> = async ({ req,
       return null
     }
     const childDocs = (findNode(tree)?.children || []).map((c) => ({ slug: c.slug, title: c.title, external_url: c.external_url, external_new_tab: c.external_new_tab }))
-    const html = fillChildrenToc(renderMarkdown(doc.content, { bookSlug: book.slug }), childDocs, book.slug, book.chapter_prefix || '')
+    const html = fillChildrenToc(renderMarkdown(doc.content, { bookSlug: book.slug, docs: wikiDocsFromTree(tree) }), childDocs, book.slug, book.chapter_prefix || '')
     return { props: {
       installed: true, user, site, siteUrl: siteUrlFrom(req), book, doc,
       html, tree, access, readDocIds: readChapters.doc_ids || [],
@@ -559,6 +561,7 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
                   {chapterGuideEnabled(site) && <ChapterGuideCard docId={doc.id} />}
                   <div ref={contentRef} className="markdown-body" style={{ fontSize: FONT_SIZES[fontIdx] }} dangerouslySetInnerHTML={{ __html: html }} />
                   {doc.paywall && <PaywallCard paywall={doc.paywall} />}
+                  {backlinksEnabled(site) && <Backlinks docId={doc.id} bookId={book.id} />}
                   <RelatedChapters docId={doc.id} bookId={book.id} />
 
                   {/* 章节关闭评论时整个评论模块都不出现（不渲染标题/评论框/列表） */}

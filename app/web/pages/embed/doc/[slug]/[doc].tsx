@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next'
 import EmbedFrame from '@/components/EmbedFrame'
 import { getSiteConfig, isInstalled, serverApi, siteUrlFrom } from '@/lib/server-api'
-import { bindMarkdownInteractivity, renderMarkdown } from '@/lib/markdown'
+import { bindMarkdownInteractivity, renderMarkdown, wikiDocsFromTree } from '@/lib/markdown'
 import { useTranslation } from '@/lib/i18n'
 import { embedEnabled } from '@/lib/embed'
 import type { Book, Document } from '@/lib/types'
@@ -18,7 +18,8 @@ export const getServerSideProps: GetServerSideProps<{ site: Record<string, strin
     const book = await serverApi<Book>(`/books/slug/${encodeURIComponent(slug)}`)
     const doc = await serverApi<Document>(`/books/${book.id}/documents/slug/${encodeURIComponent(docSlug)}`)
     if (doc.status !== 'published') return { notFound: true }
-    return { props: { site, siteUrl: siteUrlFrom(req), book, doc, html: renderMarkdown(doc.content || '', { bookSlug: book.slug }), locked: !!doc.paywall } }
+    const tree = await serverApi<Document[]>(`/books/${book.id}/documents`).catch(() => [] as Document[])
+    return { props: { site, siteUrl: siteUrlFrom(req), book, doc, html: renderMarkdown(doc.content || '', { bookSlug: book.slug, docs: wikiDocsFromTree(tree) }), locked: !!doc.paywall } }
   } catch {
     return { notFound: true }
   }

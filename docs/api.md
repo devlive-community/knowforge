@@ -455,6 +455,15 @@ Authorization: Bearer kf_pat_…
 | GET | `/feeds/books/:slug.xml` | 一本书最近发布的章节；私有或不可读的书返回 404 |
 | GET | `/feeds/users/:username.xml` | 一位作者全部公开书籍最近发布的章节（条目标题为「书名 · 章节名」） |
 
+## 反向链接（「反向链接」插件，默认关闭）
+
+章节正文用 `[[章节标题或slug]]`、`[[目标|显示文字]]`、跨书 `[[书籍slug/章节slug]]` 或 `[文字](doc:章节slug)` 链接其他章节（代码中的不算）。同书目标先按 slug、再按标题（忽略大小写）匹配；链接按「目标书籍 + 目标文字」保存，查询时与章节当前的 slug/标题匹配，因此目标改名后按新标题生效。来源章节保存、发布、书籍复制时重建其链接，插件启用时为全部已有章节建立索引。
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/backlinks/docs/:id` | 链接到本章的已发布章节 `{items:[{id,title,slug,book_id,book_slug,book_title,excerpt}]}`，最多 50 条；只含当前用户可读书籍中的来源；`excerpt{before,text,after}` 为链接所在段落的上下文，来源为付费且未解锁时为 `null` | 可读该书 |
+| GET | `/backlinks/books/:id/graph` | 本书章节之间的链接（含草稿）：`nodes[{id,parent_id,title,slug,status,outgoing,incoming,external}]`、`edges`（链接数）、`broken[{from,target}]`（找不到章节的链接，跨书为 `书籍slug/目标`）；同时重建本书索引 | 可编辑该书 |
+
 ## Webhook（「Webhook」插件，默认关闭）
 
 用户订阅自己书籍上的事件，事件发生时经任务队列向接收地址投递 `POST` JSON：

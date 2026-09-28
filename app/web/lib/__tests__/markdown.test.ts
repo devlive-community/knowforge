@@ -186,3 +186,32 @@ describe('M19 扩展', () => {
     expect(html).not.toContain('javascript:')
   })
 })
+
+describe('双向链接 [[...]]', () => {
+  const docs = [{ slug: 'intro', title: '入门指南' }, { slug: 'cache', title: 'Cache Basics' }]
+
+  it('按标题或 slug 解析同书章节，显示章节标题', () => {
+    const html = renderMarkdown('见 [[入门指南]] 与 [[cache]]、[[cache basics]]', { bookSlug: 'my-book', docs })
+    expect(html).toContain('<a href="/book/reader/my-book/intro" class="md-doc-link md-wikilink">入门指南</a>')
+    expect(html).toContain('<a href="/book/reader/my-book/cache" class="md-doc-link md-wikilink">Cache Basics</a>')
+    expect(html.match(/md-wikilink"/g)).toHaveLength(3)
+  })
+
+  it('支持显示文字与跨书链接', () => {
+    const html = renderMarkdown('[[入门指南|从这里开始]] [[other-book/setup|安装]]', { bookSlug: 'my-book', docs })
+    expect(html).toContain('href="/book/reader/my-book/intro" class="md-doc-link md-wikilink">从这里开始</a>')
+    expect(html).toContain('href="/book/reader/other-book/setup" class="md-doc-link md-wikilink">安装</a>')
+  })
+
+  it('无法解析的目标渲染为缺失链接，文本转义', () => {
+    const html = renderMarkdown('[[不存在的章节]] [[<b>x</b>]]', { bookSlug: 'my-book', docs })
+    expect(html).toContain('<span class="md-wikilink-missing">不存在的章节</span>')
+    expect(html).not.toContain('<b>')
+  })
+
+  it('未提供章节索引时按 slug 处理；代码中不解析', () => {
+    expect(renderMarkdown('[[intro]]', { bookSlug: 'b' })).toContain('href="/book/reader/b/intro"')
+    expect(renderMarkdown('`[[intro]]`', { bookSlug: 'b' })).not.toContain('md-wikilink')
+    expect(renderMarkdown('[[intro]]')).toContain('md-wikilink-missing')
+  })
+})
