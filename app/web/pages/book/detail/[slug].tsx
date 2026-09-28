@@ -38,6 +38,9 @@ import FeedButton from '@/components/FeedButton'
 import { bookFeedPath, feedsEnabled } from '@/lib/feeds'
 import EmbedModal from '@/components/EmbedModal'
 import { embedEnabled } from '@/lib/embed'
+import AddToListModal from '@/components/booklists/AddToListModal'
+import BookListsOnBook from '@/components/booklists/BookListsOnBook'
+import { bookListsEnabled } from '@/lib/booklists'
 
 interface BookDetailProps {
   installed: boolean
@@ -137,6 +140,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
   const [book, setBook] = useState<Book | null>(ssrBook ?? null)
   const [copyOpen, setCopyOpen] = useState(false)
   const [embedOpen, setEmbedOpen] = useState(false)
+  const [addToListOpen, setAddToListOpen] = useState(false)
   const [bookViews, setBookViews] = useState(ssrBook?.view_count || 0)
   const countedBook = useRef<number | null>(null)
   const [tree, setTree] = useState<Document[]>(ssrTree || [])
@@ -532,6 +536,12 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
                     <ShareIcon className="h-4 w-4" />
                   </Button></Tooltip>
                 {feedsEnabled(site) && book.is_public && <FeedButton path={bookFeedPath(book.slug)} className="w-full sm:w-auto" />}
+                {bookListsEnabled(site) && user && (
+                  <Tooltip content={t('booklists.add.button')} className="w-full sm:w-auto"><Button type="button" variant="outline" onClick={() => setAddToListOpen(true)} aria-label={t('booklists.add.button')}
+                    className="w-full !px-0 text-slate-500 sm:w-[var(--control-height)]">
+                    <i className="fa-solid fa-layer-group" aria-hidden="true" />
+                  </Button></Tooltip>
+                )}
                 {embedEnabled(site) && book.is_public && (
                   <Tooltip content={t('embed.button')} className="w-full sm:w-auto"><Button type="button" variant="outline" onClick={() => setEmbedOpen(true)} aria-label={t('embed.button')}
                     className="w-full !px-0 text-slate-500 sm:w-[var(--control-height)]">
@@ -706,6 +716,8 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
         </section>
       </Container>
 
+      {bookListsEnabled(site) && <Container><BookListsOnBook bookId={book.id} /></Container>}
+
       {/* 你可能也喜欢 */}
       {related.length > 0 && (
         <section className="border-t border-slate-200 bg-white py-10">
@@ -719,6 +731,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
       )}
 
       <BookCopyDialog book={book} tree={tree} open={copyOpen} onClose={() => setCopyOpen(false)} />
+      {addToListOpen && <AddToListModal bookId={book.id} onClose={() => setAddToListOpen(false)} />}
       {embedOpen && <EmbedModal book={book} tree={tree} onClose={() => setEmbedOpen(false)} />}
     </div>
   )

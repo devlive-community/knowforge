@@ -108,7 +108,7 @@ function MobileNav() {
       </button>
       {open && (
         <div className="absolute left-0 top-11 z-40 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          {([[t('nav.main.explore'), '/explore'], [t('nav.main.search'), '/search'], ...(site.growth_leaderboard_enabled ? [[t('nav.main.leaderboard'), '/growth/leaderboard']] : []), ...(user ? [[t('nav.main.myBooks'), '/books']] : [])] as [string, string][]).map(([label, href]) => (
+          {([[t('nav.main.explore'), '/explore'], [t('nav.main.search'), '/search'], ...((site.feature_plugins || []).includes('book-lists') ? [[t('booklists.nav'), '/lists']] : []), ...(site.growth_leaderboard_enabled ? [[t('nav.main.leaderboard'), '/growth/leaderboard']] : []), ...(user ? [[t('nav.main.myBooks'), '/books']] : [])] as [string, string][]).map(([label, href]) => (
             <Link key={href} href={href} onClick={() => setOpen(false)}
               className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">{label}</Link>
           ))}
@@ -244,6 +244,7 @@ export default function Layout({ title, children }: { title?: string; children: 
           </Link>
           <nav className="hidden items-center gap-1 text-sm font-medium text-slate-600 md:flex">
             <Link href="/explore" className="rounded-lg px-3 py-2 hover:bg-slate-100 hover:text-slate-900">{t('nav.main.explore')}</Link>
+            {(site.feature_plugins || []).includes('book-lists') && <Link href="/lists" className="rounded-lg px-3 py-2 hover:bg-slate-100 hover:text-slate-900">{t('booklists.nav')}</Link>}
             {site.growth_leaderboard_enabled && <Link href="/growth/leaderboard" className="rounded-lg px-3 py-2 hover:bg-slate-100 hover:text-slate-900">{t('nav.main.leaderboard')}</Link>}
             {user && <Link href="/books" className="rounded-lg px-3 py-2 hover:bg-slate-100 hover:text-slate-900">{t('nav.main.myBooks')}</Link>}
           </nav>

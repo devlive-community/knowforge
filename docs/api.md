@@ -455,6 +455,27 @@ Authorization: Bearer kf_pat_…
 | GET | `/feeds/books/:slug.xml` | 一本书最近发布的章节；私有或不可读的书返回 404 |
 | GET | `/feeds/users/:username.xml` | 一位作者全部公开书籍最近发布的章节（条目标题为「书名 · 章节名」） |
 
+## 书单（「书单」插件，默认关闭）
+
+用户把书籍整理成书单（每本书可附推荐语、可排序）。书单只列出查看者可读的书籍；私有书单只有创建者可见（管理员亦可）。每人书单数为权益 `booklists.max`（基础 20 个），每个书单最多 500 本书。写操作需 `booklists:use`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/book-lists?sort=popular\|latest&page=&page_size=` | 书单广场：有书的公开书单，默认按收藏数排序 |
+| GET | `/book-lists/mine?book_id=` | 我的全部书单与数量上限 `{items, limit}`；带 `book_id` 时每项含 `contains`（是否已收录该书） |
+| GET | `/book-lists/followed` | 我收藏的书单（分页；已改为私有的不显示） |
+| GET | `/users/:username/book-lists` | 某用户的公开书单（本人可见全部，分页） |
+| GET | `/books/:id/book-lists` | 收录该书的公开书单（最多 6 个）与总数 `total` |
+| POST | `/book-lists` | 新建 `{title, description?, is_public?（默认 true）, book_id?（同时收录）}` |
+| GET | `/book-lists/:id` | 详情 `{list, items:[{book,note,sort_order,added_at}], mine, hidden}`；`hidden` 为创建者当前不可读而未显示的书籍数 |
+| PUT / DELETE | `/book-lists/:id` | 修改 `{title?, description?, is_public?}` / 删除（连同收录与收藏记录） |
+| POST | `/book-lists/:id/items` | 收录 `{book_id, note?}`（排在最后；已收录返回 409；只能收录自己可读的书） |
+| PUT / DELETE | `/book-lists/:id/items/:bookId` | 修改推荐语 `{note}`（最多 300 字）/ 移出 |
+| PUT | `/book-lists/:id/order` | 排序 `{book_ids[]}`（未列出的排在后面） |
+| POST / DELETE | `/book-lists/:id/follow` | 收藏 / 取消收藏（幂等；不能收藏自己的书单），返回 `{following, follower_count}` |
+
+书单卡片字段：`id,user_id,title,description,is_public,item_count,follower_count,created_at,updated_at,owner{id,username,nickname,avatar},covers[{book_id,title,cover_image}]（前 4 本可读书籍）,following`。
+
 ## 反向链接（「反向链接」插件，默认关闭）
 
 章节正文用 `[[章节标题或slug]]`、`[[目标|显示文字]]`、跨书 `[[书籍slug/章节slug]]` 或 `[文字](doc:章节slug)` 链接其他章节（代码中的不算）。同书目标先按 slug、再按标题（忽略大小写）匹配；链接按「目标书籍 + 目标文字」保存，查询时与章节当前的 slug/标题匹配，因此目标改名后按新标题生效。来源章节保存、发布、书籍复制时重建其链接，插件启用时为全部已有章节建立索引。

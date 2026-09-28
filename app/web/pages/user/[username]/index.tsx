@@ -19,6 +19,8 @@ import type { AchievementGrant, Book, PageResult, User } from '@/lib/types'
 import { useTranslation } from '@/lib/i18n'
 import FeedButton from '@/components/FeedButton'
 import { feedsEnabled, userFeedPath } from '@/lib/feeds'
+import UserBookLists from '@/components/booklists/UserBookLists'
+import { bookListsEnabled } from '@/lib/booklists'
 
 interface UserProfile {
   id: number
@@ -318,6 +320,7 @@ export default function UserHome({ site, siteUrl, profile, books, sort, achievem
       </div>
 
       <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} />
+      {bookListsEnabled(site) && <UserBookLists username={profile.username} />}
     </Container>
   )
 }

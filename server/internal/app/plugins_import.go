@@ -7,6 +7,7 @@ import (
 	_ "knowforge/server/internal/plugins/aiwriter"
 	_ "knowforge/server/internal/plugins/backlinks"
 	_ "knowforge/server/internal/plugins/bookfollow"
+	_ "knowforge/server/internal/plugins/booklists"
 	_ "knowforge/server/internal/plugins/booktranslations"
 	_ "knowforge/server/internal/plugins/bookversions"
 	_ "knowforge/server/internal/plugins/chapterguide"
