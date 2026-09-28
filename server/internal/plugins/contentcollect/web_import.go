@@ -754,6 +754,13 @@ var ignoredWebRegionTokens = map[string]bool{
 	"nav": true, "navigation": true, "popup": true, "recommend": true,
 	"recommendation": true, "related": true, "share": true, "sharing": true,
 	"sidebar": true, "social": true, "subscribe": true, "toolbar": true,
+	// 页内目录（「On this page」）：toc / table-of-contents / tableOfContents_xxx 等
+	"toc": true, "tableofcontents": true,
+	// 文档站生成器的页面装饰：版本标记与旧版本提示、编辑链接、最后更新时间、上一页/下一页
+	"theme-doc-version-badge": true, "theme-doc-version-banner": true, "theme-edit-this-page": true,
+	"theme-last-updated": true, "theme-doc-footer": true, // Docusaurus
+	"vpdocaside": true, "vpdocfooter": true, "edit-link": true, "prev-next": true, // VitePress
+	"md-source-file": true, "md-content__button": true, // MkDocs Material
 }
 
 var webContentRegionTokens = map[string]bool{

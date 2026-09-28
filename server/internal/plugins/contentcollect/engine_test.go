@@ -166,3 +166,36 @@ func TestCrawlSlugPreservesCase(t *testing.T) {
 		t.Fatalf("下划线转中划线且保留大小写，实际 %q", got)
 	}
 }
+
+// Docusaurus 文档页（如 hudi.apache.org）：正文外的版本标记「Version: x」、移动端与桌面端的「On this page」页内目录、
+// 编辑链接、上一页/下一页都不应进入正文。
+func TestExtractWebArticleDropsDocusaurusChrome(t *testing.T) {
+	pageURL, _ := url.Parse("https://8.8.8.8/docs/catalog_polaris")
+	article, err := extractWebArticle(webPage{
+		FinalURL: pageURL,
+		HTML: `<html><head><title>Apache Polaris</title></head><body class="navigation-with-keyboard"><div id="__docusaurus"><div class="main-wrapper"><div class="docMainContainer_TBSr"><div class="container"><div class="row">
+			<div class="col docItemCol_VOVn"><div class="docItemContainer_Djhp"><article>
+				<nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label="Breadcrumbs"><ul class="breadcrumbs"><li class="breadcrumbs__item"><span>Data Catalogs</span></li></ul></nav>
+				<span class="theme-doc-version-badge badge badge--secondary">Version: 1.2.1</span>
+				<div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type="button" class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div>
+				<div class="theme-doc-markdown markdown"><header><h1>Apache Polaris (Incubating)</h1></header>
+					<p>Apache Polaris is an open-source catalog for Apache Iceberg tables.</p><h2 id="setup">Setup</h2><p>Configure the Polaris catalog before syncing.</p></div>
+				<footer class="theme-doc-footer docusaurus-mt-lg"><div class="theme-edit-this-page"><a href="https://github.com/x">Edit this page</a></div></footer>
+			</article><nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages"><a class="pagination-nav__link" href="/docs/next"><div class="pagination-nav__label">Exporter</div></a></nav></div></div>
+			<div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#setup" class="table-of-contents__link toc-highlight">Setup</a></li></ul></div></div>
+		</div></div></div></div></div></body></html>`,
+	})
+	if err != nil {
+		t.Fatalf("Docusaurus 页面提取失败: %v", err)
+	}
+	for _, unwanted := range []string{"Version: 1.2.1", "On this page", "Edit this page", "Exporter", "Data Catalogs", "table-of-contents"} {
+		if strings.Contains(article.Markdown, unwanted) {
+			t.Fatalf("正文不应包含 %q:\n%s", unwanted, article.Markdown)
+		}
+	}
+	for _, want := range []string{"open-source catalog", "## Setup"} {
+		if !strings.Contains(article.Markdown, want) {
+			t.Fatalf("正文缺少 %q:\n%s", want, article.Markdown)
+		}
+	}
+}
