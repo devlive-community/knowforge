@@ -38,7 +38,9 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
   const { t } = useTranslation()
   const [docs, setDocs] = useState<Document[] | null>(null)
   const [busy, setBusy] = useState<number | null>(null)
-  const [bulkBusy, setBulkBusy] = useState(false)
+  // 批量操作进度：逐个处理所选章节，current 为正在处理的章节，failed 为失败数
+  const [bulk, setBulk] = useState<{ kind: 'status' | 'delete'; status?: DocumentStatus; done: number; total: number; current: number | null; failed: number } | null>(null)
+  const bulkBusy = bulk !== null
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [dragId, setDragId] = useState<number | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: number; pos: DropPos } | null>(null)
@@ -103,18 +105,39 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
     }
   }
 
-  // 批量改状态：对所选章节逐个应用（含子章节级联），完成后刷新。
+  // setStatusLocal 本地更新章节（及其子章节，与服务端级联一致）的状态，批量处理时逐行即时切换显示。
+  function setStatusLocal(id: number, status: DocumentStatus) {
+    const apply = (list: Document[], inside: boolean): Document[] => list.map((d) => {
+      const hit = inside || d.id === id
+      return { ...d, status: hit ? status : d.status, children: d.children ? apply(d.children, hit) : d.children }
+    })
+    setDocs((ds) => (ds ? apply(ds, false) : ds))
+  }
+
+  // 批量改状态：按目录顺序逐个应用（含子章节级联）；进度显示在工具栏，正在处理的章节显示处理中，完成的章节即时切换状态；
+  // 失败的章节保持选中，便于重试。
   async function bulkStatus(status: DocumentStatus) {
-    const ids = Array.from(selected)
+    const ids = flat.filter((d) => selected.has(d.id)).map((d) => d.id)
     if (ids.length === 0) return
-    setBulkBusy(true)
-    try {
-      await Promise.all(ids.map((id) => api(`/documents/${id}`, { method: 'PUT', body: { status, cascade_status: true } })))
+    const failed: number[] = []
+    setBulk({ kind: 'status', status, done: 0, total: ids.length, current: null, failed: 0 })
+    for (const id of ids) {
+      setBulk((b) => (b ? { ...b, current: id } : b))
+      try {
+        await api(`/documents/${id}`, { method: 'PUT', body: { status, cascade_status: true } })
+        setStatusLocal(id, status)
+      } catch {
+        failed.push(id)
+      }
+      setBulk((b) => (b ? { ...b, done: b.done + 1, failed: failed.length } : b))
+    }
+    setBulk(null)
+    if (failed.length === 0) {
       showToast({ message: t('bookSettings.chapters.bulk.statusDone', { count: ids.length }), tone: 'success' })
-      setSelected(new Set()); load()
-    } catch (e) {
-      showToast({ title: t('bookSettings.chapters.error.status'), message: (e as Error).message, tone: 'error' })
-    } finally { setBulkBusy(false) }
+    } else {
+      showToast({ title: t('bookSettings.chapters.error.status'), message: t('bookSettings.chapters.bulk.partialFailed', { done: ids.length - failed.length, failed: failed.length }), tone: 'error' })
+    }
+    setSelected(new Set(failed)); load()
   }
 
   // 批量删除：删除父章节会连带其子树，逐个删除并忽略已随父级删除的项。
@@ -122,12 +145,16 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
     const ids = Array.from(selected)
     if (ids.length === 0) return
     if (!(await confirmAction({ title: t('bookSettings.chapters.bulk.deleteTitle'), message: t('bookSettings.chapters.bulk.deleteMessage', { count: ids.length }), confirmLabel: t('books.delete.confirm'), danger: true }))) return
-    setBulkBusy(true)
+    setBulk({ kind: 'delete', done: 0, total: ids.length, current: null, failed: 0 })
     try {
-      for (const id of ids) { try { await api(`/documents/${id}`, { method: 'DELETE' }) } catch { /* 可能已随父章节删除 */ } }
+      for (const id of ids) {
+        setBulk((b) => (b ? { ...b, current: id } : b))
+        try { await api(`/documents/${id}`, { method: 'DELETE' }) } catch { /* 可能已随父章节删除 */ }
+        setBulk((b) => (b ? { ...b, done: b.done + 1 } : b))
+      }
       showToast({ message: t('bookSettings.chapters.bulk.deleteDone', { count: ids.length }), tone: 'success' })
       setSelected(new Set()); load()
-    } finally { setBulkBusy(false) }
+    } finally { setBulk(null) }
   }
 
   async function copyLink(doc: Document) {
@@ -235,7 +262,7 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
           <DocTreeIcon icon={doc.icon} hasChildren={hasChildren} colorClass={hasChildren ? 'text-slate-400' : 'text-slate-300'} />
           <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{book.chapter_prefix}{doc.title}</span>
           <Badge tone={meta.tone}>{t(meta.labelKey)}</Badge>
-          {busy === doc.id && (
+          {(busy === doc.id || bulk?.current === doc.id) && (
             <span className="flex shrink-0 items-center gap-1.5 text-xs text-slate-400">
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-primary-500" />
               {t('bookSettings.chapters.processing')}
@@ -329,13 +356,26 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
               <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:block" />
               <span className="text-xs text-slate-400">{t('bookSettings.chapters.bulk.setStatus')}</span>
               {STATUS_ACTIONS.map((s) => (
-                <Button key={s.value} size="sm" variant="outline" disabled={bulkBusy} onClick={() => bulkStatus(s.value)}>{t(s.labelKey)}</Button>
+                <Button key={s.value} size="sm" variant="outline" disabled={bulkBusy} loading={bulk?.kind === 'status' && bulk.status === s.value} onClick={() => bulkStatus(s.value)}>{t(s.labelKey)}</Button>
               ))}
-              <Button size="sm" variant="outline" disabled={bulkBusy} className="border-rose-300 text-rose-600 hover:bg-rose-50" onClick={bulkDelete}>
+              <Button size="sm" variant="outline" disabled={bulkBusy} loading={bulk?.kind === 'delete'} className="border-rose-300 text-rose-600 hover:bg-rose-50" onClick={bulkDelete}>
                 <TrashIcon className="h-4 w-4" /> {t('bookSettings.chapters.bulk.delete')}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t('bookSettings.chapters.copy.clear')}</Button>
+              <Button size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setSelected(new Set())}>{t('bookSettings.chapters.copy.clear')}</Button>
             </div>
+            {bulk && (
+              <div className="w-full" role="status" aria-live="polite">
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>{bulk.kind === 'delete'
+                    ? t('bookSettings.chapters.bulk.deleting', { done: bulk.done, total: bulk.total })
+                    : t('bookSettings.chapters.bulk.updating', { status: t(STATUS[bulk.status!]?.labelKey || 'bookSettings.chapters.status.new'), done: bulk.done, total: bulk.total })}</span>
+                  {bulk.failed > 0 && <span className="text-rose-600">{t('bookSettings.chapters.bulk.failedCount', { n: bulk.failed })}</span>}
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-primary-100">
+                  <div className="h-full rounded-full bg-primary-500 transition-all duration-300" style={{ width: `${Math.round((bulk.done / bulk.total) * 100)}%` }} />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -5201,4 +5201,8 @@ export const en: Record<string, string> = {
   'user.profile.nameDisplayHint': 'The name shown on your books, comments, Q&A, leaderboards and elsewhere',
   'user.profile.nameDisplayNickname': 'Nickname (username if no nickname)',
   'user.profile.nameDisplayUsername': 'Username',
+  'bookSettings.chapters.bulk.updating': 'Setting to "{status}": {done}/{total}',
+  'bookSettings.chapters.bulk.deleting': 'Deleting: {done}/{total}',
+  'bookSettings.chapters.bulk.failedCount': '{n} failed',
+  'bookSettings.chapters.bulk.partialFailed': '{done} done, {failed} failed (still selected so you can retry)',
 }

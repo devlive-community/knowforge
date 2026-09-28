@@ -5201,4 +5201,8 @@ export const zh: Record<string, string> = {
   'user.profile.nameDisplayHint': '作者署名、评论、问答、排行榜等处显示的名字',
   'user.profile.nameDisplayNickname': '昵称（未设置昵称时显示用户名）',
   'user.profile.nameDisplayUsername': '用户名',
+  'bookSettings.chapters.bulk.updating': '正在设为「{status}」：{done}/{total}',
+  'bookSettings.chapters.bulk.deleting': '正在删除：{done}/{total}',
+  'bookSettings.chapters.bulk.failedCount': '{n} 个失败',
+  'bookSettings.chapters.bulk.partialFailed': '{done} 个已完成，{failed} 个失败（仍保持选中，可重试）',
 }
