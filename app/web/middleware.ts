@@ -42,7 +42,18 @@ export async function middleware(req: NextRequest) {
     external.search = ''
     return NextResponse.redirect(external)
   }
-  return NextResponse.next()
+  return withFrameHeaders(NextResponse.next(), pathname)
+}
+
+// withFrameHeaders 防点击劫持：页面默认只允许同源嵌入；嵌入组件页（/embed/*）允许被任意网站嵌入。
+function withFrameHeaders(res: NextResponse, pathname: string): NextResponse {
+  if (pathname === '/embed' || pathname.startsWith('/embed/')) {
+    res.headers.set('Content-Security-Policy', 'frame-ancestors *')
+  } else {
+    res.headers.set('X-Frame-Options', 'SAMEORIGIN')
+    res.headers.set('Content-Security-Policy', "frame-ancestors 'self'")
+  }
+  return res
 }
 
 // 页面请求全部经过中间件；静态资源、内建 API 与上传文件除外
