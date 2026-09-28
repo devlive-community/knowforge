@@ -179,7 +179,8 @@ func TestBookVersionsGroupedListing(t *testing.T) {
 		t.Fatalf("版本列表第 2 页错误: %v", items)
 	}
 
-	// 译本继承原书的版本组：同一版本的多个语言只算一个版本，版本切换优先当前语言
+	// 译本继承原书的版本组：同一版本的多个语言只算一个版本，版本切换优先当前语言（未启用「书籍多语言」时不按语言筛选）
+	request(http.MethodPost, "/api/v1/admin/plugins/book-translations/uninstall", nil, token)
 	_, created := request(http.MethodPost, "/api/v1/books", map[string]any{
 		"title": "Manual v1.10", "status": "published", "is_public": true, "version": "v1.10", "version_group": "manual",
 		"version_is_latest": true, "language": "English",
@@ -213,5 +214,21 @@ func TestBookVersionsGroupedListing(t *testing.T) {
 	}
 	if _, total := page(fmt.Sprintf("/api/v1/books/%d/versions/books", enID)); total != 3 {
 		t.Fatalf("版本弹框应按版本号去重，实际 %d", total)
+	}
+
+	// 启用「书籍多语言」后只列出当前语言已有的版本：英文只做了 v1.10，不显示只有原文的版本（只剩一本时不显示切换）
+	request(http.MethodPost, "/api/v1/admin/plugins/book-translations/install", nil, token)
+	versionsOf := func(id int) []any {
+		_, resp := request(http.MethodGet, fmt.Sprintf("/api/v1/books/%d/versions", id), nil, "")
+		return resp["data"].(map[string]any)["items"].([]any)
+	}
+	if got := versionsOf(enID); len(got) != 0 {
+		t.Fatalf("英文译本只有一个版本，不应列出其他语言的版本: %v", got)
+	}
+	if got := versionsOf(latestID); len(got) != 3 {
+		t.Fatalf("原文应列出全部 3 个原文版本: %v", got)
+	}
+	if _, total := page(fmt.Sprintf("/api/v1/books/%d/versions/books", enID)); total != 1 {
+		t.Fatalf("版本弹框也只列出当前语言的版本，实际 %d", total)
 	}
 }

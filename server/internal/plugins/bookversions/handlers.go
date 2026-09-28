@@ -25,6 +25,21 @@ type bookVariant struct {
 	FirstDocSlug string `json:"first_doc_slug"`
 }
 
+// sameLanguage 启用「书籍多语言」时只保留与当前书籍同语言的版本：译本只做了部分版本时，
+// 切换版本不应列出其他语言才有的版本（否则误以为这些版本都有该语言）。未启用时不按语言筛选。
+func sameLanguage(core plugincore.Core, books []models.Book, current *models.Book) []models.Book {
+	if !core.PluginEnabled(plugins.KeyBookTranslations) {
+		return books
+	}
+	out := make([]models.Book, 0, len(books))
+	for _, b := range books {
+		if strings.TrimSpace(b.Language) == strings.TrimSpace(current.Language) {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // dedupeVersions 版本组内每个版本号只保留一本：译本会继承原书的版本组，同一版本的多个语言不应重复出现。
 // 优先当前书籍，其次与当前书籍同语言的，否则取最早创建的（通常是原书）；未填版本号的书各自保留。保持输入顺序。
 func dedupeVersions(books []models.Book, current *models.Book) []models.Book {
@@ -74,7 +89,7 @@ func bookGroupSiblings(core plugincore.Core, u *models.User, book *models.Book, 
 			readable = append(readable, all[i])
 		}
 	}
-	books := dedupeVersions(readable, book)
+	books := dedupeVersions(sameLanguage(core, readable, book), book)
 	out := make([]bookVariant, 0, len(books))
 	for i := range books {
 		b := &books[i]
@@ -169,7 +184,7 @@ func (b *behavior) ListBookVersionBooks(c *gin.Context) {
 				books = append(books, all[i])
 			}
 		}
-		books = dedupeVersions(books, book)
+		books = dedupeVersions(sameLanguage(core, books, book), book)
 	}
 	asc := core.GetSetting("book_versions_sort") == "asc"
 	sort.SliceStable(books, func(i, j int) bool {
