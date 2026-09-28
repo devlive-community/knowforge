@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Seo from '@/components/Seo'
 import Container from '@/components/Container'
@@ -6,13 +6,14 @@ import AccountSettingsLayout from '@/components/AccountSettingsLayout'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Badge, Button, EmptyState, Field, Input, Loading, Modal, SegmentedTabs, Select, useFeedback } from '@/components/ui'
+import { Badge, Button, Checkbox, EmptyState, Field, Input, Loading, Modal, SegmentedTabs, Select, useFeedback } from '@/components/ui'
 
 interface AccessToken {
   id: number
   name: string
   prefix: string
-  scope: 'read' | 'write'
+  scope: 'all' | 'custom' | 'read' | 'write' // read / write 为旧令牌（write 等同全部权限）
+  permissions: string[] | null
   expires_at: string | null
   last_used_at: string | null
   last_used_ip: string
@@ -22,7 +23,21 @@ interface AccessToken {
 }
 interface TokenList { items: AccessToken[]; active: number; limit: number }
 
+interface PermissionGroup { resource: string; permissions: string[] }
+
+// resourceKey 权限资源名对应的文案键（book-analytics → account.tokens.resource.bookAnalytics）。
+const resourceKey = (resource: string) => `account.tokens.resource.${resource.replace(/-(\w)/g, (_, c: string) => c.toUpperCase())}`
+
 const EXPIRY_OPTIONS = ['30', '7', '90', '365', '0']
+
+// usePermissionLabel 权限的显示名：「资源 · 操作」（如「章节 · 创建」）。
+function usePermissionLabel() {
+  const { t } = useTranslation()
+  return useCallback((perm: string) => {
+    const [resource, action] = perm.split(':')
+    return `${t(resourceKey(resource))} · ${t(`account.tokens.action.${action}`)}`
+  }, [t])
+}
 
 // 访问令牌：生成个人访问令牌供脚本、CI 调用 API（Authorization: Bearer kf_pat_…）；明文只显示一次，可吊销。
 export default function AccessTokensPage() {
@@ -30,6 +45,7 @@ export default function AccessTokensPage() {
   const { t } = useTranslation()
   const user = useRequireAuth()
   const { showToast, confirmAction } = useFeedback()
+  const permLabel = usePermissionLabel()
   const [data, setData] = useState<TokenList | null>(null)
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<string>('')
@@ -100,7 +116,9 @@ export default function AccessTokensPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`font-medium ${inactive ? 'text-slate-400' : 'text-slate-900'}`}>{tk.name}</span>
-                            <Badge tone={tk.scope === 'write' ? 'amber' : 'sky'}>{t(`account.tokens.scope.${tk.scope}`)}</Badge>
+                            <Badge tone={tk.scope === 'all' || tk.scope === 'write' ? 'amber' : 'sky'}>
+                              {tk.scope === 'custom' ? t('account.tokens.scope.customCount', { n: tk.permissions?.length || 0 }) : t(`account.tokens.scope.${tk.scope === 'write' ? 'all' : tk.scope}`)}
+                            </Badge>
                             {tk.revoked_at ? <Badge tone="slate">{t('account.tokens.status.revoked')}</Badge> : tk.expired && <Badge tone="slate">{t('account.tokens.status.expired')}</Badge>}
                           </div>
                           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
@@ -109,6 +127,11 @@ export default function AccessTokensPage() {
                             <span>{tk.expires_at ? t('account.tokens.expiresAt', { date: formatDate(tk.expires_at) }) : t('account.tokens.neverExpires')}</span>
                             <span>{tk.last_used_at ? t('account.tokens.lastUsed', { date: formatDate(tk.last_used_at), ip: tk.last_used_ip }) : t('account.tokens.neverUsed')}</span>
                           </div>
+                          {tk.scope === 'custom' && (tk.permissions?.length || 0) > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {tk.permissions!.map((p) => <span key={p} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">{permLabel(p)}</span>)}
+                            </div>
+                          )}
                         </div>
                         {!inactive && (
                           <Button size="sm" variant="ghost" className="shrink-0 whitespace-nowrap text-rose-600 hover:bg-rose-50" loading={revoking === tk.id} onClick={() => void revoke(tk)}>
@@ -135,14 +158,30 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const { t } = useTranslation()
   const { showToast } = useFeedback()
   const [name, setName] = useState('')
-  const [scope, setScope] = useState<'read' | 'write'>('read')
+  const [scope, setScope] = useState<'all' | 'custom'>('custom')
   const [expires, setExpires] = useState('30')
   const [saving, setSaving] = useState(false)
+  const [groups, setGroups] = useState<PermissionGroup[] | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    api<{ groups: PermissionGroup[] }>('/auth/tokens/permissions').then((d) => setGroups(d.groups))
+      .catch((e) => { setGroups([]); showToast({ message: (e as Error).message, tone: 'error' }) })
+  }, [showToast])
+
+  const all = useMemo(() => (groups || []).flatMap((g) => g.permissions), [groups])
+  const toggle = (perms: string[], on: boolean) => setSelected((cur) => {
+    const next = new Set(cur)
+    perms.forEach((p) => (on ? next.add(p) : next.delete(p)))
+    return next
+  })
+  const preset = (perms: string[]) => setSelected(new Set(perms))
 
   async function submit() {
     setSaving(true)
     try {
-      const r = await api<{ token: string }>('/auth/tokens', { method: 'POST', body: { name: name.trim(), scope, expires_days: Number(expires) } })
+      const body = { name: name.trim(), scope, expires_days: Number(expires), ...(scope === 'custom' ? { permissions: Array.from(selected) } : {}) }
+      const r = await api<{ token: string }>('/auth/tokens', { method: 'POST', body })
       onCreated(r.token)
     } catch (e) {
       showToast({ title: t('account.tokens.createFailed'), message: (e as Error).message, tone: 'error' })
@@ -151,21 +190,60 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
     }
   }
 
+  const invalid = !name.trim() || (scope === 'custom' && selected.size === 0)
   return (
-    <Modal open onClose={onClose} title={t('account.tokens.create')}
-      footer={<><Button variant="outline" onClick={onClose}>{t('common.actions.cancel')}</Button><Button loading={saving} disabled={!name.trim()} onClick={() => void submit()}>{t('account.tokens.generate')}</Button></>}>
+    <Modal open onClose={onClose} title={t('account.tokens.create')} className="max-w-2xl"
+      footer={<><Button variant="outline" onClick={onClose}>{t('common.actions.cancel')}</Button><Button loading={saving} disabled={invalid} onClick={() => void submit()}>{t('account.tokens.generate')}</Button></>}>
       <div className="space-y-4">
-        <Field label={t('account.tokens.name')}>
-          <Input value={name} maxLength={100} placeholder={t('account.tokens.namePlaceholder')} onChange={(e) => setName(e.target.value)} />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+          <Field label={t('account.tokens.name')}>
+            <Input value={name} maxLength={100} placeholder={t('account.tokens.namePlaceholder')} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label={t('account.tokens.expiresLabel')}>
+            <Select value={expires} onChange={setExpires}
+              options={EXPIRY_OPTIONS.map((d) => ({ value: d, label: d === '0' ? t('account.tokens.neverExpires') : t('account.tokens.days', { n: d }) }))} />
+          </Field>
+        </div>
         <Field label={t('account.tokens.scopeLabel')} hint={t(`account.tokens.scopeHint.${scope}`)}>
-          <SegmentedTabs fullWidth size="sm" value={scope} ariaLabel={t('account.tokens.scopeLabel')} onChange={(v) => setScope(v as 'read' | 'write')}
-            items={[{ value: 'read', label: t('account.tokens.scope.read') }, { value: 'write', label: t('account.tokens.scope.write') }]} />
+          <SegmentedTabs fullWidth size="sm" value={scope} ariaLabel={t('account.tokens.scopeLabel')} onChange={(v) => setScope(v as 'all' | 'custom')}
+            items={[{ value: 'custom', label: t('account.tokens.scope.custom') }, { value: 'all', label: t('account.tokens.scope.all') }]} />
         </Field>
-        <Field label={t('account.tokens.expiresLabel')}>
-          <Select value={expires} onChange={setExpires}
-            options={EXPIRY_OPTIONS.map((d) => ({ value: d, label: d === '0' ? t('account.tokens.neverExpires') : t('account.tokens.days', { n: d }) }))} />
-        </Field>
+        {scope === 'custom' && (
+          <div className="rounded-xl border border-slate-200">
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2 text-xs">
+              <span className="mr-auto text-slate-500">{t('account.tokens.selected', { n: selected.size, total: all.length })}</span>
+              <Button size="sm" variant="ghost" onClick={() => preset(all.filter((p) => p.endsWith(':read')))}>{t('account.tokens.presetRead')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => preset(all)}>{t('account.tokens.presetAll')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => preset([])}>{t('account.tokens.presetNone')}</Button>
+            </div>
+            {groups === null ? <Loading className="py-8" /> : (
+              <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
+                {groups.map((g) => {
+                  const on = g.permissions.filter((p) => selected.has(p)).length
+                  return (
+                    <li key={g.resource} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5">
+                      <label className="flex w-36 shrink-0 items-center gap-2 text-sm font-medium text-slate-700">
+                        <Checkbox checked={on === g.permissions.length} onChange={(v) => toggle(g.permissions, v)} ariaLabel={t(resourceKey(g.resource))} />
+                        <span className="truncate">{t(resourceKey(g.resource))}</span>
+                      </label>
+                      <div className="flex flex-1 flex-wrap gap-x-4 gap-y-1.5">
+                        {g.permissions.map((p) => {
+                          const label = t(`account.tokens.action.${p.split(':')[1]}`)
+                          return (
+                            <label key={p} className="flex items-center gap-1.5 text-sm text-slate-600">
+                              <Checkbox checked={selected.has(p)} onChange={(v) => toggle([p], v)} ariaLabel={`${t(resourceKey(g.resource))} · ${label}`} />
+                              {label}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   )

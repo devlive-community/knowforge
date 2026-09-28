@@ -58,7 +58,10 @@ Authorization: Bearer kf_pat_…
 ```
 
 - 只接受请求头（Cookie 中的令牌不生效）；服务端只保存摘要，明文只在创建时返回一次；可设 7 / 30 / 90 / 365 天有效期或永不过期，可随时吊销，记录最近使用时间与 IP
-- `read`（只读）令牌只能发起 `GET` / `HEAD` 请求；`write`（读写）令牌可调用普通接口
+- 权限范围 `scope`：
+  - `all`（全部权限）：可调用普通用户能调用的全部接口；
+  - `custom`（自定义）：只允许 `permissions` 中勾选的权限（`resource:action`，可选项见 `GET /auth/tokens/permissions`）。路由上 `RequirePermission` 要求的权限不在其中时返回 403 `TOKEN_FORBIDDEN`；**未登记所需权限的登录接口一律拒绝**，未登记权限的公开接口按游客处理；读取书籍/章节、导出等公开接口登记了 `book:read` / `document:read` / `book:export`，令牌缺少时按游客处理（只能看到公开内容）。`GET /auth/permissions` 只返回令牌拥有的权限；
+  - 旧令牌：`read`（只能 `GET` / `HEAD`）继续有效，`write` 等同 `all`
 - 令牌始终按普通用户鉴权，不具备管理员等角色权限；不能访问 `/auth/*` 下的账号与安全接口（`GET /auth/me`、`GET /auth/permissions` 除外），这些请求返回 403 `code: TOKEN_FORBIDDEN`
 - 每人的有效令牌数为权益 `api.tokens_max`（基础 10 个，0 表示不开放），可由会员方案与成长等级提升
 
@@ -225,8 +228,9 @@ Authorization: Bearer kf_pat_…
 | GET/PUT | `/content-settings` | 管理员读取/保存内容设置：`{upload_max_mb(1-100), upload_allowed_exts(逗号分隔扩展名), comments_enabled}`。上传超限/类型不符拒绝；`comments_enabled=false` 时全站禁止发表评论（`comments_enabled` 也会出现在公开 `/site`，供前端隐藏评论框） | `site:update` |
 | GET | `/auth/me` | 当前用户信息（含 `email_verified`、`invite_code`，以及 `entitlements{key:value}` 各项权益的生效值，见「权益」） | 登录 |
 | GET | `/auth/permissions` | 当前用户权限列表（`string[]`） | 登录 |
-| GET | `/auth/tokens` | 我的个人访问令牌 `items:[{id,name,prefix,scope,expires_at,last_used_at,last_used_ip,revoked_at,expired,created_at}]` + `active`（有效数）+ `limit`（上限，-1 不限）；令牌本身不能调用 | 登录 |
-| POST | `/auth/tokens` | `{name, scope: read\|write, expires_days: 0\|7\|30\|90\|365}` 生成令牌，返回 `{token（明文，仅此一次）, item}`；超出权益上限 403 | 登录 |
+| GET | `/auth/tokens` | 我的个人访问令牌 `items:[{id,name,prefix,scope,permissions,expires_at,last_used_at,last_used_ip,revoked_at,expired,created_at}]` + `active`（有效数）+ `limit`（上限，-1 不限）；令牌本身不能调用 | 登录 |
+| GET | `/auth/tokens/permissions` | 创建令牌时可选的权限 `groups:[{resource, permissions[]}]`（普通用户当前拥有的权限，含已启用插件，不含 `auth:*`） | 登录 |
+| POST | `/auth/tokens` | `{name, scope: all\|custom, permissions[]（custom 必填）, expires_days: 0\|7\|30\|90\|365}` 生成令牌，返回 `{token（明文，仅此一次）, item}`；超出权益上限 403；仍接受旧的 `read` / `write`（`write` 保存为 `all`） | 登录 |
 | DELETE | `/auth/tokens/:id` | 吊销令牌（立即失效，记录保留） | 登录 |
 | PUT | `/auth/profile` | 更新资料（email/avatar/bio/github_url/nickname/website/location/company；改邮箱受二次认证保护） | `user:update` |
 | GET/PUT | `/auth/export-settings` | 当前用户 PDF 导出样式偏好：`page_size`(A4\|Letter)、`include_cover`、`include_toc`、`font_size`(12–20)、`code_theme`(light\|dark)、`margin`(narrow\|normal\|wide)、`footer`（每页页脚 Powered by 文案，≤100 字，留空用默认 `Powered by <站点名>`） | `user:read` / `user:update` |

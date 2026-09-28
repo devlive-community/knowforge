@@ -798,17 +798,19 @@ type DocumentRevision struct {
 // PersonalAccessToken 个人访问令牌：用于脚本、CI 等调用 API（Authorization: Bearer kf_pat_…）。
 // 只保存令牌的 SHA-256 摘要；Prefix 为令牌开头若干字符，便于用户辨认。令牌不具备管理员权限，也不能访问账号安全相关接口。
 type PersonalAccessToken struct {
-	ID         uint       `gorm:"primaryKey" json:"id"`
-	UserID     uint       `gorm:"index;not null" json:"user_id"`
-	Name       string     `gorm:"size:100" json:"name"`
-	Prefix     string     `gorm:"size:20" json:"prefix"`
-	TokenHash  string     `gorm:"size:64;uniqueIndex" json:"-"`
-	Scope      string     `gorm:"size:10" json:"scope"` // read（只读）| write（读写）
-	ExpiresAt  *time.Time `json:"expires_at"`
-	LastUsedAt *time.Time `json:"last_used_at"`
-	LastUsedIP string     `gorm:"size:64" json:"last_used_ip"`
-	RevokedAt  *time.Time `json:"revoked_at"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	UserID    uint   `gorm:"index;not null" json:"user_id"`
+	Name      string `gorm:"size:100" json:"name"`
+	Prefix    string `gorm:"size:20" json:"prefix"`
+	TokenHash string `gorm:"size:64;uniqueIndex" json:"-"`
+	Scope     string `gorm:"size:10" json:"scope"` // all（全部权限）| custom（Permissions 所列权限）；旧令牌为 read（只读）| write（等同 all）
+	// Permissions scope=custom 时令牌可用的权限（resource:action），见 app/access_tokens.go
+	Permissions []string   `gorm:"type:text;serializer:json" json:"permissions"`
+	ExpiresAt   *time.Time `json:"expires_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	LastUsedIP  string     `gorm:"size:64" json:"last_used_ip"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 func All(db *gorm.DB) error {

@@ -47,6 +47,10 @@ func (a *App) RequireAuth() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "message": "请先登录"})
 			return
 		}
+		if _, restricted := tokenScopes(c); restricted && !chainDeclaresPermission(c) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "TOKEN_FORBIDDEN", "message": "该接口没有登记所需权限，只能使用「全部权限」的访问令牌调用"})
+			return
+		}
 		c.Set("user", u)
 		c.Next()
 	}
@@ -72,6 +76,9 @@ func (a *App) OptionalAuth() gin.HandlerFunc {
 		u := a.resolveUser(c)
 		if abortTokenDenied(c) { // 显式带了访问令牌但不允许本次请求：拒绝而不是按游客处理
 			return
+		}
+		if _, restricted := tokenScopes(c); restricted && !chainDeclaresPermission(c) {
+			u = nil // 限定权限的令牌调用未声明权限的公开接口：按游客处理
 		}
 		if u != nil {
 			c.Set("user", u)
@@ -160,6 +167,10 @@ func (a *App) RequirePermission(perm authz.Permission) gin.HandlerFunc {
 			})
 			return
 		}
+		if scopes, restricted := tokenScopes(c); restricted && !scopes[perm] {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "TOKEN_FORBIDDEN", "message": "访问令牌没有 " + string(perm) + " 权限"})
+			return
+		}
 		c.Next()
 	}
 }
@@ -167,5 +178,15 @@ func (a *App) RequirePermission(perm authz.Permission) gin.HandlerFunc {
 // CurrentPermissions 返回当前用户的权限列表
 func (a *App) CurrentPermissions(c *gin.Context) {
 	u := currentUser(c)
-	ok(c, authz.ForRole(u.Role))
+	perms := authz.ForRole(u.Role)
+	if scopes, restricted := tokenScopes(c); restricted { // 限定权限的令牌：只返回令牌拥有的权限
+		kept := []authz.Permission{}
+		for _, p := range perms {
+			if scopes[p] {
+				kept = append(kept, p)
+			}
+		}
+		perms = kept
+	}
+	ok(c, perms)
 }

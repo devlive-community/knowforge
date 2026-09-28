@@ -126,6 +126,7 @@ func (a *App) Router() *gin.Engine {
 				authed.GET("/theme-settings", a.RequirePermission(authz.UserRead), a.GetThemeSettings)
 				// 个人访问令牌（令牌本身不能访问这些接口）
 				authed.GET("/tokens", a.MyAccessTokens)
+				authed.GET("/tokens/permissions", a.TokenPermissions)
 				authed.POST("/tokens", a.CreateAccessToken)
 				authed.DELETE("/tokens/:id", a.RevokeAccessToken)
 				authed.PUT("/theme-settings", a.RequirePermission(authz.UserUpdate), a.UpdateThemeSettings)
@@ -133,8 +134,10 @@ func (a *App) Router() *gin.Engine {
 		}
 
 		// ── 公开内容：匿名可访问，可选登录以查看自己可见的私有内容 ──
-		// 语义权限：site:read / stats:read / book:read / document:read / user:read
+		// 语义权限：site:read / stats:read / book:read / document:read / user:read。
+		// 涉及登录用户可见私有内容的接口用 DeclarePermission 声明，限定权限的访问令牌缺少该权限时按游客处理。
 		public := api.Group("", a.OptionalAuth())
+		readBook, readDoc, exportBook := a.DeclarePermission(authz.BookRead), a.DeclarePermission(authz.DocumentRead), a.DeclarePermission(authz.BookExport)
 		{
 			public.GET("/site", a.GetSiteConfig)
 			public.GET("/stats", a.SiteStats)
@@ -143,26 +146,26 @@ func (a *App) Router() *gin.Engine {
 			public.GET("/explore/active-authors", a.ExploreActiveAuthors)
 			public.GET("/explore/latest", a.ExploreLatest)
 			public.GET("/users/:username", a.GetUserProfile)
-			public.GET("/users/:username/books", a.GetUserBooks)
+			public.GET("/users/:username/books", readBook, a.GetUserBooks)
 			// /growth/settings、/growth/levels、/users/:username/growth 由 growth 插件子包自注册
 
-			public.GET("/books", a.ListBooks) // mine=true 时要求登录
-			public.GET("/books/:id", a.GetBook)
-			public.GET("/books/slug/:slug", a.GetBookBySlug)
-			public.GET("/books/:id/documents", a.ListDocumentTree)
+			public.GET("/books", readBook, a.ListBooks) // mine=true 时要求登录
+			public.GET("/books/:id", readBook, a.GetBook)
+			public.GET("/books/slug/:slug", readBook, a.GetBookBySlug)
+			public.GET("/books/:id/documents", readDoc, a.ListDocumentTree)
 			// /books/:id/translations 与 /books/:id/versions 由 book-translations / book-versions 插件子包自注册
-			public.GET("/books/:id/documents/slug/:slug", a.GetDocumentBySlug)
-			public.GET("/documents/:id", a.GetDocument)
-			public.GET("/books/:id/related", a.RelatedBooks)         // 语义相关书籍（插件提供，没有时为空）
-			public.GET("/documents/:id/related", a.RelatedDocuments) // 语义相关章节
+			public.GET("/books/:id/documents/slug/:slug", readDoc, a.GetDocumentBySlug)
+			public.GET("/documents/:id", readDoc, a.GetDocument)
+			public.GET("/books/:id/related", readBook, a.RelatedBooks)        // 语义相关书籍（插件提供，没有时为空）
+			public.GET("/documents/:id/related", readDoc, a.RelatedDocuments) // 语义相关章节
 			// /tags、/tags/:slug/books 由 tags 插件子包自注册
 			public.POST("/books/:id/view", a.IncrementBookView)
 			// 导出（公开且开放导出的书籍匿名可导，鉴权在 handler 内）
 			public.GET("/export/pdf-available", a.PDFExportAvailable)
-			public.GET("/books/:id/export/options", a.GetExportOptions)
-			public.GET("/books/:id/export/markdown", a.ExportBookMarkdownPublic)
-			public.GET("/books/:id/export/epub", a.ExportBookEPUB)
-			public.GET("/books/:id/export/docx", a.ExportBookDOCX)
+			public.GET("/books/:id/export/options", exportBook, a.GetExportOptions)
+			public.GET("/books/:id/export/markdown", exportBook, a.ExportBookMarkdownPublic)
+			public.GET("/books/:id/export/epub", exportBook, a.ExportBookEPUB)
+			public.GET("/books/:id/export/docx", exportBook, a.ExportBookDOCX)
 			// /books/:id/export/pdf 由 pdf-export 插件子包注册
 			public.POST("/documents/:id/view", a.IncrementDocumentView)
 		}
