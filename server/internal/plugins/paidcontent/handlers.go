@@ -44,10 +44,11 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 func changedFields(fields ...string) map[string]any { return map[string]any{"changed_fields": fields} }
 
 type userBrief struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
 }
 
 func (b *behavior) userBriefs(ids []uint) map[uint]userBrief {
@@ -56,9 +57,9 @@ func (b *behavior) userBriefs(ids []uint) map[uint]userBrief {
 		return out
 	}
 	var users []models.User
-	b.core.Gorm().Select("id, username, nickname, avatar").Where("id IN ?", ids).Find(&users)
+	b.core.Gorm().Select("id, username, nickname, name_display, avatar").Where("id IN ?", ids).Find(&users)
 	for _, u := range users {
-		out[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar}
+		out[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, DisplayName: u.PublicName(), Avatar: u.Avatar}
 	}
 	return out
 }

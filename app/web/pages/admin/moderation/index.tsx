@@ -10,6 +10,7 @@ import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Paginati
 import { useTranslation } from '@/lib/i18n'
 import { AI_VERDICT_TONE, applyCaseEvent, caseLink, MODERATION_STATUS_TONE, type ModerationCaseItem, type ModerationHit } from '@/lib/moderation'
 import { openTicketedStream } from '@/lib/event-stream'
+import { displayName } from '@/lib/users'
 
 type Tab = 'pending' | 'ai' | 'auto' | 'handled' | 'words' | 'settings'
 const TABS: Tab[] = ['pending', 'ai', 'auto', 'handled', 'words', 'settings']
@@ -122,7 +123,7 @@ function CasesPanel({ status, ai, onCounts }: { status: string; ai: boolean; onC
                       {link ? <Link href={link} target="_blank" className="font-medium text-slate-900 hover:text-primary-600">{c.title}</Link> : <span className="font-medium text-slate-900">{c.title}</span>}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                      {item.user && <span className="flex items-center gap-1.5"><UserAvatar user={item.user} size="h-5 w-5" />{item.user.nickname || item.user.username}</span>}
+                      {item.user && <span className="flex items-center gap-1.5"><UserAvatar user={item.user} size="h-5 w-5" />{displayName(item.user)}</span>}
                       {item.book && c.kind === 'document' && <span>《{item.book.title}》</span>}
                       <span>{formatDate(c.updated_at)}</span>
                     </div>

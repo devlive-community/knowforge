@@ -14,6 +14,10 @@ export interface User {
   bio: string
   github_url: string
   nickname?: string
+  /** 名字显示方式：nickname（优先昵称，默认）| username（始终用户名） */
+  name_display?: 'nickname' | 'username' | ''
+  /** 服务端按名字显示方式计算的展示名 */
+  display_name?: string
   website?: string
   location?: string
   company?: string
@@ -77,7 +81,7 @@ export interface Book {
   export_formats?: string
   extra_info?: BookInfoItem[] // 「更多信息」附加属性（GitHub、原始文档地址等）
   publish_held?: string // 本次保存「公开」被内容审核拦截时的说明（书籍保持私有）
-  user?: Pick<User, 'id' | 'username' | 'avatar' | 'email' | 'bio' | 'github_url' | 'role'>
+  user?: Pick<User, 'id' | 'username' | 'nickname' | 'display_name' | 'avatar' | 'email' | 'bio' | 'github_url' | 'role'>
   tags?: Tag[]
   crawling?: boolean
   created_at: string

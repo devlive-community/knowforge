@@ -10,10 +10,11 @@ import { api, formatNumber } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Card, EmptyState, Loading, Pagination, SegmentedTabs, useFeedback } from '@/components/ui'
+import { displayName } from '@/lib/users'
 
 type Period = 'all' | 'month' | 'week'
 interface Level { level: number; name: string; icon_type?: string; icon_value?: string; color?: string }
-interface LbUser { id: number; username: string; nickname?: string; avatar?: string }
+interface LbUser { id: number; username: string; nickname?: string; display_name?: string; avatar?: string }
 interface Entry { rank: number; xp: number; user: LbUser; level?: Level }
 interface Me { rank?: number; xp: number; public: boolean; user: LbUser; level?: Level }
 interface Board { items: Entry[]; total: number; page: number; page_size: number; period: Period; min_xp: number; me?: Me }
@@ -113,8 +114,8 @@ function LeaderboardInner() {
                     <Link href={`/user/${encodeURIComponent(e.user.username)}`} className="flex min-w-0 items-center gap-2.5 hover:text-primary-600">
                       <UserAvatar user={e.user} size="h-9 w-9" link={false} tooltip={false} />
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-slate-800">{e.user.nickname || e.user.username}</span>
-                        {e.user.nickname && <span className="block truncate text-xs text-slate-400">@{e.user.username}</span>}
+                        <span className="block truncate text-sm font-medium text-slate-800">{displayName(e.user)}</span>
+                        {displayName(e.user) !== e.user.username && <span className="block truncate text-xs text-slate-400">@{e.user.username}</span>}
                       </span>
                     </Link>
                     <span className="hidden sm:inline-flex"><LevelTag level={e.level} /></span>

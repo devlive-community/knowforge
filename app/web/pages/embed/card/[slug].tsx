@@ -6,6 +6,7 @@ import { useTranslation } from '@/lib/i18n'
 import { resolveMediaUrl } from '@/lib/media'
 import { getSiteConfig, isInstalled, serverApi, siteUrlFrom } from '@/lib/server-api'
 import type { Book, Document } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 const MAX_TAGS = 4
 
@@ -33,7 +34,7 @@ export default function EmbedBookCard({ site, siteUrl, book, chapters }: InferGe
   const siteName = site.site_name || 'KnowForge'
   const detail = `/book/detail/${encodeURIComponent(book.slug)}`
   const cover = resolveMediaUrl(book.cover_image)
-  const author = book.user ? ((book.user as { nickname?: string }).nickname || book.user.username) : ''
+  const author = displayName(book.user)
   const tags = (book.tags || []).slice(0, MAX_TAGS)
   return (
     <EmbedFrame siteName={siteName} siteUrl={siteUrl} href={detail} title={book.title}>

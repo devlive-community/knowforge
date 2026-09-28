@@ -14,6 +14,7 @@ import type { FooterLinkGroup } from '@/lib/types'
 import NotificationBell from '@/components/NotificationBell'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { SearchIcon } from '@/components/icons'
+import { displayName } from '@/lib/users'
 
 function UserMenu() {
   const { user, logout, site } = useApp()
@@ -65,8 +66,8 @@ function UserMenu() {
       <button onClick={() => setOpen(!open)} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 hover:bg-slate-50">
         {user.avatar
           ? <img src={user.avatar.startsWith('/') ? API_BASE + user.avatar : user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
-          : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-500 text-sm font-bold text-white">{user.username[0]?.toUpperCase()}</span>}
-        <span className="max-w-[120px] truncate text-sm">{user.username}</span>
+          : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-500 text-sm font-bold text-white">{displayName(user)[0]?.toUpperCase()}</span>}
+        <span className="max-w-[120px] truncate text-sm">{displayName(user)}</span>
       </button>
       {open && (
         <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">

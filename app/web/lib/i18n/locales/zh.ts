@@ -5197,4 +5197,8 @@ export const zh: Record<string, string> = {
   'webhooks.event.sale.completed': '作品被购买',
   'webhooks.event.question.received': '收到读者提问',
   'webhooks.event.membership.changed': '我的会员变化',
+  'user.profile.nameDisplay': '名字显示方式',
+  'user.profile.nameDisplayHint': '作者署名、评论、问答、排行榜等处显示的名字',
+  'user.profile.nameDisplayNickname': '昵称（未设置昵称时显示用户名）',
+  'user.profile.nameDisplayUsername': '用户名',
 }

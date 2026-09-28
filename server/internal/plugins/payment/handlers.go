@@ -284,10 +284,11 @@ func failReply(channelKey string) notifyReply {
 // —— 管理端 ——
 
 type userBrief struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
 }
 
 // AdminListOrders GET /admin/payment/orders?status=&channel=&q=&awaiting=1&page=&page_size=
@@ -323,9 +324,9 @@ func (b *behavior) AdminListOrders(c *gin.Context) {
 	users := map[uint]userBrief{}
 	if len(ids) > 0 {
 		var list []models.User
-		db.Select("id, username, nickname, avatar").Where("id IN ?", ids).Find(&list)
+		db.Select("id, username, nickname, name_display, avatar").Where("id IN ?", ids).Find(&list)
 		for _, u := range list {
-			users[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar}
+			users[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, DisplayName: u.PublicName(), Avatar: u.Avatar}
 		}
 	}
 	items := make([]gin.H, 0, len(rows))
@@ -460,9 +461,9 @@ func (b *behavior) AdminListRefunds(c *gin.Context) {
 	orders := map[uint]Order{}
 	if len(rows) > 0 {
 		var ul []models.User
-		db.Select("id, username, nickname, avatar").Where("id IN ?", userIDs).Find(&ul)
+		db.Select("id, username, nickname, name_display, avatar").Where("id IN ?", userIDs).Find(&ul)
 		for _, u := range ul {
-			users[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar}
+			users[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, DisplayName: u.PublicName(), Avatar: u.Avatar}
 		}
 		var ol []Order
 		db.Where("id IN ?", orderIDs).Find(&ol)

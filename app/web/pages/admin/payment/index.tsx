@@ -9,6 +9,7 @@ import { Badge, Button, Card, Checkbox, EmptyState, Field, Input, Loading, Modal
 import { useTranslation } from '@/lib/i18n'
 import { durationLabel, formatPrice } from '@/lib/commerce'
 import { CHANNEL_ICONS, REFUND_STATUS_TONE, STATUS_TONE, toCents, type PaymentChannel, type PaymentOrder, type PaymentRefund } from '@/lib/payment'
+import { displayName } from '@/lib/users'
 
 type Tab = 'orders' | 'refunds' | 'settings'
 const TABS: Tab[] = ['orders', 'refunds', 'settings']
@@ -111,7 +112,7 @@ function OrdersPanel() {
                     {o.payer_note && <div className="mt-1 max-w-xs whitespace-pre-wrap rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{o.payer_note}</div>}
                     {o.fulfill_error && !o.fulfilled_at && <div className="mt-1 max-w-xs text-xs text-rose-600">{o.fulfill_error}</div>}
                   </td>
-                  <td className="px-4 py-3">{user && <span className="flex items-center gap-2"><UserAvatar user={user} /><span className="text-slate-700">{user.nickname || user.username}</span></span>}</td>
+                  <td className="px-4 py-3">{user && <span className="flex items-center gap-2"><UserAvatar user={user} /><span className="text-slate-700">{displayName(user)}</span></span>}</td>
                   <td className="px-4 py-3">
                     <div className="font-medium tabular-nums text-slate-900">{formatPrice(o.amount_cents, o.currency, locale)}</div>
                     {o.discount_cents > 0 && <div className="text-xs tabular-nums text-emerald-600">{t('payment.coupon.orderDiscount', { code: o.coupon_code, amount: formatPrice(o.discount_cents, o.currency, locale) })}</div>}
@@ -278,7 +279,7 @@ function RefundsPanel() {
                       {r.error && <div className="mt-0.5 max-w-sm text-xs text-rose-600">{r.error}</div>}
                       {r.settle_error && !r.settled_at && <div className="mt-0.5 max-w-sm text-xs text-rose-600">{t('admin.payment.refund.settleError', { error: r.settle_error })}</div>}
                     </td>
-                    <td className="px-4 py-3">{user && <span className="flex items-center gap-2"><UserAvatar user={user} /><span className="text-slate-700">{user.nickname || user.username}</span></span>}</td>
+                    <td className="px-4 py-3">{user && <span className="flex items-center gap-2"><UserAvatar user={user} /><span className="text-slate-700">{displayName(user)}</span></span>}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium tabular-nums text-slate-900">{formatPrice(r.amount_cents, r.currency, locale)}</div>
                       <div className="mt-0.5 text-xs text-slate-400">{t('admin.payment.refund.ofOrder', { total: formatPrice(o.amount_cents, o.currency, locale) })}</div>

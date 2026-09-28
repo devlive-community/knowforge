@@ -5197,4 +5197,8 @@ export const en: Record<string, string> = {
   'webhooks.event.sale.completed': 'Content sold',
   'webhooks.event.question.received': 'Question received',
   'webhooks.event.membership.changed': 'My membership changed',
+  'user.profile.nameDisplay': 'Show my name as',
+  'user.profile.nameDisplayHint': 'The name shown on your books, comments, Q&A, leaderboards and elsewhere',
+  'user.profile.nameDisplayNickname': 'Nickname (username if no nickname)',
+  'user.profile.nameDisplayUsername': 'Username',
 }

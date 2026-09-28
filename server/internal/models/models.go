@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -24,6 +25,10 @@ type User struct {
 	Location string `gorm:"size:100" json:"location"` // 所在地
 	Company  string `gorm:"size:100" json:"company"`  // 公司/组织
 	IsActive bool   `gorm:"default:true" json:"is_active"`
+	// NameDisplay 名字显示方式：空或 nickname 为优先显示昵称（未设置昵称时显示用户名），username 为始终显示用户名
+	NameDisplay string `gorm:"size:10;default:''" json:"name_display"`
+	// DisplayName 非持久化：按名字显示方式得出的展示名，查询后自动回填（见 AfterFind）
+	DisplayName string `gorm:"-" json:"display_name"`
 	// DeletionRequestedAt 用户自助注销请求时间；非空表示进入冷静期，到期后由维护任务自动删除
 	DeletionRequestedAt *time.Time `gorm:"index" json:"deletion_requested_at"`
 	// EmailVerified 邮箱是否已激活；开启「注册后必须激活邮箱」时，未激活用户只读
@@ -47,6 +52,29 @@ type User struct {
 	// Entitlements 非持久化：/auth/me 回填的当前权益生效值（权益键 → 值），供前端联动入口
 	Entitlements map[string]int64 `gorm:"-" json:"entitlements,omitempty"`
 	Authentications []UserAuthentication `gorm:"foreignKey:UserID" json:"authentications,omitempty"`
+}
+
+// 名字显示方式。
+const (
+	NameDisplayNickname = "nickname"
+	NameDisplayUsername = "username"
+)
+
+// PublicName 展示名：选择显示用户名、或没有昵称时为用户名，否则为昵称。
+func (u *User) PublicName() string {
+	if u == nil {
+		return ""
+	}
+	if u.NameDisplay == NameDisplayUsername || strings.TrimSpace(u.Nickname) == "" {
+		return u.Username
+	}
+	return u.Nickname
+}
+
+// AfterFind 查询后回填展示名（只选部分列时未选 name_display 按默认的「优先昵称」处理）。
+func (u *User) AfterFind(*gorm.DB) error {
+	u.DisplayName = u.PublicName()
+	return nil
 }
 
 // UserAuthentication 第三方登录绑定

@@ -5,6 +5,7 @@ import type { MembershipPlan } from '@/lib/membership'
 import UserAvatar from '@/components/UserAvatar'
 import type { UserLite } from '@/components/UserSearchSelect'
 import { Badge, Button, Card, EmptyState, Field, Input, Loading, Pagination, Select, Switch, useFeedback } from '@/components/ui'
+import { displayName } from '@/lib/users'
 
 export interface ReferralSettings {
   enabled: boolean
@@ -79,9 +80,9 @@ export default function ReferralPanel({ plans }: { plans: { plan: MembershipPlan
           <Card className="divide-y divide-slate-100">
             {data.items.map(({ reward: r, inviter, invitee }) => (
               <div key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                {inviter && <span className="flex items-center gap-2"><UserAvatar user={inviter} /><span className="text-slate-800">{inviter.nickname || inviter.username}</span></span>}
+                {inviter && <span className="flex items-center gap-2"><UserAvatar user={inviter} /><span className="text-slate-800">{displayName(inviter)}</span></span>}
                 <i className="fa-solid fa-arrow-right text-xs text-slate-300" aria-hidden="true" />
-                {invitee && <span className="flex items-center gap-2"><UserAvatar user={invitee} /><span className="text-slate-800">{invitee.nickname || invitee.username}</span></span>}
+                {invitee && <span className="flex items-center gap-2"><UserAvatar user={invitee} /><span className="text-slate-800">{displayName(invitee)}</span></span>}
                 <Badge tone={r.kind === 'purchase' ? 'amber' : 'sky'}>{t(`membership.referral.kind.${r.kind}`)}</Badge>
                 {r.capped && <Badge tone="slate">{t('membership.referral.capped')}</Badge>}
                 <span className="ml-auto text-right text-xs text-slate-500">

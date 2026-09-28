@@ -7,6 +7,7 @@ import type { User } from '@/lib/types'
 import { ShieldIcon, UserCircleIcon, DownloadIcon, LinkIcon, PaletteIcon, TrashIcon } from '@/components/icons'
 import { useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
+import { displayName } from '@/lib/users'
 
 interface AccountSettingsLayoutProps {
   user: User
@@ -68,7 +69,7 @@ export default function AccountSettingsLayout({ user, active, onAvatarChange, ch
         <div className="flex items-center gap-3">
           <UserAvatar user={user} size="h-14 w-14" link={false} />
           <div className="min-w-0">
-            <div className="truncate font-bold text-slate-900">{user.username}</div>
+            <div className="truncate font-bold text-slate-900">{displayName(user)}</div>
             <div className="truncate text-sm text-slate-400">@{user.username}</div>
           </div>
         </div>

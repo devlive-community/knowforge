@@ -148,11 +148,11 @@ func notifyAsked(core plugincore.Core, q *Question) {
 		body = append(body[:500], '…')
 	}
 	var asker models.User
-	core.Gorm().Select("id", "username", "nickname").First(&asker, q.UserID)
+	core.Gorm().Select("id", "username", "nickname", "name_display").First(&asker, q.UserID)
 	plugincore.FireActivity(core, plugincore.ActivityEvent{UserID: book.UserID, Type: "qa.question_received", SourceType: "qa_question", SourceID: id,
 		DedupeKey: "qa.question_received:" + id, Data: map[string]any{"book_id": book.ID, "doc_id": q.DocID, "question": map[string]any{
 			"id": q.ID, "title": q.Title, "body": string(body), "link": questionLink(&book, q.ID), "created_at": q.CreatedAt,
-			"author": map[string]any{"id": asker.ID, "username": asker.Username, "nickname": asker.Nickname}}}})
+			"author": map[string]any{"id": asker.ID, "username": asker.Username, "nickname": asker.Nickname, "display_name": asker.PublicName()}}}})
 }
 
 func notifyAnswered(core plugincore.Core, a *Answer) {

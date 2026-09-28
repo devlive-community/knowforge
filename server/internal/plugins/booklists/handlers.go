@@ -42,10 +42,11 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 // —— 视图 ——
 
 type owner struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
 }
 
 type cover struct {
@@ -107,7 +108,7 @@ func (b *behavior) views(u *models.User, lists []List) []listView {
 	db.Where("id IN ?", userIDs).Find(&users)
 	owners := map[uint]*owner{}
 	for _, x := range users {
-		owners[x.ID] = &owner{ID: x.ID, Username: x.Username, Nickname: x.Nickname, Avatar: x.Avatar}
+		owners[x.ID] = &owner{ID: x.ID, Username: x.Username, Nickname: x.Nickname, DisplayName: x.PublicName(), Avatar: x.Avatar}
 	}
 	var items []Item
 	db.Where("list_id IN ?", listIDs).Order("sort_order ASC, id ASC").Find(&items)

@@ -6,6 +6,7 @@ import { centsFromInput, type MembershipPlan } from '@/lib/membership'
 import UserAvatar from '@/components/UserAvatar'
 import type { UserLite } from '@/components/UserSearchSelect'
 import { Badge, Button, Card, Checkbox, DateTimePicker, EmptyState, Field, Input, Loading, Modal, Pagination, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
+import { displayName } from '@/lib/users'
 
 interface Coupon {
   id: number
@@ -227,7 +228,7 @@ function UsesModal({ coupon, onClose }: { coupon: Coupon; onClose: () => void })
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {data.items.map(({ use, user }) => (
               <li key={use.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
-                {user && <span className="flex min-w-0 items-center gap-2"><UserAvatar user={user} /><span className="truncate text-slate-800">{user.nickname || user.username}</span></span>}
+                {user && <span className="flex min-w-0 items-center gap-2"><UserAvatar user={user} /><span className="truncate text-slate-800">{displayName(user)}</span></span>}
                 <Badge tone={useTone[use.status]}>{t(`admin.membership.coupon.useStatus.${use.status}`)}</Badge>
                 <span className="ml-auto text-right text-xs text-slate-500">
                   <span className="block tabular-nums text-emerald-600">-{formatPrice(use.discount_cents, coupon.currency, locale)}</span>

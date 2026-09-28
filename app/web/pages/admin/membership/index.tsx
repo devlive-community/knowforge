@@ -17,6 +17,7 @@ import { useTranslation } from '@/lib/i18n'
 import type { EntitlementDef } from '@/lib/entitlements'
 import { centsFromInput, inputFromCents, type MembershipPlan, type MembershipRecord } from '@/lib/membership'
 import { durationLabel, formatPrice } from '@/lib/commerce'
+import { displayName } from '@/lib/users'
 
 type Tab = 'plans' | 'members' | 'redeem' | 'coupons' | 'referral' | 'records' | 'settings'
 const TABS: Tab[] = ['plans', 'members', 'redeem', 'coupons', 'referral', 'records', 'settings']
@@ -313,7 +314,7 @@ function MembersPanel({ plans, onChanged }: { plans: PlanItem[]; onChanged: () =
             <tbody className="divide-y divide-slate-100">
               {data.items.map((m) => (
                 <tr key={m.user.id}>
-                  <td className="px-4 py-3"><span className="flex items-center gap-2"><UserAvatar user={m.user} /><span className="font-medium text-slate-800">{m.user.nickname || m.user.username}</span></span></td>
+                  <td className="px-4 py-3"><span className="flex items-center gap-2"><UserAvatar user={m.user} /><span className="font-medium text-slate-800">{displayName(m.user)}</span></span></td>
                   <td className="px-4 py-3 text-slate-700">{m.plan?.name || '—'}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(m.started_at)}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(m.expires_at)}</td>
@@ -445,7 +446,7 @@ function RecordsPanel() {
               {data.items.map(({ record: r, user: u, operator }) => (
                 <tr key={r.id}>
                   <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatDate(r.created_at)}</td>
-                  <td className="px-4 py-3 text-slate-800">{u?.nickname || u?.username || `#${r.user_id}`}</td>
+                  <td className="px-4 py-3 text-slate-800">{displayName(u) || `#${r.user_id}`}</td>
                   <td className="px-4 py-3"><Badge tone={r.action === 'revoke' ? 'rose' : 'primary'}>{t(`admin.membership.action.${r.action}`)}</Badge>{r.days > 0 && <span className="ml-1.5 text-xs text-slate-400">+{r.days}</span>}</td>
                   <td className="px-4 py-3 text-slate-700">{r.plan_name}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">{r.prev_expires_at ? formatDate(r.prev_expires_at) : '—'} → {r.expires_at ? formatDate(r.expires_at) : '—'}</td>

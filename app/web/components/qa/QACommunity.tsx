@@ -8,6 +8,7 @@ import UserAvatar from '@/components/UserAvatar'
 import { CitationList } from '@/components/qa/QAAskPanel'
 import { Badge, Button, ButtonLink, Checkbox, EmptyState, Input, Loading, Modal, Pagination, Select, Textarea, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
+import { displayName } from '@/lib/users'
 
 type Filter = 'all' | 'open' | 'resolved'
 
@@ -36,9 +37,7 @@ function VisibilityBadge({ visibility }: { visibility: QAVisibility }) {
   return <Badge tone={visibility === 'held' ? 'amber' : 'rose'}>{t(visibility === 'held' ? 'qa.community.visibilityHeld' : 'qa.community.visibilityHidden')}</Badge>
 }
 
-function displayName(u?: { username: string; nickname?: string }) {
-  return u ? (u.nickname || u.username) : ''
-}
+
 
 function QuestionList({ user, book, onOpenQuestion, docId, selection, loginHref, compact }: Props) {
   const { t } = useTranslation()

@@ -132,7 +132,7 @@ func (a *App) ListDocumentRevisions(c *gin.Context) {
 	authors := map[uint]models.User{}
 	if len(userIDs) > 0 {
 		var users []models.User
-		if err := a.DB.Select("id", "username", "avatar").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+		if err := a.DB.Select("id", "username", "nickname", "name_display", "avatar").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
 			fail(c, http.StatusInternalServerError, "查询版本作者失败")
 			return
 		}
@@ -200,7 +200,7 @@ func (a *App) GetDocumentRevision(c *gin.Context) {
 	}
 	var author models.User
 	var authorPtr *models.User
-	if err := a.DB.Select("id", "username", "avatar").First(&author, revision.UserID).Error; err == nil {
+	if err := a.DB.Select("id", "username", "nickname", "name_display", "avatar").First(&author, revision.UserID).Error; err == nil {
 		authorPtr = &author
 	}
 	ok(c, revisionResponse(revision, authorPtr, true))

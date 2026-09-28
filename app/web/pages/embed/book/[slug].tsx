@@ -5,6 +5,7 @@ import { resolveMediaUrl } from '@/lib/media'
 import { useTranslation } from '@/lib/i18n'
 import { embedEnabled } from '@/lib/embed'
 import type { Book, Document } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 const MAX_CHAPTERS = 50
 
@@ -40,7 +41,7 @@ export default function EmbedBook({ site, siteUrl, book, chapters, total }: Infe
         {book.cover_image && <img src={resolveMediaUrl(book.cover_image)} alt="" className="h-24 w-[4.5rem] shrink-0 rounded-md object-cover shadow-sm" />}
         <div className="min-w-0">
           <a href={siteUrl + detail} target="_blank" rel="noopener" className="text-lg font-bold text-slate-900 hover:text-primary-600">{book.title}</a>
-          {book.user && <p className="mt-0.5 text-xs text-slate-500">{book.user.username}</p>}
+          {book.user && <p className="mt-0.5 text-xs text-slate-500">{displayName(book.user)}</p>}
           {book.description && <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{book.description}</p>}
         </div>
       </div>

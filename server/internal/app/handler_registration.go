@@ -206,7 +206,7 @@ func (a *App) MyInvitedUsers(c *gin.Context) {
 	a.DB.Where("invited_by = ?", u.ID).Order("created_at DESC").Find(&users)
 	items := make([]gin.H, 0, len(users))
 	for _, x := range users {
-		items = append(items, gin.H{"username": x.Username, "avatar": x.Avatar, "created_at": x.CreatedAt})
+		items = append(items, gin.H{"username": x.Username, "nickname": x.Nickname, "display_name": x.PublicName(), "avatar": x.Avatar, "created_at": x.CreatedAt})
 	}
 	ok(c, gin.H{"items": items, "total": len(items)})
 }

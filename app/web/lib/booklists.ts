@@ -1,4 +1,5 @@
 import type { Book } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 // 书单（「书单」插件）：用户整理的主题书单，可公开、收藏。
 
@@ -9,7 +10,7 @@ export function bookListsEnabled(site: { feature_plugins?: string[] } | Record<s
   return Array.isArray(list) && list.includes(BOOK_LISTS_PLUGIN_KEY)
 }
 
-export interface BookListOwner { id: number; username: string; nickname: string; avatar: string }
+export interface BookListOwner { id: number; username: string; nickname: string; display_name?: string; avatar: string }
 
 // BookList 书单卡片：covers 为前几本查看者可读书籍的封面；contains 仅在「我的书单」按书籍查询时返回。
 export interface BookList {
@@ -34,4 +35,4 @@ export interface BookListDetail { list: BookList; items: BookListEntry[]; mine: 
 
 export const bookListPath = (id: number) => `/lists/${id}`
 
-export const ownerName = (o: BookListOwner | null) => (o ? o.nickname || o.username : '')
+export const ownerName = (o: BookListOwner | null) => displayName(o)

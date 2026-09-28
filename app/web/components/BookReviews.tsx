@@ -5,6 +5,7 @@ import { useTranslation } from '@/lib/i18n'
 import { Button, Textarea, Loading, useFeedback } from '@/components/ui'
 import UserAvatar from '@/components/UserAvatar'
 import type { BookReview, BookReviewSummary } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 // Stars 只读星级展示（支持半星取整为整数星，size 控制字号）
 function Stars({ value, size = 'text-base' }: { value: number; size?: string }) {
@@ -183,7 +184,7 @@ export default function BookReviews({ bookId, authorId }: { bookId: number; auth
                 <UserAvatar user={r.user} size="h-9 w-9" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-800">{r.user?.username || '—'}</span>
+                    <span className="text-sm font-medium text-slate-800">{displayName(r.user) || '—'}</span>
                     <Stars value={r.rating} size="text-xs" />
                     <span className="ml-auto text-xs text-slate-400">{new Date(r.updated_at).toLocaleDateString()}</span>
                   </div>

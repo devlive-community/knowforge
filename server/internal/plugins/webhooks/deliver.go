@@ -120,11 +120,7 @@ func userInfo(u *models.User) map[string]any {
 	if u == nil {
 		return nil
 	}
-	name := u.Nickname
-	if name == "" {
-		name = u.Username
-	}
-	return map[string]any{"id": u.ID, "username": u.Username, "name": name}
+	return map[string]any{"id": u.ID, "username": u.Username, "name": u.PublicName()}
 }
 
 func (b *behavior) onComment(ev plugincore.ActivityEvent) {

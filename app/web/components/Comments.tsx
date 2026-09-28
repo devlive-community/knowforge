@@ -9,6 +9,7 @@ import type { User } from '@/lib/types'
 import { Button, Loading, useFeedback } from '@/components/ui'
 import ReportButton from '@/components/ReportButton'
 import CaptchaField, { CaptchaValue } from '@/components/CaptchaField'
+import { displayName } from '@/lib/users'
 
 interface CommentItem {
   id: number
@@ -79,7 +80,7 @@ export default function Comments({ docId, allowComments = true }: { docId: numbe
         <UserAvatar user={comment.user} size="h-8 w-8 text-xs" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-slate-900">{comment.user?.username || t('comment.anonymous')}</span>
+            <span className="font-medium text-slate-900">{displayName(comment.user) || t('comment.anonymous')}</span>
             <span className="text-xs text-slate-400">{formatDate(comment.created_at)}</span>
             {user?.id === comment.user_id && (
               <button onClick={() => remove(comment.id)} className="text-xs text-rose-400 hover:text-rose-600">{t('comment.delete')}</button>
@@ -97,7 +98,7 @@ export default function Comments({ docId, allowComments = true }: { docId: numbe
                   <UserAvatar user={r.user} size="h-7 w-7" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="font-medium text-slate-900">{r.user?.username}</span>
+                      <span className="font-medium text-slate-900">{displayName(r.user)}</span>
                       <span className="text-xs text-slate-400">{formatDate(r.created_at)}</span>
                       {user?.id === r.user_id ? (
                         <button onClick={() => remove(r.id)} className="text-xs text-rose-400 hover:text-rose-600">{t('comment.delete')}</button>

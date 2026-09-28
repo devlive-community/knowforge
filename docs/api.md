@@ -232,7 +232,7 @@ Authorization: Bearer kf_pat_…
 | GET | `/auth/tokens/permissions` | 创建令牌时可选的权限 `groups:[{resource, permissions[]}]`（普通用户当前拥有的权限，含已启用插件，不含 `auth:*`） | 登录 |
 | POST | `/auth/tokens` | `{name, scope: all\|custom, permissions[]（custom 必填）, expires_days: 0\|7\|30\|90\|365}` 生成令牌，返回 `{token（明文，仅此一次）, item}`；超出权益上限 403；仍接受旧的 `read` / `write`（`write` 保存为 `all`） | 登录 |
 | DELETE | `/auth/tokens/:id` | 吊销令牌（立即失效，记录保留） | 登录 |
-| PUT | `/auth/profile` | 更新资料（email/avatar/bio/github_url/nickname/website/location/company；改邮箱受二次认证保护） | `user:update` |
+| PUT | `/auth/profile` | 更新资料（email/avatar/bio/github_url/nickname/name_display/website/location/company；改邮箱受二次认证保护）。`name_display` 为名字显示方式：`nickname`（默认，有昵称时显示昵称）或 `username`（始终显示用户名）；各接口返回的用户都带按此计算的 `display_name` | `user:update` |
 | GET/PUT | `/auth/export-settings` | 当前用户 PDF 导出样式偏好：`page_size`(A4\|Letter)、`include_cover`、`include_toc`、`font_size`(12–20)、`code_theme`(light\|dark)、`margin`(narrow\|normal\|wide)、`footer`（每页页脚 Powered by 文案，≤100 字，留空用默认 `Powered by <站点名>`） | `user:read` / `user:update` |
 | PUT | `/auth/password` | 修改密码（old_password/new_password；OAuth 用户未设密码时免验原密码，用于首次设置） | `user:update` |
 | POST | `/auth/password/forgot` | 匿名申请找回：`{email}`；响应不泄露邮箱是否存在，令牌邮件 60 分钟有效、一次性、只保留最新一条；邮件写入持久化异步队列，失败自动退避重试；`mail_driver=log` 时执行任务后把链接输出到后端日志 | `auth:password-reset`（匿名语义） |

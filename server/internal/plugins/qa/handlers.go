@@ -470,10 +470,11 @@ func (b *behavior) Reindex(c *gin.Context) {
 // —— 社区问答 ——
 
 type userBrief struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
 }
 
 func (b *behavior) users(ids []uint) map[uint]userBrief {
@@ -482,9 +483,9 @@ func (b *behavior) users(ids []uint) map[uint]userBrief {
 		return out
 	}
 	var list []models.User
-	b.core.Gorm().Select("id, username, nickname, avatar").Where("id IN ?", ids).Find(&list)
+	b.core.Gorm().Select("id, username, nickname, name_display, avatar").Where("id IN ?", ids).Find(&list)
 	for _, u := range list {
-		out[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar}
+		out[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, DisplayName: u.PublicName(), Avatar: u.Avatar}
 	}
 	return out
 }

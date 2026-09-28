@@ -288,9 +288,6 @@ func (b *behavior) UserFeed(c *gin.Context) {
 	for _, d := range b.recentDocs(ids) {
 		items = append(items, b.toItem(base, books[d.BookID], d, true))
 	}
-	author := u.Nickname
-	if author == "" {
-		author = u.Username
-	}
+	author := u.PublicName()
 	b.write(c, newFeed(base, "/api/v1/feeds/users/"+u.Username+".xml", author+" - "+b.siteName(), base+"/user/"+u.Username, author+" 最近发布的章节", "", items))
 }

@@ -21,6 +21,7 @@ import FeedButton from '@/components/FeedButton'
 import { feedsEnabled, userFeedPath } from '@/lib/feeds'
 import UserBookLists from '@/components/booklists/UserBookLists'
 import { bookListsEnabled } from '@/lib/booklists'
+import { displayName } from '@/lib/users'
 
 interface UserProfile {
   id: number
@@ -29,6 +30,7 @@ interface UserProfile {
   bio: string
   github_url: string
   nickname?: string
+  display_name?: string
   website?: string
   location?: string
   company?: string
@@ -116,13 +118,13 @@ function AuthorProfileCard({ profile, siteUrl, share, t }: { profile: UserProfil
         <div className="min-w-0">
           <p className="text-sm text-slate-400">{t('user.home.knowledgeCreator')}</p>
           <h1 className="mt-1 flex min-w-0 flex-wrap items-center gap-2 break-words text-2xl font-bold text-ink sm:gap-3 sm:text-4xl">
-            {profile.nickname || profile.username}
+            {displayName(profile)}
             {profile.role === 'admin' && (
               <span className="inline-flex items-center rounded-md bg-primary-50 px-2.5 py-1 text-sm font-medium text-primary-700 ring-1 ring-inset ring-primary-200">{t('user.home.admin')}</span>
             )}
             <ProfileLevelBadge username={profile.username} />
           </h1>
-          {profile.nickname && <p className="mt-1 text-sm text-slate-400">@{profile.username}</p>}
+          {displayName(profile) !== profile.username && <p className="mt-1 text-sm text-slate-400">@{profile.username}</p>}
           {profile.bio && <p className="mt-3 max-w-lg text-[15px] leading-7 text-slate-500">{profile.bio}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-500">
             {profile.created_at && (
@@ -264,7 +266,7 @@ export default function UserHome({ site, siteUrl, profile, books, sort, achievem
         description={profile.bio || `${siteName} user ${profile.username}, ${profile.public_book_count} public books.`}
         url={profileUrl}
         jsonLd={jsonLd}
-        rss={feedsEnabled(site) ? { title: profile.nickname || profile.username, href: userFeedPath(profile.username) } : undefined}
+        rss={feedsEnabled(site) ? { title: displayName(profile), href: userFeedPath(profile.username) } : undefined}
       />
 
       <div className="py-6">

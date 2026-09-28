@@ -1317,7 +1317,7 @@ func (am *behavior) AdminListAchievementGrants(c *gin.Context) {
 	}
 	users := []models.User{}
 	if len(userIDs) > 0 {
-		am.core.Gorm().Select("id", "username", "avatar").Where("id IN ?", userIDs).Find(&users)
+		am.core.Gorm().Select("id", "username", "nickname", "name_display", "avatar").Where("id IN ?", userIDs).Find(&users)
 	}
 	userMap := map[uint]models.User{}
 	for _, user := range users {

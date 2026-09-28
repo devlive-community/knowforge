@@ -33,7 +33,7 @@ func publicCommentUser(u *models.User) gin.H {
 		return gin.H{}
 	}
 	return gin.H{
-		"id": u.ID, "username": u.Username, "avatar": u.Avatar,
+		"id": u.ID, "username": u.Username, "nickname": u.Nickname, "display_name": u.PublicName(), "avatar": u.Avatar,
 		"bio": u.Bio, "github_url": u.GithubURL, "role": u.Role,
 	}
 }
@@ -63,7 +63,7 @@ func (a *App) ListComments(c *gin.Context) {
 		return
 	}
 	q := a.DB.Preload("User", func(tx *gorm.DB) *gorm.DB {
-		return tx.Select("id", "username", "avatar", "bio", "github_url", "role")
+		return tx.Select("id", "username", "nickname", "name_display", "avatar", "bio", "github_url", "role")
 	}).Where("document_id = ? AND status = ?", docID, "published").Order("created_at ASC")
 	var comments []models.Comment
 	if err := q.Find(&comments).Error; err != nil {

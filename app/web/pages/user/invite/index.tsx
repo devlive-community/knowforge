@@ -8,6 +8,7 @@ import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Button, Input, Loading, EmptyState, useFeedback } from '@/components/ui'
+import { displayName } from '@/lib/users'
 
 interface InvitedUser {
   username: string
@@ -146,7 +147,7 @@ export default function InvitePage() {
                     <div key={u.username} className="flex items-center gap-3 py-3">
                       <UserAvatar user={u} size="h-9 w-9" link={false} tooltip={false} />
                       <div className="min-w-0">
-                        <Link href={`/user/${encodeURIComponent(u.username)}`} className="font-medium text-slate-800 hover:text-primary-600">{u.username}</Link>
+                        <Link href={`/user/${encodeURIComponent(u.username)}`} className="font-medium text-slate-800 hover:text-primary-600">{displayName(u)}</Link>
                         <div className="text-xs text-slate-400">{t('invite.registeredAt', { date: formatDate(u.created_at).slice(0, 10) })}</div>
                       </div>
                     </div>

@@ -5,6 +5,7 @@ import { useTranslation } from '@/lib/i18n'
 import UserAvatar from '@/components/UserAvatar'
 import type { UserLite } from '@/components/UserSearchSelect'
 import { Badge, Button, Card, Input, useFeedback } from '@/components/ui'
+import { displayName } from '@/lib/users'
 
 interface MyReferral {
   enabled: boolean
@@ -64,7 +65,7 @@ export default function ReferralCard() {
         <ul className="mt-4 divide-y divide-slate-100 border-t border-slate-100">
           {data.rewards.map((w, i) => (
             <li key={i} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
-              {w.invitee && <span className="flex min-w-0 items-center gap-2"><UserAvatar user={w.invitee} /><span className="truncate text-slate-700">{w.invitee.nickname || w.invitee.username}</span></span>}
+              {w.invitee && <span className="flex min-w-0 items-center gap-2"><UserAvatar user={w.invitee} /><span className="truncate text-slate-700">{displayName(w.invitee)}</span></span>}
               <Badge tone={w.kind === 'purchase' ? 'amber' : 'sky'}>{t(`membership.referral.kind.${w.kind}`)}</Badge>
               <span className="ml-auto text-xs text-slate-500">
                 {w.capped ? t('membership.referral.capped') : t('membership.referral.gotDays', { days: w.days })} · {formatDate(w.created_at)}

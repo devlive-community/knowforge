@@ -21,6 +21,7 @@ import { HEADING_LEVELS } from '@/lib/editor-blocks'
 import { entitlementAllowed } from '@/lib/entitlements'
 import AIWriterDrawer, { type AIWriterTab, type WriterEditorBridge } from '@/components/ai-writer/AIWriterDrawer'
 import { aiWriterEnabled } from '@/lib/ai-writer'
+import { displayName } from '@/lib/users'
 
 type SaveState = 'saved' | 'dirty' | 'saving'
 type TabKey = 'toc' | 'settings'
@@ -2258,7 +2259,7 @@ function RevisionDrawer({
                       <span className="text-[11px] text-slate-400">{t('writer.charCount', { n: revision.content_length })}</span>
                     </span>
                     <span className="mt-1 block text-xs text-slate-500">{formatDate(revision.created_at)}</span>
-                    <span className="mt-0.5 block truncate text-xs text-slate-400">{revision.author?.username || t('writer.unknownUser')}</span>
+                    <span className="mt-0.5 block truncate text-xs text-slate-400">{displayName(revision.author) || t('writer.unknownUser')}</span>
                   </button>
                 ))}
                 {result.items.length < result.total && (
@@ -2284,7 +2285,7 @@ function RevisionDrawer({
                       <span className="font-semibold text-slate-900">{t(REVISION_REASON_LABEL[detail.reason])}</span>
                       <Badge tone={STATUS_META[detail.status].tone}>{t(STATUS_META[detail.status].labelKey)}</Badge>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{formatDate(detail.created_at)} · {detail.author?.username || t('writer.unknownUser')}</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatDate(detail.created_at)} · {displayName(detail.author) || t('writer.unknownUser')}</p>
                   </div>
                   <Button variant="outline" loading={restoring} disabled={hasUnsavedChanges} onClick={restore}>
                     <HistoryIcon className="h-4 w-4" /> {t('writer.restoreThisVersion')}

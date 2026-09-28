@@ -41,6 +41,7 @@ import { embedEnabled } from '@/lib/embed'
 import AddToListModal from '@/components/booklists/AddToListModal'
 import BookListsOnBook from '@/components/booklists/BookListsOnBook'
 import { bookListsEnabled } from '@/lib/booklists'
+import { displayName } from '@/lib/users'
 
 interface BookDetailProps {
   installed: boolean
@@ -320,7 +321,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
     {
       '@context': 'https://schema.org', '@type': 'Book', name: book.title,
       description: book.description || undefined,
-      author: { '@type': 'Person', name: author?.username || t('detail.anonymous') },
+      author: { '@type': 'Person', name: displayName(author) || t('detail.anonymous') },
       url: bookUrl, inLanguage: 'zh-CN',
     },
     { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
@@ -454,7 +455,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
                 <Link href={`/user/${encodeURIComponent(author.username)}`} className="flex min-w-0 items-center gap-3">
                   <UserAvatar user={author} size="h-11 w-11" link={false} />
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold text-slate-900">{author.username}</span>
+                    <span className="block truncate font-semibold text-slate-900">{displayName(author)}</span>
                     {author.bio && <span className="block truncate text-xs text-slate-400">{author.bio}</span>}
                   </span>
                 </Link>

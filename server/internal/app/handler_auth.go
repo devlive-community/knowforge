@@ -228,9 +228,11 @@ type profileUpdate struct {
 	Bio       *string `json:"bio"`
 	GithubURL *string `json:"github_url"`
 	Nickname  *string `json:"nickname"`
-	Website   *string `json:"website"`
-	Location  *string `json:"location"`
-	Company   *string `json:"company"`
+	// NameDisplay 名字显示方式：nickname（优先昵称）| username（始终用户名）
+	NameDisplay *string `json:"name_display"`
+	Website     *string `json:"website"`
+	Location    *string `json:"location"`
+	Company     *string `json:"company"`
 }
 
 // UpdateProfile PUT /auth/profile
@@ -278,6 +280,15 @@ func (a *App) UpdateProfile(c *gin.Context) {
 	if req.Location != nil {
 		u.Location = truncateText(strings.TrimSpace(*req.Location), 100)
 	}
+	if req.NameDisplay != nil {
+		switch *req.NameDisplay {
+		case models.NameDisplayNickname, models.NameDisplayUsername:
+			u.NameDisplay = *req.NameDisplay
+		default:
+			fail(c, http.StatusBadRequest, "名字显示方式需为 nickname 或 username")
+			return
+		}
+	}
 	if req.Company != nil {
 		u.Company = truncateText(strings.TrimSpace(*req.Company), 100)
 	}
@@ -285,6 +296,7 @@ func (a *App) UpdateProfile(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "保存失败: "+err.Error())
 		return
 	}
+	u.DisplayName = u.PublicName()
 	ok(c, u)
 }
 

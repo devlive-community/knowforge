@@ -40,7 +40,7 @@ func (a *App) ListCollaborators(c *gin.Context) {
 
 	collaborators := []models.BookCollaborator{}
 	query := a.DB.Preload("User", func(tx *gorm.DB) *gorm.DB {
-		return tx.Select("id", "username", "avatar", "bio")
+		return tx.Select("id", "username", "nickname", "name_display", "avatar", "bio")
 	}).Where("book_id = ?", book.ID)
 	if !a.canManageBook(u, book) {
 		query = query.Where("status = ?", "accepted")

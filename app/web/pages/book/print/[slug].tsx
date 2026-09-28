@@ -6,6 +6,7 @@ import { renderMarkdown, wikiDocsFromTree } from '@/lib/markdown'
 import { resolveMediaUrl } from '@/lib/media'
 import { useTranslation } from '@/lib/i18n'
 import type { Book, Document } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 interface Chapter { id: number; title: string; level: number; html: string }
 interface PrintStyle { pageSize: string; fontSize: number; codeTheme: string; margin: string; cover: boolean; toc: boolean }
@@ -74,7 +75,7 @@ export default function PrintBook({ book, chapters, chapterPrefix, style, waterm
           {cover && <img src={cover} alt="" className="cover-img" />}
           <h1>{book.title}</h1>
           {book.description && <p className="cover-desc">{book.description}</p>}
-          {book.user && <p className="cover-author">{book.user.username}</p>}
+          {book.user && <p className="cover-author">{displayName(book.user)}</p>}
         </section>
       )}
 

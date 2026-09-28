@@ -11,6 +11,7 @@ import type { Book } from '@/lib/types'
 import HighlightText from '@/components/HighlightText'
 import CoverImage from '@/components/CoverImage'
 import BookVersionsModal from '@/components/BookVersionsModal'
+import { displayName } from '@/lib/users'
 
 // BookCard 全站统一书籍展示卡。
 // 收敛了首页/发现/搜索/收藏/我的书籍/用户主页/相关书籍等全部列表场景，
@@ -172,13 +173,13 @@ export default function BookCard({
         <Link href={`/user/${encodeURIComponent(book.user.username)}`}
           className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-primary-600">
           {authorInner}
-          <span className="truncate">{book.user.username}</span>
+          <span className="truncate">{displayName(book.user)}</span>
         </Link>
       )
       : (
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
           {authorInner}
-          <span className="truncate">{book.user.username}</span>
+          <span className="truncate">{displayName(book.user)}</span>
         </span>
       )
   )

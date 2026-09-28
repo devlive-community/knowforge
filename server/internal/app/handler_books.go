@@ -127,7 +127,7 @@ func preloadBookUser(db *gorm.DB) *gorm.DB {
 	return db.
 		Preload("User", func(tx *gorm.DB) *gorm.DB {
 			// 公开书籍响应只能携带公开资料，禁止通过嵌套 User 泄露邮箱、登录时间和账户状态。
-			return tx.Select("id", "username", "avatar", "bio", "github_url", "role", "created_at")
+			return tx.Select("id", "username", "nickname", "name_display", "avatar", "bio", "github_url", "role", "created_at")
 		})
 }
 

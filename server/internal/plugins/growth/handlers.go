@@ -380,10 +380,11 @@ type experienceEventItem struct {
 }
 
 type experienceEventUser struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
 }
 
 // AdminListExperienceEvents GET /admin/growth/events?user_id=&rule_key=&page=&page_size=
@@ -415,9 +416,9 @@ func (b *behavior) AdminListExperienceEvents(c *gin.Context) {
 	users := map[uint]*experienceEventUser{}
 	if len(ids) > 0 {
 		var rows []models.User
-		core.Gorm().Select("id", "username", "nickname", "avatar").Where("id IN ?", ids).Find(&rows)
+		core.Gorm().Select("id", "username", "nickname", "name_display", "avatar").Where("id IN ?", ids).Find(&rows)
 		for _, u := range rows {
-			users[u.ID] = &experienceEventUser{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar}
+			users[u.ID] = &experienceEventUser{ID: u.ID, Username: u.Username, Nickname: u.Nickname, DisplayName: u.PublicName(), Avatar: u.Avatar}
 		}
 	}
 	items := make([]experienceEventItem, 0, len(events))

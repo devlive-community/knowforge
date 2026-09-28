@@ -7,7 +7,7 @@ import { api, API_BASE, getToken } from '@/lib/api'
 import { resolveMediaUrl } from '@/lib/media'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Button, Input, Textarea, Field, Loading } from '@/components/ui'
+import { Button, Input, Textarea, Field, Loading, Select } from '@/components/ui'
 import { EyeIcon, SaveIcon } from '@/components/icons'
 import UserAvatar from '@/components/UserAvatar'
 
@@ -24,6 +24,7 @@ export default function Profile() {
   const [bio, setBio] = useState('')
   const [githubUrl, setGithubUrl] = useState('')
   const [nickname, setNickname] = useState('')
+  const [nameDisplay, setNameDisplay] = useState<'nickname' | 'username'>('nickname')
   const [website, setWebsite] = useState('')
   const [location, setLocation] = useState('')
   const [company, setCompany] = useState('')
@@ -39,6 +40,7 @@ export default function Profile() {
       setBio(user.bio || '')
       setGithubUrl(user.github_url || '')
       setNickname(user.nickname || '')
+      setNameDisplay(user.name_display === 'username' ? 'username' : 'nickname')
       setWebsite(user.website || '')
       setLocation(user.location || '')
       setCompany(user.company || '')
@@ -48,6 +50,8 @@ export default function Profile() {
   if (!user) return <Loading className="min-h-[60vh]" label={t('user.profile.loading')} />
 
   const avatarSrc = resolveMediaUrl(avatar)
+  // 与服务端规则一致：选择显示用户名或没有昵称时为用户名，否则为昵称
+  const previewName = nameDisplay === 'username' || !nickname.trim() ? user.username : nickname.trim()
 
   async function uploadAvatar(file: File | undefined) {
     if (!file) return
@@ -75,7 +79,7 @@ export default function Profile() {
     try {
       await api('/auth/profile', {
         method: 'PUT',
-        body: { email, avatar, bio, github_url: githubUrl, nickname, website, location, company },
+        body: { email, avatar, bio, github_url: githubUrl, nickname, name_display: nameDisplay, website, location, company },
       })
       await refreshUser()
       setMessage(t('user.profile.saved'))
@@ -156,6 +160,10 @@ export default function Profile() {
                       <Field label={t('user.profile.nickname')} hint={t('user.profile.nicknameHint')}>
                         <Input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder={t('user.profile.nicknamePlaceholder')} maxLength={50} />
                       </Field>
+                      <Field label={t('user.profile.nameDisplay')} hint={t('user.profile.nameDisplayHint')}>
+                        <Select value={nameDisplay} onChange={(v) => setNameDisplay(v as 'nickname' | 'username')}
+                          options={[{ value: 'nickname', label: t('user.profile.nameDisplayNickname') }, { value: 'username', label: t('user.profile.nameDisplayUsername') }]} />
+                      </Field>
                       <Field label={t('user.profile.location')}>
                         <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t('user.profile.locationPlaceholder')} maxLength={100} />
                       </Field>
@@ -192,9 +200,9 @@ export default function Profile() {
                   <span className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
                     <EyeIcon className="h-4 w-4" /> {t('user.profile.preview')}
                   </span>
-                  <UserAvatar user={{ username: user.username, avatar }} size="h-11 w-11" link={false} />
+                  <UserAvatar user={{ username: user.username, display_name: previewName, avatar }} size="h-11 w-11" link={false} />
                   <div className="min-w-0">
-                    <div className="truncate font-semibold text-slate-900">{user.username}</div>
+                    <div className="truncate font-semibold text-slate-900">{previewName}</div>
                     <div className="truncate text-xs text-slate-500">{bio || t('user.profile.bioPlaceholder')}</div>
                   </div>
                 </div>

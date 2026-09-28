@@ -28,6 +28,7 @@ import ReportButton from '@/components/ReportButton'
 import BookTranslations from '@/components/BookTranslations'
 import BookVersions from '@/components/BookVersions'
 import type { Book, BookAccess, Document, User } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 interface ReaderProps {
   installed: boolean
@@ -460,7 +461,7 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
               <div className="mt-1.5 flex items-center justify-between text-sm text-slate-500">
                 <span className="flex items-center gap-1.5">
                   <UserAvatar user={author} size="h-5 w-5" />
-                  {author?.username || t('reader.anonymous')}
+                  {displayName(author) || t('reader.anonymous')}
                 </span>
                 <span className="text-xs text-slate-400">{t('reader.chaptersCount', { n: flat.length })}</span>
               </div>
@@ -541,7 +542,7 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
                   <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">{doc.title}</h1>
                   <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
                     <UserAvatar user={author} size="h-6 w-6" />
-                    <span className="text-slate-600">{author?.username || t('reader.anonymous')}</span>
+                    <span className="text-slate-600">{displayName(author) || t('reader.anonymous')}</span>
                     <span>· {t('reader.updatedAt', { date: formatDate(doc.updated_at).slice(0, 10) })}</span>
                     <span>· {t('reader.readingMin', { n: readingMin })}</span>
                     <span>· {t('reader.readCount', { n: formatNumber(docViews) })}</span>
@@ -666,7 +667,7 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
                     ? <img src={authorAvatar} alt="" className="h-11 w-11 rounded-lg object-cover" />
                     : <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-gradient-to-br from-primary-200 to-[#8B8DFF] font-semibold text-white">{(author.username || '?').slice(0, 1)}</span>}
                   <div className="min-w-0">
-                    <div className="truncate font-semibold text-slate-900">{author.username}</div>
+                    <div className="truncate font-semibold text-slate-900">{displayName(author)}</div>
                     {author.bio && <div className="line-clamp-2 text-xs text-slate-500">{author.bio}</div>}
                   </div>
                 </div>

@@ -5,6 +5,7 @@ import CoverImage from '@/components/CoverImage'
 import { EyeIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import type { Book } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 const topicChips = [
   { key: 'home.hero.topicMethodology', className: 'left-2 top-10 bg-violet-100/90 text-violet-600' },
@@ -27,7 +28,7 @@ function CardFace({ book }: { book?: Book }) {
       <div className="mt-2 truncate text-xs font-medium text-slate-800">{book?.title || t('home.hero.sampleBook')}</div>
       {book ? (
         <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-slate-400">
-          <span className="min-w-0 truncate">{book.user?.username || ''}</span>
+          <span className="min-w-0 truncate">{displayName(book.user)}</span>
           <span className="flex shrink-0 items-center gap-1"><EyeIcon className="h-3 w-3" /> {formatNumber(book.view_count)}</span>
         </div>
       ) : (

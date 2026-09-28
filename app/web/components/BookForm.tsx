@@ -6,6 +6,7 @@ import { useTranslation } from '@/lib/i18n'
 import { Button, Input, Textarea, Select, Switch } from '@/components/ui'
 import { BookIcon, CheckCircleIcon, CloseIcon, ImageIcon, LinkIcon, UploadIcon, EyeIcon } from '@/components/icons'
 import type { Book, BookStatus } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 const MAX_TITLE = 60
 const MAX_DESC = 1000
@@ -78,7 +79,7 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
   useEffect(() => { setHost(window.location.host) }, [])
 
   const coverSrc = coverImage ? (/^https?:\/\//.test(coverImage) ? coverImage : API_BASE + coverImage) : ''
-  const authorName = user?.username || t('bookForm.you')
+  const authorName = displayName(user) || t('bookForm.you')
   const authorAvatar = user?.avatar ? (/^https?:\/\//.test(user.avatar) ? user.avatar : API_BASE + user.avatar) : ''
 
   function addTagValue(raw: string) {

@@ -15,6 +15,7 @@ import { formatNumber } from '@/lib/api'
 import { BookIcon, ChevronRightIcon, CloudIcon, CodeIcon, EyeIcon, FileTextIcon, ShieldIcon, UsersIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import type { Book, PageResult, SiteStats, Tag, User } from '@/lib/types'
+import { displayName } from '@/lib/users'
 
 interface ActiveAuthor {
   id: number
@@ -240,7 +241,7 @@ export default function Home({ site, siteUrl, stats, latest, hot, trending, tags
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold text-slate-900 group-hover:text-primary-600">{b.title}</span>
                       {b.description && <span className="mt-0.5 block line-clamp-1 text-xs text-slate-400">{b.description}</span>}
-                      <span className="mt-1 block truncate text-xs text-slate-400">{b.user?.username} · {t('home.latest.meta', { chapters: b.chapter_count || 0, views: formatNumber(b.view_count) })}</span>
+                      <span className="mt-1 block truncate text-xs text-slate-400">{displayName(b.user)} · {t('home.latest.meta', { chapters: b.chapter_count || 0, views: formatNumber(b.view_count) })}</span>
                     </span>
                   </Link>
                 </li>
@@ -291,7 +292,7 @@ export default function Home({ site, siteUrl, stats, latest, hot, trending, tags
                     <Link href={`/user/${encodeURIComponent(author.username)}`} className="group flex items-center gap-3">
                       <UserAvatar user={{ username: author.username, avatar: author.avatar }} size="h-9 w-9" link={false} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-slate-800 group-hover:text-primary-600">{author.username}</span>
+                        <span className="block truncate text-sm font-medium text-slate-800 group-hover:text-primary-600">{displayName(author)}</span>
                         <span className="block truncate text-xs text-slate-400">{t('home.authors.meta', { books: author.book_count, views: formatNumber(author.total_views) })}</span>
                       </span>
                     </Link>

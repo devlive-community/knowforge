@@ -58,7 +58,7 @@ func (a *App) ListBookReviews(c *gin.Context) {
 	base.Count(&total)
 	var reviews []models.BookReview
 	a.DB.Preload("User", func(tx *gorm.DB) *gorm.DB {
-		return tx.Select("id", "username", "avatar", "bio", "github_url", "role")
+		return tx.Select("id", "username", "nickname", "name_display", "avatar", "bio", "github_url", "role")
 	}).Where("book_id = ? AND status = ?", book.ID, "published").
 		Order("updated_at DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&reviews)
 

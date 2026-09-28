@@ -14,10 +14,15 @@ import (
 var leaderboardPeriods = map[string]time.Duration{"week": 7 * 24 * time.Hour, "month": 30 * 24 * time.Hour}
 
 type leaderboardUser struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
+}
+
+func toLeaderboardUser(u models.User) leaderboardUser {
+	return leaderboardUser{ID: u.ID, Username: u.Username, Nickname: u.Nickname, DisplayName: u.PublicName(), Avatar: u.Avatar}
 }
 
 type leaderboardEntry struct {
@@ -32,6 +37,7 @@ type leaderboardRow struct {
 	XP           int64
 	Username     string
 	Nickname     string
+	NameDisplay  string
 	Avatar       string
 	CurrentLevel int
 }
@@ -49,10 +55,10 @@ func (b *behavior) leaderboardQuery(period string, minXP int) *gorm.DB {
 			Group("user_id")
 		return base.Joins("JOIN (?) s ON s.user_id = p.user_id", sums).
 			Where("s.xp >= ?", minXP).
-			Select("p.user_id, s.xp AS xp, u.username, u.nickname, u.avatar, p.current_level")
+			Select("p.user_id, s.xp AS xp, u.username, u.nickname, u.name_display, u.avatar, p.current_level")
 	}
 	return base.Where("p.lifetime_xp >= ?", minXP).
-		Select("p.user_id, p.lifetime_xp AS xp, u.username, u.nickname, u.avatar, p.current_level")
+		Select("p.user_id, p.lifetime_xp AS xp, u.username, u.nickname, u.name_display, u.avatar, p.current_level")
 }
 
 // Leaderboard GET /growth/leaderboard?period=all|week|month&page=&page_size=
@@ -79,7 +85,7 @@ func (b *behavior) Leaderboard(c *gin.Context) {
 	for i, r := range rows {
 		items = append(items, leaderboardEntry{
 			Rank: (page-1)*pageSize + i + 1, XP: r.XP,
-			User:  leaderboardUser{ID: r.UserID, Username: r.Username, Nickname: r.Nickname, Avatar: r.Avatar},
+			User:  toLeaderboardUser(models.User{ID: r.UserID, Username: r.Username, Nickname: r.Nickname, NameDisplay: r.NameDisplay, Avatar: r.Avatar}),
 			Level: levels[r.CurrentLevel],
 		})
 	}
@@ -99,7 +105,7 @@ func (b *behavior) myLeaderboardRank(u *models.User, period string, minXP int, l
 		db.Model(&models.ExperienceEvent{}).Where("user_id = ? AND created_at >= ?", u.ID, time.Now().Add(-window)).
 			Select("COALESCE(SUM(final_xp),0)").Scan(&xp)
 	}
-	me := gin.H{"xp": xp, "public": p.Public, "user": leaderboardUser{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar}, "level": levels[p.CurrentLevel]}
+	me := gin.H{"xp": xp, "public": p.Public, "user": toLeaderboardUser(*u), "level": levels[p.CurrentLevel]}
 	if xp >= int64(minXP) {
 		var ahead int64
 		db.Table("(?) AS lb", b.leaderboardQuery(period, minXP)).Where("lb.xp > ? AND lb.user_id <> ?", xp, u.ID).Count(&ahead)

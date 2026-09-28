@@ -49,10 +49,11 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 func changedFields(fields ...string) map[string]any { return map[string]any{"changed_fields": fields} }
 
 type userBrief struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
 }
 
 // caseItems 审核记录附带作者、书籍与章节 slug（便于跳转阅读页）。
@@ -68,9 +69,9 @@ func (b *behavior) caseItems(rows []Case) []gin.H {
 	}
 	users, books, docs := map[uint]userBrief{}, map[uint]gin.H{}, map[uint]string{}
 	var ul []models.User
-	db.Select("id, username, nickname, avatar").Where("id IN ?", userIDs).Find(&ul)
+	db.Select("id, username, nickname, name_display, avatar").Where("id IN ?", userIDs).Find(&ul)
 	for _, u := range ul {
-		users[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar}
+		users[u.ID] = userBrief{ID: u.ID, Username: u.Username, Nickname: u.Nickname, DisplayName: u.PublicName(), Avatar: u.Avatar}
 	}
 	var bl []models.Book
 	db.Select("id, title, slug").Where("id IN ?", bookIDs).Find(&bl)

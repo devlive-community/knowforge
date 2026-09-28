@@ -12,6 +12,7 @@ import {
   SearchIcon, ArrowLeftIcon, ChevronDownIcon, ListBulletIcon,
   ActivityIcon, ClockIcon,
 } from '@/components/icons'
+import { displayName } from '@/lib/users'
 
 export type AdminNavKey = 'system' | 'users' | 'books' | 'documents' | 'tags' | 'achievements' | 'growth' | 'membership' | 'payment' | 'paid' | 'moderation' | 'qa' | 'chapter-guide' | 'book-translations' | 'reports' | 'audit' | 'ai-usage' | 'tasks' | 'languages' | 'settings' | 'plugins' | 'upgrade'
 
@@ -40,8 +41,8 @@ function AdminUserMenu() {
         style={{ height: 'var(--control-height)' }}>
         {user.avatar
           ? <img src={user.avatar.startsWith('/') ? API_BASE + user.avatar : user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
-          : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-500 text-sm font-bold text-white">{user.username[0]?.toUpperCase()}</span>}
-        <span className="hidden max-w-[120px] truncate text-sm text-slate-700 sm:inline">{user.username}</span>
+          : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-500 text-sm font-bold text-white">{displayName(user)[0]?.toUpperCase()}</span>}
+        <span className="hidden max-w-[120px] truncate text-sm text-slate-700 sm:inline">{displayName(user)}</span>
         <ChevronDownIcon className="h-4 w-4 text-slate-400" />
       </button>
       {open && (

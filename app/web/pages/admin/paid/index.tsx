@@ -9,6 +9,7 @@ import { Badge, Button, Card, EmptyState, Field, Input, Loading, Pagination, Seg
 import { useTranslation } from '@/lib/i18n'
 import { formatPrice } from '@/lib/commerce'
 import { centsFromInput, inputFromCents } from '@/lib/membership'
+import { displayName } from '@/lib/users'
 
 type Tab = 'sales' | 'withdrawals' | 'settings'
 const TABS: Tab[] = ['sales', 'withdrawals', 'settings']
@@ -66,8 +67,8 @@ function SalesPanel() {
               {data.items.map(({ entry: e, author, buyer }) => (
                 <tr key={e.id}>
                   <td className="px-4 py-3"><div className="text-slate-800">{e.title}</div><div className="text-xs text-slate-400">{e.order_no}</div></td>
-                  <td className="px-4 py-3 text-slate-600">{author?.nickname || author?.username}</td>
-                  <td className="px-4 py-3 text-slate-600">{buyer?.nickname || buyer?.username}</td>
+                  <td className="px-4 py-3 text-slate-600">{displayName(author)}</td>
+                  <td className="px-4 py-3 text-slate-600">{displayName(buyer)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{money(e.gross_cents, e.currency)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-500">{money(e.commission_cents, e.currency)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">{formatDate(e.created_at)}</td>
@@ -129,7 +130,7 @@ function WithdrawalsPanel() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     {item.author && <UserAvatar user={item.author} />}
-                    <span className="font-medium text-slate-800">{item.author?.nickname || item.author?.username}</span>
+                    <span className="font-medium text-slate-800">{displayName(item.author)}</span>
                     <span className="text-lg font-bold tabular-nums">{formatPrice(w.amount_cents, w.currency, locale)}</span>
                     <Badge tone={w.status === 'pending' ? 'amber' : w.status === 'paid' ? 'emerald' : 'rose'}>{t(`paid.withdrawal.status.${w.status}`)}</Badge>
                   </div>
