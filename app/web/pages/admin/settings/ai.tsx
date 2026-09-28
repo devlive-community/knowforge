@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { api } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import SettingsLayout from '@/components/SettingsLayout'
+import ModelPricesCard from '@/components/admin/ModelPricesCard'
 import { Badge, Button, Input, Field, Select, Loading } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 
@@ -182,6 +183,8 @@ export default function SettingsAI() {
             </div>
             <p className="mt-3 text-xs text-slate-400">{t('admin.settings.ai.quotaNote')}</p>
           </div>
+
+          <ModelPricesCard />
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-slate-900">{t('admin.settings.ai.alertTitle')}</h2>

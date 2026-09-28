@@ -41,10 +41,12 @@ func init() {
 	})
 }
 
-// aiPricing 每百万 tokens 的单价（货币单位），未配置为 0（不估算费用）。
+// aiPricing 每百万 tokens 的单价（货币单位），未配置为 0（不估算费用）。Input/Output/Embed 为默认单价，
+// Models 为按模型单独设置的单价（见 ai_model_prices.go），优先于默认单价。
 type aiPricing struct {
 	Currency                        string
 	Input, Output, Embed, Translate float64 // Translate 为每百万字符
+	Models                          []aiModelPrice
 }
 
 func (a *App) aiPricing() aiPricing {
@@ -59,18 +61,23 @@ func (a *App) aiPricing() aiPricing {
 	if cur == "" {
 		cur = "USD"
 	}
-	return aiPricing{Currency: cur, Input: num("ai_price_input"), Output: num("ai_price_output"), Embed: num("ai_price_embed"), Translate: num("ai_price_translate")}
+	return aiPricing{Currency: cur, Input: num("ai_price_input"), Output: num("ai_price_output"), Embed: num("ai_price_embed"),
+		Translate: num("ai_price_translate"), Models: a.aiModelPrices()}
 }
 
-// costMicros 估算费用（货币单位的百万分之一）：tokens × 每百万单价 / 1e6 × 1e6。
-func (p aiPricing) costMicros(kind string, u ai.Usage, chars int64) int64 {
+// costMicros 估算费用（货币单位的百万分之一）：tokens × 每百万单价 / 1e6 × 1e6。模型单独设置了单价时按模型单价计。
+func (p aiPricing) costMicros(kind, model string, inputTokens, outputTokens, chars int64) int64 {
 	if kind == "translate" {
 		return int64(math.Round(float64(chars) * p.Translate))
 	}
-	if kind == "embed" {
-		return int64(math.Round(float64(u.InputTokens) * p.Embed))
+	input, output, embed := p.Input, p.Output, p.Embed
+	if mp, ok := matchModelPrice(p.Models, model); ok {
+		input, output, embed = mp.Input, mp.Output, mp.Input
 	}
-	return int64(math.Round(float64(u.InputTokens)*p.Input + float64(u.OutputTokens)*p.Output))
+	if kind == "embed" {
+		return int64(math.Round(float64(inputTokens) * embed))
+	}
+	return int64(math.Round(float64(inputTokens)*input + float64(outputTokens)*output))
 }
 
 // meteredLimit 按月计量权益的生效上限；不限或权益不可用（如对应服务未配置）时不做限制。
@@ -131,7 +138,7 @@ func (a *App) recordAIUsage(caller ai.Caller, kind, provider, model string, usag
 		row.Status, row.Error = "error", truncateRunes(callErr.Error(), 300)
 	} else {
 		row.InputTokens, row.OutputTokens, row.Estimated, row.Characters = usage.InputTokens, usage.OutputTokens, usage.Estimated, chars
-		row.CostMicros = pricing.costMicros(kind, usage, chars)
+		row.CostMicros = pricing.costMicros(kind, model, usage.InputTokens, usage.OutputTokens, chars)
 	}
 	if a.DB.Create(&row).Error == nil {
 		a.checkAIAlerts(&row)

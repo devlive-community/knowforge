@@ -369,6 +369,9 @@ func (a *App) Router() *gin.Engine {
 			// AI 服务（大模型）：站点级配置，插件经 Core.AIChat/AIEmbed 调用
 			admin.GET("/admin/ai", a.RequirePermission(authz.SiteUpdate), a.AdminGetAI)
 			admin.PUT("/admin/ai", a.RequirePermission(authz.SiteUpdate), a.AdminUpdateAI)
+			admin.GET("/admin/ai/model-prices", a.RequirePermission(authz.SiteUpdate), a.AdminGetAIModelPrices)
+			admin.PUT("/admin/ai/model-prices", a.RequirePermission(authz.SiteUpdate), a.AdminUpdateAIModelPrices)
+			admin.POST("/admin/ai/model-prices/recalculate", a.RequirePermission(authz.SiteUpdate), a.AdminRecalculateAICost)
 			admin.POST("/admin/ai/test", a.RequirePermission(authz.SiteUpdate), a.AdminTestAI)
 			admin.GET("/admin/ai/usage", a.RequirePermission(authz.SiteUpdate), a.AdminAIUsage)
 			admin.GET("/admin/ai/usage/logs", a.RequirePermission(authz.SiteUpdate), a.AdminAIUsageLogs)
