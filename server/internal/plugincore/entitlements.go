@@ -48,6 +48,33 @@ type EntitlementSource struct {
 	Priority int
 	// Resolve 返回该来源为用户给出的权益取值；exclusive 为 true 时更低优先级的来源不再参与。
 	Resolve func(core Core, u *models.User) (values map[string]int64, exclusive bool)
+	// Grants 列出该来源中各档（如会员方案、成长等级）为某项权益给出的取值（可选），
+	// 供其他插件向用户展示「哪些人能达到」，如作者选择「哪些会员免费阅读」。
+	Grants func(core Core, key string) []EntitlementGrant
+}
+
+// EntitlementGrant 某个来源中的一档为某项权益给出的取值。
+type EntitlementGrant struct {
+	Source string `json:"source"` // 来源键（base 表示所有用户的基础值）
+	Label  string `json:"label"`  // 展示名（如方案名、等级名）
+	Rank   int    `json:"rank"`   // 同一来源内的次序（如成长等级序号），用于「某等级及以上」
+	Value  int64  `json:"value"`
+}
+
+// EntitlementGrants 某项权益在各来源中的授予情况：基础值（大于 0 时）与各来源登记的档位。
+func EntitlementGrants(core Core, key string) []EntitlementGrant {
+	out := []EntitlementGrant{}
+	if def, ok := EntitlementDefByKey(key); ok && def.Base != nil {
+		if v := def.Base(core); v > 0 || v == Unlimited {
+			out = append(out, EntitlementGrant{Source: "base", Value: v})
+		}
+	}
+	for _, s := range entitlementSources {
+		if s.Grants != nil {
+			out = append(out, s.Grants(core, key)...)
+		}
+	}
+	return out
 }
 
 // ResolvedEntitlement 用户某项权益的生效值与来源（base | admin | 来源键 | unavailable）。

@@ -5,7 +5,7 @@ import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, ButtonLink } from '@/components/ui'
 import { checkoutAvailable, checkoutHref, formatPrice } from '@/lib/commerce'
-import type { PaidBookInfo } from '@/lib/paid'
+import { freeReadersText, type PaidBookInfo } from '@/lib/paid'
 
 // PaidBookCard 书籍详情页侧栏：付费书籍的价格、免费试读章节与购买/已解锁状态（付费内容插件启用且本书开启付费时显示）。
 export default function PaidBookCard({ bookId }: { bookId: number }) {
@@ -33,7 +33,7 @@ export default function PaidBookCard({ bookId }: { bookId: number }) {
         {info.chapter_price_cents > 0 && <li>{t('paid.book.chapterPrice')}：<span className="font-medium text-slate-900">{formatPrice(info.chapter_price_cents, info.currency, locale)}</span></li>}
         {info.free_chapters > 0 && <li>{t('paid.book.freeChapters', { n: info.free_chapters })}</li>}
         {info.discount_percent > 0 && <li className="text-amber-700">{t('paid.paywall.discount', { n: info.discount_percent })}</li>}
-        {info.free_tier > 0 && <li className="text-xs text-slate-500">{t('paid.paywall.freeTier', { n: info.free_tier })}{info.upgrade_link && <> · <a href={info.upgrade_link} className="text-primary-600 hover:underline">{t('paid.paywall.upgrade')}</a></>}</li>}
+        {info.free_tier > 0 && <li className="text-xs text-slate-500">{info.free_for?.length ? t('paid.paywall.freeFor', { who: freeReadersText(t, locale, info.free_for, info.free_tier) }) : t('paid.paywall.freeTier', { n: info.free_tier })}{info.upgrade_link && <> · <a href={info.upgrade_link} className="text-primary-600 hover:underline">{t('paid.paywall.upgrade')}</a></>}</li>}
       </ul>
       {!info.is_author && !info.can_read_all && info.book_price_cents > 0 && (
         <div className="mt-4">

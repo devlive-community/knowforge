@@ -87,7 +87,7 @@ func (b *behavior) BookInfo(c *gin.Context) {
 	b.core.OK(c, gin.H{
 		"enabled": true, "currency": s.Currency, "book_price_cents": pb.BookPriceCents, "book_final_cents": discounted(pb.BookPriceCents, disc),
 		"chapter_price_cents": pb.ChapterPriceCents, "free_chapters": pb.FreeChapters, "preview_percent": pb.PreviewPercent,
-		"free_tier": pb.FreeTier, "discount_percent": disc, "purchased_book": purchasedBook, "can_read_all": len(locked) == 0,
+		"free_tier": pb.FreeTier, "free_for": freeFor(b.core, pb), "discount_percent": disc, "purchased_book": purchasedBook, "can_read_all": len(locked) == 0,
 		"locked_doc_ids": locked, "upgrade_link": s.UpgradeLink, "is_author": editor,
 	})
 }
@@ -153,7 +153,8 @@ func (b *behavior) GetBookSettings(c *gin.Context) {
 			"effective_free": free, "effective_price_cents": price})
 	}
 	s := loadSettings(b.core)
-	b.core.OK(c, gin.H{"settings": pb, "docs": items, "currency": s.Currency, "max_price_cents": s.MaxPrice, "commission_percent": s.CommissionPercent})
+	b.core.OK(c, gin.H{"settings": pb, "docs": items, "currency": s.Currency, "max_price_cents": s.MaxPrice, "commission_percent": s.CommissionPercent,
+		"tier_grants": plugincore.EntitlementGrants(b.core, entAccessTier)}) // 「哪些会员 / 等级免费阅读」的选项
 }
 
 // UpdateBookSettings PUT /books/:id/paid-settings 保存付费设置（章节单独设置整体替换）。

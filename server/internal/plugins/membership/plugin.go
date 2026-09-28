@@ -53,7 +53,7 @@ func init() {
 	plugincore.RegisterBehavior(&behavior{})
 	plugincore.RegisterUserDataModels(&UserMembership{}, &Record{}, &Renewal{})
 	plugincore.RegisterLocalizedResource(resourceKind, map[string]int{"name": 120, "description": 500})
-	plugincore.RegisterEntitlementSource(plugincore.EntitlementSource{Key: sourceKey, Priority: sourcePriority, Resolve: resolveEntitlements})
+	plugincore.RegisterEntitlementSource(plugincore.EntitlementSource{Key: sourceKey, Priority: sourcePriority, Resolve: resolveEntitlements, Grants: planGrants})
 	plugincore.OnJobQueueSweep(sweep)
 
 	i18ntext.Register("notify.membership.granted", map[string]string{"zh-CN": "你已开通「{plan}」会员，有效期至 {date}", "en": "Your {plan} membership is active until {date}"})

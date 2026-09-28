@@ -216,9 +216,23 @@ func gateDocument(core plugincore.Core, u *models.User, book *models.Book, doc *
 		"book_id": book.ID, "doc_id": doc.ID, "currency": s.Currency, "discount_percent": disc,
 		"book_price_cents": pb.BookPriceCents, "book_final_cents": discounted(pb.BookPriceCents, disc),
 		"chapter_price_cents": price, "chapter_final_cents": discounted(price, disc),
-		"free_tier": pb.FreeTier, "logged_in": u != nil, "upgrade_link": s.UpgradeLink,
+		"free_tier": pb.FreeTier, "free_for": freeFor(core, pb), "logged_in": u != nil, "upgrade_link": s.UpgradeLink,
 	}
 	return plugincore.ContentAccess{Preview: makePreview(doc.Content, pb.PreviewPercent), Paywall: paywall}
+}
+
+// freeFor 可免费阅读本书的会员方案与成长等级（内容访问等级达到书的设置值）。
+func freeFor(core plugincore.Core, pb PaidBook) []plugincore.EntitlementGrant {
+	out := []plugincore.EntitlementGrant{}
+	if pb.FreeTier <= 0 {
+		return out
+	}
+	for _, g := range plugincore.EntitlementGrants(core, entAccessTier) {
+		if g.Value == plugincore.Unlimited || g.Value >= int64(pb.FreeTier) {
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 func orderIfNeeded(db *gorm.DB, pb PaidBook, bookID uint) []uint {

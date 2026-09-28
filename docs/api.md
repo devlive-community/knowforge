@@ -599,8 +599,8 @@ Authorization: Bearer kf_pat_…
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/paid/books/:id` | 书籍付费信息与当前读者状态 `{enabled, currency, book_price_cents, book_final_cents, chapter_price_cents, free_chapters, preview_percent, free_tier, discount_percent, purchased_book, can_read_all, locked_doc_ids[], upgrade_link, is_author}` | 可读该书 |
-| GET/PUT | `/books/:id/paid-settings` | 付费设置 `{enabled, book_price_cents, chapter_price_cents, free_chapters, preview_percent(0–50), free_tier(0–100), docs:[{doc_id, free, price_cents}]}`（章节设置整体替换）；GET 另含各已发布章节的生效结果、货币、单价上限与抽成比例。仅作者或管理员 | `paid:use` |
+| GET | `/paid/books/:id` | 书籍付费信息与当前读者状态（含 `free_for`：可免费阅读本书的会员方案 / 成长等级 `[{source,label,rank,value}]`） `{enabled, currency, book_price_cents, book_final_cents, chapter_price_cents, free_chapters, preview_percent, free_tier, discount_percent, purchased_book, can_read_all, locked_doc_ids[], upgrade_link, is_author}` | 可读该书 |
+| GET/PUT | `/books/:id/paid-settings` | 付费设置（响应含 `tier_grants`：各会员方案、成长等级与基础值给出的「内容访问等级」`[{source: membership\|level\|base,label,rank,value}]`，作者据此选择 `free_tier`「哪些读者免费阅读」） `{enabled, book_price_cents, chapter_price_cents, free_chapters, preview_percent(0–50), free_tier(0–100), docs:[{doc_id, free, price_cents}]}`（章节设置整体替换）；GET 另含各已发布章节的生效结果、货币、单价上限与抽成比例。仅作者或管理员 | `paid:use` |
 | GET | `/users/me/purchases?page=` | 我购买的书籍与章节 | `paid:use` |
 | GET | `/users/me/earnings?page=` | 收益：`balance_cents`（可提现）、累计售价/抽成/净收益、收益流水（sale / withdrawal / withdrawal_revert）、最近提现记录 | `paid:use` |
 | POST | `/users/me/withdrawals` | `{amount_cents, account}` 申请提现（不低于最低金额、不超过余额、同时仅一笔处理中），申请即冻结 | `paid:use` |

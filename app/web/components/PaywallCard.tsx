@@ -3,7 +3,7 @@ import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, ButtonLink } from '@/components/ui'
 import { checkoutAvailable, checkoutHref, formatPrice } from '@/lib/commerce'
-import type { Paywall } from '@/lib/paid'
+import { freeReadersText, type Paywall } from '@/lib/paid'
 
 // PaywallCard 章节未解锁时显示在试读内容下方：购买本章 / 购买全书、会员折扣与「免费阅读」入口。
 export default function PaywallCard({ paywall }: { paywall: Paywall }) {
@@ -41,7 +41,7 @@ export default function PaywallCard({ paywall }: { paywall: Paywall }) {
         </div>
         {paywall.free_tier > 0 && (
           <p className="mt-4 text-xs text-slate-500">
-            {t('paid.paywall.freeTier', { n: paywall.free_tier })}
+            {paywall.free_for?.length ? t('paid.paywall.freeFor', { who: freeReadersText(t, locale, paywall.free_for, paywall.free_tier) }) : t('paid.paywall.freeTier', { n: paywall.free_tier })}
             {paywall.upgrade_link && <> · <a href={paywall.upgrade_link} className="text-primary-600 hover:underline">{t('paid.paywall.upgrade')}</a></>}
           </p>
         )}

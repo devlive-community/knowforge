@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, confirmOffline, orderNoFromUrl, registerUser, unique } from './helpers'
+import { admin, api, confirmOffline, orderNoFromUrl, registerUser, signIn, unique } from './helpers'
 
 // 付费墙：付费章节只显示试读与付费墙；读者购买本章并付款后可阅读全文。
 
@@ -35,4 +35,29 @@ test('购买付费章节后解锁全文', async ({ page }) => {
   await page.goto(`/book/reader/${book.slug}/${paid.slug}`)
   await expect(page.getByText('结尾秘密：玫瑰花园。')).toBeVisible()
   await expect(page.getByText('本章为付费内容')).toHaveCount(0)
+})
+
+// 作者在付费设置中选择「哪些会员免费阅读」（选项来自会员方案的内容访问等级），读者的付费墙显示可免费阅读的方案。
+test('按会员方案选择免费阅读', async ({ page, browser }) => {
+  const planName = unique('高级版')
+  await admin('/admin/membership/plans', { body: { name: planName, entitlements: { 'content.access_tier': 3 }, prices: [{ duration_days: 30, price_cents: 3000 }] } })
+  const author = await registerUser('tierauthor')
+  const book = await api<{ id: number; slug: string }>('/books', { token: author.token, body: { title: unique('会员免费书 '), status: 'published', is_public: true } })
+  await api(`/books/${book.id}/documents`, { token: author.token, body: { title: '免费章', content: '免费', status: 'published', sort_order: 0 } })
+  const paid = await api<{ slug: string }>(`/books/${book.id}/documents`, { token: author.token, body: { title: '付费章', content: '付费', status: 'published', sort_order: 1 } })
+  await api(`/books/${book.id}/paid-settings`, { token: author.token, method: 'PUT', body: { enabled: true, chapter_price_cents: 300, free_chapters: 1 } })
+
+  await signIn(page, author)
+  await page.goto(`/book/settings/${book.slug}/paid`)
+  await page.getByRole('button', { name: '不免费（读者需购买）' }).click()
+  await page.getByRole('option', { name: `「${planName}」会员免费阅读` }).click()
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByText('已保存').first()).toBeVisible()
+
+  const ctx = await browser.newContext()
+  const readerPage = await ctx.newPage()
+  await signIn(readerPage, await registerUser('tierreader'))
+  await readerPage.goto(`/book/reader/${book.slug}/${paid.slug}`)
+  await expect(readerPage.getByText(`「${planName}」会员可免费阅读本书`)).toBeVisible()
+  await ctx.close()
 })

@@ -36,6 +36,22 @@ func activeMembership(db *gorm.DB, userID uint, now time.Time) (*UserMembership,
 	return &m, &p
 }
 
+// planGrants 启用中的方案为某项权益设置的取值（按方案排序）。
+func planGrants(core plugincore.Core, key string) []plugincore.EntitlementGrant {
+	if !core.PluginEnabled(plugins.KeyMembership) {
+		return nil
+	}
+	var plans []Plan
+	core.Gorm().Where("status = ?", "active").Order("sort_order ASC, id ASC").Find(&plans)
+	out := []plugincore.EntitlementGrant{}
+	for i, p := range plans {
+		if v, ok := p.Entitlements[key]; ok {
+			out = append(out, plugincore.EntitlementGrant{Source: sourceKey, Label: p.Name, Rank: i, Value: v})
+		}
+	}
+	return out
+}
+
 // resolveEntitlements 权益来源：有效会员独占（返回非 nil 即不再参考成长等级，未配置的键回退基础值）。
 func resolveEntitlements(core plugincore.Core, u *models.User) (map[string]int64, bool) {
 	if !core.PluginEnabled(plugins.KeyMembership) {

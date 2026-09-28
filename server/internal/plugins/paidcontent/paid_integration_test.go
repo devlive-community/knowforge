@@ -329,3 +329,48 @@ func TestPaidContentRefund(t *testing.T) {
 		t.Fatalf("两次退款应各有一条流水: %d", n)
 	}
 }
+
+// 「哪些会员免费阅读」：设置页列出会员方案与成长等级给出的内容访问等级；付费墙列出可免费阅读本书的方案。
+func TestFreeTierChoices(t *testing.T) {
+	e := newTestEnv(t) // 已启用会员插件
+	for _, body := range []string{
+		`{"name":"基础版","entitlements":{"content.access_tier":1},"prices":[]}`,
+		`{"name":"专业版","entitlements":{"content.access_tier":2},"prices":[]}`,
+		`{"name":"无等级","entitlements":{"books.max":10},"prices":[]}`,
+	} {
+		if status, p := e.admin(t, http.MethodPost, "/api/v1/admin/membership/plans", body); status != http.StatusOK {
+			t.Fatalf("创建方案失败: %d %v", status, p)
+		}
+	}
+	author, reader := e.user(t, "tier-author"), e.user(t, "tier-reader")
+	_, book := e.as(t, author, http.MethodPost, "/api/v1/books", `{"title":"会员免费","status":"published","is_public":true}`)
+	bookID := uint(data(book)["id"].(float64))
+	e.as(t, author, http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents", bookID), `{"title":"免费章","content":"免费","status":"published","sort_order":0}`)
+	_, paid := e.as(t, author, http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents", bookID), `{"title":"付费章","content":"付费内容","status":"published","sort_order":1}`)
+	paidID := uint(data(paid)["id"].(float64))
+
+	status, settings := e.as(t, author, http.MethodPut, fmt.Sprintf("/api/v1/books/%d/paid-settings", bookID),
+		`{"enabled":true,"chapter_price_cents":300,"free_chapters":1,"free_tier":2}`)
+	if status != http.StatusOK {
+		t.Fatalf("保存定价失败: %d %v", status, settings)
+	}
+	grants := map[string]float64{}
+	for _, g := range data(settings)["tier_grants"].([]any) {
+		m := g.(map[string]any)
+		grants[m["source"].(string)+":"+m["label"].(string)] = m["value"].(float64)
+	}
+	if grants["membership:基础版"] != 1 || grants["membership:专业版"] != 2 || len(grants) != 2 {
+		t.Fatalf("设置页应列出给出内容访问等级的方案: %v", grants)
+	}
+
+	// 付费墙：只列出达到 2 级的方案
+	_, doc := e.as(t, reader, http.MethodGet, fmt.Sprintf("/api/v1/documents/%d", paidID), "")
+	freeFor := data(doc)["paywall"].(map[string]any)["free_for"].([]any)
+	if len(freeFor) != 1 || freeFor[0].(map[string]any)["label"] != "专业版" {
+		t.Fatalf("付费墙应列出可免费阅读的方案: %v", freeFor)
+	}
+	_, info := e.as(t, reader, http.MethodGet, fmt.Sprintf("/api/v1/paid/books/%d", bookID), "")
+	if list := data(info)["free_for"].([]any); len(list) != 1 {
+		t.Fatalf("书籍付费信息应列出可免费阅读的方案: %v", list)
+	}
+}

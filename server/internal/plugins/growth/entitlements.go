@@ -33,5 +33,25 @@ func init() {
 			}
 			return values, false
 		},
+		// 各启用等级的累计取值（由低到高覆盖，与 Resolve 一致）
+		Grants: func(core plugincore.Core, key string) []plugincore.EntitlementGrant {
+			if !core.PluginEnabled(plugins.KeyGrowth) {
+				return nil
+			}
+			var levels []models.LevelDefinition
+			core.Gorm().Where("status = ?", "active").Order("level ASC").Find(&levels)
+			out := []plugincore.EntitlementGrant{}
+			var current int64
+			set := false
+			for _, lvl := range levels {
+				if v, ok := lvl.Entitlements[key]; ok {
+					current, set = v, true
+				}
+				if set {
+					out = append(out, plugincore.EntitlementGrant{Source: "level", Label: lvl.Name, Rank: lvl.Level, Value: current})
+				}
+			}
+			return out
+		},
 	})
 }

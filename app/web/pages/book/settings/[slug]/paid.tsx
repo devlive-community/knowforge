@@ -4,7 +4,8 @@ import BookSettingsLayout from '@/components/BookSettingsLayout'
 import { requireBookSettingsFeature } from '@/lib/book-settings'
 import { api } from '@/lib/api'
 import { useTranslation } from '@/lib/i18n'
-import { Button, Checkbox, EmptyState, Field, Input, Loading, Switch, useFeedback } from '@/components/ui'
+import { tierOptions, type TierGrant } from '@/lib/paid'
+import { Button, Checkbox, EmptyState, Field, Input, Loading, Select, Switch, useFeedback } from '@/components/ui'
 import { formatPrice } from '@/lib/commerce'
 import { centsFromInput, inputFromCents } from '@/lib/membership'
 
@@ -12,7 +13,7 @@ export const getServerSideProps = requireBookSettingsFeature('paid-content')
 
 interface PaidSettings { enabled: boolean; book_price_cents: number; chapter_price_cents: number; free_chapters: number; preview_percent: number; free_tier: number }
 interface DocRow { doc_id: number; title: string; parent_id: number | null; index: number; free: boolean; price_cents: number; effective_free: boolean; effective_price_cents: number }
-interface Resp { settings: PaidSettings; docs: DocRow[]; currency: string; max_price_cents: number; commission_percent: number }
+interface Resp { settings: PaidSettings; docs: DocRow[]; currency: string; max_price_cents: number; commission_percent: number; tier_grants: TierGrant[] }
 
 // 书籍设置 · 付费：整本/章节价格、免费试读章节与比例、内容访问等级免费读，以及逐章单独设置（免费/自定义价格）。
 export default function BookPaidSettings({ book }: InferGetServerSidePropsType<typeof getServerSideProps>) {
@@ -77,8 +78,9 @@ export default function BookPaidSettings({ book }: InferGetServerSidePropsType<t
             <Field label={t('paid.settings.preview')} hint={t('paid.settings.previewHint')}>
               <Input type="number" min={0} max={50} value={form.preview} onChange={(e) => setForm({ ...form, preview: clampInt(e.target.value, 50) })} trailing={<span className="text-xs text-slate-400">%</span>} />
             </Field>
-            <Field label={t('paid.settings.freeTier')} hint={t('paid.settings.freeTierHint')}>
-              <Input type="number" min={0} max={100} value={form.freeTier} onChange={(e) => setForm({ ...form, freeTier: clampInt(e.target.value, 100) })} />
+            <Field label={t('paid.settings.freeTier')} hint={(data.tier_grants || []).some((g) => g.source !== 'base' && g.value > 0) ? t('paid.settings.freeTierHint') : t('paid.settings.freeTierEmpty')}>
+              <Select value={String(form.freeTier)} onChange={(v) => setForm({ ...form, freeTier: Number(v) })}
+                options={tierOptions(t, locale, data.tier_grants || [], form.freeTier)} />
             </Field>
           </div>
 
