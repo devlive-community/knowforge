@@ -25,6 +25,13 @@ test('购买付费章节后解锁全文', async ({ page }) => {
   await page.goto(`/book/reader/${book.slug}/${paid.slug}`)
   await expect(page.getByText('本章为付费内容')).toBeVisible()
   await expect(page.getByText('结尾秘密：玫瑰花园。')).toHaveCount(0)
+  // 试读在服务端截断：页面源码（含注入给前端的数据）与接口响应中都没有付费部分，而不是由前端隐藏
+  expect(await page.content()).not.toContain('玫瑰花园')
+  const readerToken = await page.evaluate(() => localStorage.getItem('knowforge_token'))
+  const apiDoc = await api<{ content: string; paywall?: { locked: boolean } }>(`/documents/${paid.id}`, { token: readerToken || '' })
+  expect(apiDoc.paywall?.locked).toBe(true)
+  expect(apiDoc.content).not.toContain('玫瑰花园')
+  expect(apiDoc.content.length).toBeLessThan(40) // 8 段「付费开头。」+ 结尾共约 70 字，试读 30%
 
   await page.getByRole('link', { name: /购买本章/ }).click()
   await expect(page).toHaveURL(/\/pay\/checkout/)

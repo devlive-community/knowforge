@@ -173,28 +173,61 @@ func purchased(db *gorm.DB, userID, bookID, docID uint) bool {
 }
 
 // makePreview 试读内容：按段落截取约 percent% 的正文；代码块未闭合时补齐围栏。
+// makePreview 试读内容：按字数取正文的前 percent%（服务端截断，接口与页面都只拿到这部分）。
+// 整段放得下的段落完整保留；放不下的段落在额度内截断，尽量停在句末标点，并以「…」结尾；
+// 截断在代码块中时补齐结束标记，避免后续渲染错乱。整章只有一段时同样按比例截断。
 func makePreview(content string, percent int) string {
 	if percent <= 0 || content == "" {
 		return ""
 	}
-	total := utf8.RuneCountInString(content)
-	target := total * percent / 100
-	paras := strings.Split(content, "\n\n")
+	target := utf8.RuneCountInString(content) * percent / 100
+	if target <= 0 {
+		return ""
+	}
 	var b strings.Builder
-	for i, p := range paras {
-		if i > 0 && utf8.RuneCountInString(b.String()) >= target {
-			break
-		}
+	used := 0
+	for i, p := range strings.Split(content, "\n\n") {
+		sep := 0
 		if i > 0 {
-			b.WriteString("\n\n")
+			sep = 2
 		}
-		b.WriteString(p)
+		runes := []rune(p)
+		if used+sep+len(runes) <= target {
+			if sep > 0 {
+				b.WriteString("\n\n")
+			}
+			b.WriteString(p)
+			used += sep + len(runes)
+			continue
+		}
+		if remain := target - used - sep; remain > 0 {
+			if sep > 0 {
+				b.WriteString("\n\n")
+			}
+			b.WriteString(cutRunes(runes, remain))
+			b.WriteString("…")
+		}
+		break
 	}
 	out := b.String()
 	if strings.Count(out, "```")%2 == 1 {
 		out += "\n```"
 	}
 	return out
+}
+
+// cutRunes 取前 n 个字符，尽量停在后半段的句末标点或换行处。
+func cutRunes(r []rune, n int) string {
+	if n >= len(r) {
+		return string(r)
+	}
+	for i := n - 1; i >= n/2; i-- {
+		switch r[i] {
+		case '。', '！', '？', '；', '.', '!', '?', ';', '\n':
+			return string(r[:i+1])
+		}
+	}
+	return string(r[:n])
 }
 
 func gateDocument(core plugincore.Core, u *models.User, book *models.Book, doc *models.Document) plugincore.ContentAccess {
