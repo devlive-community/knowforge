@@ -105,7 +105,7 @@ func TestRedeemCodes(t *testing.T) {
 	var promo membership.RedeemCode
 	e.db.Where("batch_id = ?", promoBatch).First(&promo)
 	if okCount != 2 || promo.UsedCount != 2 {
-		t.Fatalf("活动码应恰好兑换 2 次: 成功 %d 次，计数 %d", okCount, promo.UsedCount)
+		t.Fatalf("活动码应恰好兑换 2 次: 成功 %d 次，计数 %d，状态 %v", okCount, promo.UsedCount, results)
 	}
 
 	// 整批停用、过期

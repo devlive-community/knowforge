@@ -68,7 +68,9 @@ func Open(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		if path == "" {
 			path = "./data/knowforge.db"
 		}
-		db, err := gorm.Open(sqlite.Open(path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"), &gorm.Config{})
+		// _txlock=immediate：事务开始即取得写锁，并发写事务按 busy_timeout 排队。默认的 deferred 事务先读后写时
+		// 可能无法升级为写锁而立即报 database is locked（busy_timeout 对这种情况不生效），并发兑换、下单等会偶发失败。
+		db, err := gorm.Open(sqlite.Open(path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate"), &gorm.Config{})
 		if err != nil {
 			// 纯 Go SQLite 驱动把"无法打开文件"(14) 误报为 out of memory，翻译成人话
 			return nil, fmt.Errorf("无法打开 SQLite 数据库文件 %s: %w（通常为目录不存在或无写入权限）", path, err)

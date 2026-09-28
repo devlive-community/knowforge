@@ -193,11 +193,19 @@ func (b *behavior) redeem(userID uint, raw string, now time.Time) (redeemed, err
 		case rc.UsedCount >= rc.MaxUses:
 			return errCodeUsedUp
 		}
-		if res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&RedeemUse{BatchID: batch.ID, UserID: userID, CodeID: rc.ID}); res.Error != nil || res.RowsAffected == 0 {
+		res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&RedeemUse{BatchID: batch.ID, UserID: userID, CodeID: rc.ID})
+		if res.Error != nil {
+			return res.Error // 数据库错误不能当成「已兑换过」
+		}
+		if res.RowsAffected == 0 {
 			return errCodeRedeemed
 		}
 		// 条件更新防止并发超用
-		if res := tx.Model(&RedeemCode{}).Where("id = ? AND used_count < max_uses", rc.ID).Update("used_count", gorm.Expr("used_count + 1")); res.RowsAffected == 0 {
+		res = tx.Model(&RedeemCode{}).Where("id = ? AND used_count < max_uses", rc.ID).Update("used_count", gorm.Expr("used_count + 1"))
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
 			return errCodeUsedUp
 		}
 		if batch.Kind == kindGift && rc.OwnerID != userID {
@@ -228,10 +236,16 @@ func (b *behavior) Redeem(c *gin.Context) {
 	}
 	r, err := b.redeem(u.ID, req.Code, now)
 	if err != nil {
-		if errors.Is(err, errCodeInvalid) {
+		switch {
+		case errors.Is(err, errCodeInvalid):
 			b.recordFail(u.ID, now)
+			b.core.Fail(c, http.StatusBadRequest, err.Error())
+		case errors.Is(err, errCodeUsedUp), errors.Is(err, errCodeExpired), errors.Is(err, errCodeDisabled), errors.Is(err, errCodeRedeemed),
+			errors.Is(err, errPlanNotFound), errors.Is(err, errPlanArchived), errors.Is(err, errBadDuration):
+			b.core.Fail(c, http.StatusBadRequest, err.Error())
+		default:
+			b.core.Fail(c, http.StatusInternalServerError, "兑换失败，请稍后重试")
 		}
-		b.core.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	b.notifyChange(u.ID, r.plan, r.action, r.m.ExpiresAt)
