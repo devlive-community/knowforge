@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -64,6 +65,9 @@ func (f *fakeAI) handler() http.Handler {
 			return
 		}
 		out := "EN:" + input
+		if strings.Contains(input, "丢占位") { // 模拟模型丢掉占位符
+			out = regexp.MustCompile(`⟦\d+⟧`).ReplaceAllString(out, "")
+		}
 		if strings.Contains(system, "JSON 字符串数组") {
 			var list []string
 			_ = json.Unmarshal([]byte(input), &list)
@@ -103,6 +107,18 @@ func (f *fakeAI) set(delay time.Duration, failOn string) {
 	f.mu.Lock()
 	f.delay, f.failOn = delay, failOn
 	f.mu.Unlock()
+}
+
+func (f *fakeAI) inputsContaining(text string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, in := range f.inputs {
+		if strings.Contains(in, text) {
+			out = append(out, in)
+		}
+	}
+	return out
 }
 
 func (f *fakeAI) seen(text string) bool {
@@ -234,7 +250,7 @@ func TestAIBookTranslation(t *testing.T) {
 	_, created := e.as(t, author, http.MethodPost, "/api/v1/books", `{"title":"存储原理","description":"讲解存储","status":"published","is_public":true}`)
 	bookID := uint(num(data(created)["id"]))
 	base := fmt.Sprintf("/api/v1/books/%d/ai-translate", bookID)
-	ch1 := e.doc(t, author, bookID, fmt.Sprintf(`{"title":"第一章","slug":"intro","content":%q,"status":"published"}`, "缓存可以加速读取。\n\n```go\n// 注释\nfunc main() {}\n```\n\n第二段内容。"))
+	ch1 := e.doc(t, author, bookID, fmt.Sprintf(`{"title":"第一章","slug":"intro","content":%q,"status":"published"}`, "---\ntitle: 缓存\nurl: https://example.com/cache\n---\n<!-- icon: bolt -->\n\n缓存可以加速读取。\n\n```go\n// 注释\nfunc main() {}\n```\n\n第二段内容。\n\n[children]\n\n<Card title=\"卡片\" icon=\"book\">\n卡片正文\n</Card>\n\n见 [[第二章]]。"))
 	ch2 := e.doc(t, author, bookID, `{"title":"第二章","slug":"index","content":"索引。","status":"draft","sort_order":1}`)
 	e.doc(t, author, bookID, fmt.Sprintf(`{"title":"第二章第一节","slug":"btree","content":"B+ 树。","status":"draft","parent_id":%d}`, ch2.ID))
 
@@ -289,11 +305,25 @@ func TestAIBookTranslation(t *testing.T) {
 	if intro.Title != "EN:第一章" || btree.ParentID == nil || *btree.ParentID != index.ID || index.SortOrder != 1 {
 		t.Fatalf("译本结构异常: %+v", bySlug)
 	}
-	if !strings.Contains(intro.Content, "EN:缓存可以加速读取。") || !strings.Contains(intro.Content, "```go\n// 注释\nfunc main() {}\n```") || !strings.Contains(intro.Content, "EN:第二段内容。") {
+	if !strings.Contains(intro.Content, "EN:缓存可以加速读取。") || !strings.Contains(intro.Content, "```go\n// 注释\nfunc main() {}\n```") || !strings.Contains(intro.Content, "第二段内容。") {
 		t.Fatalf("译文异常: %q", intro.Content)
 	}
-	if fake.seen("func main") {
-		t.Fatalf("代码块不应发给模型")
+	// 扩展语法原样保留；双向链接改写为 slug 形式，显示文字参与翻译
+	if !strings.HasPrefix(intro.Content, "---\ntitle: EN:缓存\nurl: https://example.com/cache\n---\n<!-- icon: bolt -->\n") || intro.Icon != "bolt" {
+		t.Fatalf("front-matter 应保持结构、只翻译 title: %q (icon %q)", intro.Content, intro.Icon)
+	}
+	for _, want := range []string{"\n[children]\n", "<Card title=\"卡片\" icon=\"book\">", "</Card>", "[[index|第二章]]"} {
+		if !strings.Contains(intro.Content, want) {
+			t.Fatalf("译文应保留 %q: %q", want, intro.Content)
+		}
+	}
+	for _, hidden := range []string{"func main", "children", "Card", "icon", "[[", "url:", "https://example.com/cache"} {
+		if fake.seen(hidden) {
+			t.Fatalf("%q 不应发给模型", hidden)
+		}
+	}
+	if sys := fake.lastSystem(); !strings.Contains(sys, "⟦数字⟧") {
+		t.Fatalf("系统提示应说明占位符: %s", sys)
 	}
 	if sys := fake.lastSystem(); !strings.Contains(sys, "缓存 → cache") || !strings.Contains(sys, "语气正式") || !strings.Contains(sys, "English") {
 		t.Fatalf("系统提示缺少术语表或要求: %s", sys)
@@ -368,6 +398,28 @@ func TestAIBookTranslation(t *testing.T) {
 		t.Fatalf("重试结果异常: %v", jobOf(done))
 	}
 
+	// 模型丢失占位符（格式/组件语法）：重试一次后该章记为失败，不保存损坏的译文
+	lossy := e.doc(t, author, bookID, `{"title":"第五章","slug":"lossy","content":"丢占位的章节 [children]。","status":"draft","sort_order":4}`)
+	_, p = e.as(t, author, http.MethodPost, base+"/jobs", fmt.Sprintf(`{"target_book_id":%d}`, targetID))
+	lossyJob := num(jobOf(data(p))["id"])
+	lossyDone := e.wait(t, author, lossyJob)
+	if jobOf(lossyDone)["status"] != "done" || num(jobOf(lossyDone)["failed"]) != 1 {
+		t.Fatalf("丢失占位符的章节应记为失败: %v", jobOf(lossyDone))
+	}
+	for _, it := range lossyDone["items"].([]any) {
+		if item := it.(map[string]any); item["status"] == "failed" && !strings.Contains(item["error"].(string), "格式与组件语法") {
+			t.Fatalf("失败原因应说明格式未保留: %v", item)
+		}
+	}
+	var lossyDst models.Document
+	if e.db.Where("book_id = ? AND slug = ?", targetID, "lossy").First(&lossyDst).Error == nil && strings.Contains(lossyDst.Content, "丢占位") {
+		t.Fatalf("不应保存损坏的译文: %q", lossyDst.Content)
+	}
+	if n := strings.Count(strings.Join(fake.inputsContaining("丢占位"), "\n"), "丢占位"); n != 2 {
+		t.Fatalf("应重试一次（共调用 2 次），实际 %d", n)
+	}
+	e.db.Delete(&models.Document{}, lossy.ID)
+
 	// 暂停与继续；事件流先推 snapshot，结束推 done
 	fake.set(400*time.Millisecond, "")
 	_, p = e.as(t, author, http.MethodPost, base+"/jobs", `{"target_lang":"ja","target_label":"日本語","title":"ストレージ"}`)
@@ -433,7 +485,7 @@ func TestAIBookTranslation(t *testing.T) {
 	}
 	var items int64
 	e.db.Model(&booktranslations.TranslateItem{}).Count(&items)
-	if items != 3+2+1+5 {
+	if items != 3+2+1+1+5 { // 新建、同步、失败章、丢失占位符的章、日文译本
 		t.Fatalf("任务章节数异常: %d", items)
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"knowforge/server/internal/ai"
 	"knowforge/server/internal/cluster"
 	"knowforge/server/internal/eventhub"
+	"knowforge/server/internal/mdmask"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/taskrun"
@@ -33,6 +34,9 @@ var (
 
 // segmentRunes 每次调用翻译的原文长度（按段落切分，单个段落或代码块不拆开）。
 const segmentRunes = 3000
+
+// errMarkupLost 译文反复未能保留占位符（原文的格式与组件语法），该章记为失败，不保存损坏的内容。
+var errMarkupLost = errors.New("译文未能保留原文的格式与组件语法，请重试该章节")
 
 var errCharsExhausted = errors.New("本月翻译字数已用完，下月恢复，或提升等级/开通会员获得更多额度；可稍后继续")
 
@@ -70,6 +74,16 @@ func (r *jobRun) append(text string) {
 	jobsHub.Publish(r.id, "delta", deltaEvent{ItemID: r.itemID, Seq: r.seq, Text: text})
 }
 
+// rewind 把当前章节的临时译文回退为 text（某一段重译时撤掉失败的输出），以 partial 推送给订阅者。
+func (r *jobRun) rewind(text string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.seq++
+	r.partial.Reset()
+	r.partial.WriteString(text)
+	jobsHub.Publish(r.id, "partial", deltaEvent{ItemID: r.itemID, Seq: r.seq, Text: text})
+}
+
 // Cancel 暂停任务（taskrun.Runner）。
 func (r *jobRun) Cancel() { r.cancel() }
 
@@ -95,7 +109,7 @@ func sourceHash(d *models.Document) string {
 func runeLen(s string) int64 { return int64(utf8.RuneCountInString(s)) }
 
 // splitSegments 按空行把 Markdown 切成若干段（围栏代码块内的空行不切），再合并为不超过 max 字的片段。
-// code 标记该片段是否只由代码块组成（原样保留，不翻译）。
+// code 标记该片段是否只由代码块或纯占位符组成（原样保留，不翻译）。
 type segment struct {
 	text string
 	code bool
@@ -128,9 +142,11 @@ func splitSegments(content string, max int) []segment {
 	}
 	flush()
 
+	// 代码块，以及掩码后只剩占位符的块（front-matter、[children]、组件标签行等）单独成段、原样保留，
+	// 不与正文合并发给模型，避免模型在这些结构前后插入文字
 	isCode := func(block string) bool {
 		t := strings.TrimSpace(block)
-		return (strings.HasPrefix(t, "```") && strings.HasSuffix(t, "```")) || (strings.HasPrefix(t, "~~~") && strings.HasSuffix(t, "~~~"))
+		return (strings.HasPrefix(t, "```") && strings.HasSuffix(t, "```")) || (strings.HasPrefix(t, "~~~") && strings.HasSuffix(t, "~~~")) || !mdmask.HasText(t)
 	}
 	var out []segment
 	var buf []string
@@ -175,7 +191,8 @@ func contentSystemPrompt(job *TranslateJob, bookTitle, docTitle string, terms []
 	b.WriteString("你是专业的书籍译者。把用户给出的 Markdown 文本翻译成「" + job.TargetLabel + "」。要求：\n")
 	b.WriteString("- 只输出译文，不要任何解释，不要用代码块包裹整个结果；\n")
 	b.WriteString("- 保持 Markdown 结构完全一致：标题层级、列表、表格、引用、强调、链接与图片的地址、HTML 标签以及 ::: 提示块等组件语法原样保留，只翻译其中的文字；\n")
-	b.WriteString("- 代码块与行内代码不翻译（代码块中的注释可以翻译）；\n")
+	b.WriteString("- 代码块与行内代码不翻译；\n")
+	b.WriteString("- " + mdmask.PromptRule + "；\n")
 	b.WriteString("- 译文准确、通顺、符合目标语言的表达习惯，专有名词前后一致。\n")
 	if job.Instructions != "" {
 		b.WriteString("作者的要求：" + job.Instructions + "\n")
@@ -220,6 +237,8 @@ type runner struct {
 	dst   *models.Book
 	terms []GlossaryTerm
 	run   *jobRun
+	// srcDocs 原书章节的「标题/slug（小写）→ slug」，解析双向链接用（首次使用时加载）
+	srcDocs map[string]string
 }
 
 // translate 翻译一段文字（按原文字符计入每月翻译字数；额度不足时返回 errCharsExhausted）。
@@ -389,6 +408,59 @@ func (r *runner) failItem(it *TranslateItem, msg string) {
 }
 
 // chapter 翻译一个章节的正文并写入译本章节（记录版本；已发布的章节交发布守卫审查）。
+// translateSegment 翻译一段已掩码的文字：流式推送还原后的译文；占位符不一致时撤回该段输出并重试一次，
+// 仍不一致返回 errMarkupLost。done 为本章已完成的段落（用于撤回时恢复临时译文）。
+func (r *runner) translateSegment(ctx context.Context, system string, masked *mdmask.Masked, text string, done []string, total *usageTotals) (string, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		sys := system
+		if attempt > 0 {
+			sys += "\n注意：上一次的译文丢失或改动了 ⟦数字⟧ 占位符。每个占位符都必须原样出现且只出现一次。"
+		}
+		var pending string
+		raw, err := r.translate(ctx, sys, text, func(delta string) {
+			ready, rest := masked.RestoreStream(pending + delta)
+			pending = rest
+			if ready != "" {
+				r.run.append(ready)
+			}
+		}, total)
+		if err != nil {
+			return "", err
+		}
+		if mdmask.CheckSegment(text, raw) == nil {
+			if out, err := masked.Restore(raw); err == nil {
+				if pending != "" {
+					r.run.append(pending)
+				}
+				return out, nil
+			}
+		}
+		prev := strings.Join(done, "\n\n")
+		if prev != "" {
+			prev += "\n\n"
+		}
+		r.run.rewind(prev)
+	}
+	return "", errMarkupLost
+}
+
+// wikiTarget 把双向链接的目标（原书章节标题或 slug）解析为章节 slug，译本中章节 slug 与原书一致，链接仍然有效。
+func (r *runner) wikiTarget(target string) (string, bool) {
+	if r.srcDocs == nil {
+		r.srcDocs = map[string]string{}
+		var docs []models.Document
+		r.db().Select("slug, title").Where("book_id = ?", r.src.ID).Find(&docs)
+		for _, d := range docs {
+			r.srcDocs[strings.ToLower(strings.TrimSpace(d.Title))] = d.Slug
+		}
+		for _, d := range docs { // slug 优先于同名标题
+			r.srcDocs[strings.ToLower(d.Slug)] = d.Slug
+		}
+	}
+	slug, ok := r.srcDocs[strings.ToLower(strings.TrimSpace(target))]
+	return slug, ok
+}
+
 func (r *runner) chapter(ctx context.Context, it *TranslateItem) error {
 	started := time.Now()
 	var src, dst models.Document
@@ -417,14 +489,32 @@ func (r *runner) chapter(ctx context.Context, it *TranslateItem) error {
 		title = truncate(strings.TrimSpace(out[0]), 255)
 	}
 	system := contentSystemPrompt(r.job, r.src.Title, src.Title, r.terms)
+	// 不可翻译的语法（组件标签、::: 块、[children] 等宏、链接地址、图标、代码、front-matter 的键……）先替换为占位符，
+	// 只把读者可见的文字交给模型，译文逐段校验占位符后还原。
+	masked := mdmask.Mask(src.Content, mdmask.Options{WikiTarget: r.wikiTarget})
+	// front-matter 的 title / description 与章节标题一样按短文本翻译，其余键原样保留
+	if texts := masked.FrontTexts(); len(texts) > 0 {
+		out, err := r.translateTitles(ctx, texts, &total)
+		if err != nil {
+			r.addJobUsage(total)
+			return err
+		}
+		masked.SetFrontTranslations(out)
+	}
 	var parts []string
-	for _, seg := range splitSegments(src.Content, segmentRunes) {
-		if seg.code {
-			parts = append(parts, seg.text)
-			r.run.append(seg.text + "\n\n")
+	for _, seg := range splitSegments(masked.Text, segmentRunes) {
+		if seg.code || !mdmask.HasText(seg.text) {
+			out, _ := masked.Restore(seg.text)
+			parts = append(parts, out)
+			r.run.append(out + "\n\n")
 			continue
 		}
-		out, err := r.translate(ctx, system, seg.text, r.run.append, &total)
+		out, err := r.translateSegment(ctx, system, masked, seg.text, parts, &total)
+		if errors.Is(err, errMarkupLost) {
+			r.addJobUsage(total)
+			r.failItem(it, err.Error())
+			return nil
+		}
 		if err != nil {
 			r.addJobUsage(total)
 			return err

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -102,11 +103,29 @@ func TestTranslationUsageRecorded(t *testing.T) {
 	}
 	server := httptest.NewServer(a.Router())
 	defer server.Close()
+	var seenInputs []string
 	// 假模型服务：OpenAI 兼容对话（返回用量）与 Google 翻译
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/chat/completions":
-			_, _ = w.Write([]byte(`{"model":"gpt-x","usage":{"prompt_tokens":50,"completion_tokens":12},"choices":[{"message":{"content":"Hello world"}}]}`))
+			var body struct {
+				Messages []struct {
+					Content string `json:"content"`
+				} `json:"messages"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			input := body.Messages[len(body.Messages)-1].Content
+			content := "Hello world"
+			if strings.Contains(input, "⟦") { // 含占位符：回显（模拟保留占位符的翻译），「丢占位」时丢掉占位符
+				seenInputs = append(seenInputs, input)
+				content = "EN " + input
+				if strings.Contains(input, "丢占位") {
+					content = regexp.MustCompile(`⟦\d+⟧`).ReplaceAllString(content, "")
+				}
+			}
+			raw, _ := json.Marshal(map[string]any{"model": "gpt-x", "usage": map[string]any{"prompt_tokens": 50, "completion_tokens": 12},
+				"choices": []map[string]any{{"message": map[string]any{"content": content}}}})
+			_, _ = w.Write(raw)
 		case "/language/translate/v2":
 			_, _ = w.Write([]byte(`{"data":{"translations":[{"translatedText":"Bonjour"}]}}`))
 		default:
@@ -228,5 +247,19 @@ func TestTranslationUsageRecorded(t *testing.T) {
 	req(http.MethodPut, "/api/v1/translation", map[string]any{"provider": "openai"}, admin)
 	if status, p := req(http.MethodPost, "/api/v1/translate", map[string]any{"text": "再来", "target_label": "English"}, token); status != http.StatusTooManyRequests {
 		t.Fatalf("超出每月 AI 用量应 429: %d %v", status, p)
+	}
+
+	// Markdown 语法不交给翻译，译文中原样还原；模型丢失占位符时重试后报错
+	a.SetSetting(cfgAIMonthlyTokens, "-1", "")
+	req(http.MethodPut, "/api/v1/translation", map[string]any{"provider": "openai", "api_base": fake.URL + "/v1"}, admin)
+	status, p = req(http.MethodPost, "/api/v1/translate", map[string]any{"text": "见 [文档](doc:setup)\n\n[children]", "target_label": "English"}, token)
+	if d, _ := p["data"].(map[string]any); status != http.StatusOK || d["text"] != "EN 见 [文档](doc:setup)\n\n[children]" {
+		t.Fatalf("应保留 Markdown 语法: %d %v", status, p)
+	}
+	if strings.Contains(strings.Join(seenInputs, "\n"), "children") || strings.Contains(strings.Join(seenInputs, "\n"), "doc:setup") {
+		t.Fatalf("语法不应交给模型: %v", seenInputs)
+	}
+	if status, p := req(http.MethodPost, "/api/v1/translate", map[string]any{"text": "丢占位 [children]", "target_label": "English"}, token); status != http.StatusBadGateway || !strings.Contains(p["message"].(string), "Markdown 语法") {
+		t.Fatalf("丢失占位符应报错: %d %v", status, p)
 	}
 }

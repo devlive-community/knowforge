@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"knowforge/server/internal/ai"
+	"knowforge/server/internal/mdmask"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 )
@@ -224,13 +225,32 @@ func (a *App) Translate(c *gin.Context) {
 	)
 	base := a.getSetting("translation_api_base")
 	model := a.getSetting("translation_model")
-	switch provider {
-	case "google":
-		translated, err = a.translateGoogleMetered(ctx, caller, apiKey, base, req.Text, googleTarget, chars)
-	case "openai", "claude":
-		translated, err = a.translateAI(ctx, provider, apiKey, base, model, req.Text, aiTarget, chars)
-	default:
-		err = errors.New("不支持的翻译方式")
+	// 不可翻译的 Markdown 语法（组件标签、::: 块、[children] 等宏、链接地址、代码……）替换为占位符后再翻译，
+	// 译文占位符不一致时重试一次，仍不一致则报错，不返回被改坏的内容。
+	masked := mdmask.Mask(req.Text, mdmask.Options{})
+	if !mdmask.HasText(masked.Text) {
+		ok(c, gin.H{"text": req.Text})
+		return
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		var raw string
+		switch provider {
+		case "google":
+			raw, err = a.translateGoogleMetered(ctx, caller, apiKey, base, masked.Text, googleTarget, chars)
+		case "openai", "claude":
+			raw, err = a.translateAI(ctx, provider, apiKey, base, model, masked.Text, aiTarget, chars)
+		default:
+			err = errors.New("不支持的翻译方式")
+		}
+		if err != nil {
+			break
+		}
+		if mdmask.CheckSegment(masked.Text, raw) == nil {
+			if translated, err = masked.Restore(raw); err == nil {
+				break
+			}
+		}
+		err = mdmask.ErrPlaceholders
 	}
 	if errors.Is(err, ai.ErrQuotaExceeded) {
 		fail(c, http.StatusTooManyRequests, err.Error())
@@ -315,5 +335,6 @@ func translateGoogle(ctx context.Context, apiKey, base, text, target string) (st
 
 func translationPrompt(target string) string {
 	return "You are a professional translator. Translate the user's text into " + target +
-		". Preserve Markdown formatting, code blocks and inline code verbatim. Output only the translation without any explanation."
+		". Preserve Markdown formatting, code blocks and inline code verbatim. Placeholders like ⟦12⟧ stand for formatting or code that must not be translated: " +
+		"keep every placeholder exactly as written, exactly once, in the same relative position. Output only the translation without any explanation."
 }
