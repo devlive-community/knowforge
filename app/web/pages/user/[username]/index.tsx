@@ -321,7 +321,7 @@ export default function UserHome({ site, siteUrl, profile, books, sort, achievem
         </section>
       </div>
 
-      <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} />
+      {!loading && data.total > 0 && <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} />}
       {bookListsEnabled(site) && <UserBookLists username={profile.username} />}
     </Container>
   )

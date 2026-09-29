@@ -245,7 +245,8 @@ export default function MyBooks() {
       )}
       </div>
 
-      <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} />
+      {/* 数据加载完成且有书籍时才显示分页（加载中不显示旧的分页） */}
+      {!loading && hasBooks && <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} />}
 
       {importOpen && <BookImportDialog onClose={() => setImportOpen(false)} onImported={load} />}
       {pdfImportBook && (
