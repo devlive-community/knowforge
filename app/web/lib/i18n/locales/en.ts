@@ -5212,4 +5212,5 @@ export const en: Record<string, string> = {
   'account.tokens.bookHintAll': 'The token can reach every book you can access',
   'account.tokens.bookHintOne': 'The token can only work on this book, with book-related permissions and no new books; other books look as they do to guests',
   'account.tokens.bookBadge': 'Only "{title}"',
+  'bookSettings.aiTranslate.viewBook': 'View book',
 }

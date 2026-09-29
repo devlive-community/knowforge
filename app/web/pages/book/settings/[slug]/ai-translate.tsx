@@ -112,6 +112,9 @@ function Overview({ bookId, bookTitle, overview, base, onChanged }: { bookId: nu
                     </p>
                   </div>
                   {tg.last_job && <ButtonLink size="sm" variant="ghost" href={`${base}?job=${tg.last_job.id}`}>{t('bookSettings.aiTranslate.lastJob')}</ButtonLink>}
+                  <ButtonLink size="sm" variant="outline" href={`/book/detail/${encodeURIComponent(tg.book.slug)}`}>
+                    <i className="fa-solid fa-book" aria-hidden="true" />{t('bookSettings.aiTranslate.viewBook')}
+                  </ButtonLink>
                   <ButtonLink size="sm" variant="outline" href={`/book/writer/${encodeURIComponent(tg.book.slug)}`}>{t('bookSettings.aiTranslate.review')}</ButtonLink>
                   <Button size="sm" loading={syncing === tg.book.id} disabled={!usable || pending === 0 || busy} onClick={() => void sync(tg.book.id)}>
                     {busy ? t('bookSettings.aiTranslate.busy') : t('bookSettings.aiTranslate.sync')}
@@ -330,6 +333,11 @@ function JobDetail({ jobId, overview, backHref, onChanged }: { jobId: number; ov
             {running && <Button size="sm" variant="outline" loading={busy === 'pause'} onClick={() => void act('pause')}>{t('bookSettings.aiTranslate.pause')}</Button>}
             {job.status === 'paused' && <Button size="sm" loading={busy === 'resume'} onClick={() => void act('resume')}>{t('bookSettings.aiTranslate.resume')}</Button>}
             {!running && job.failed > 0 && <Button size="sm" variant="outline" loading={busy === 'retry'} onClick={() => void act('retry')}>{t('bookSettings.aiTranslate.retry', { n: job.failed })}</Button>}
+            {target && (
+              <ButtonLink size="sm" variant="outline" href={`/book/detail/${encodeURIComponent(target.book.slug)}`}>
+                <i className="fa-solid fa-book" aria-hidden="true" />{t('bookSettings.aiTranslate.viewBook')}
+              </ButtonLink>
+            )}
             {target && <ButtonLink size="sm" variant="outline" href={`/book/writer/${encodeURIComponent(target.book.slug)}`}>{t('bookSettings.aiTranslate.review')}</ButtonLink>}
           </span>
         </div>

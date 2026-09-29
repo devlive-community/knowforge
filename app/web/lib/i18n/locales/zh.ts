@@ -5212,4 +5212,5 @@ export const zh: Record<string, string> = {
   'account.tokens.bookHintAll': '令牌可以访问你有权限的全部书籍',
   'account.tokens.bookHintOne': '令牌只能操作这本书，只能使用书籍相关的权限，也不能新建书籍；其他书籍按游客可见',
   'account.tokens.bookBadge': '仅限《{title}》',
+  'bookSettings.aiTranslate.viewBook': '查看书籍',
 }
