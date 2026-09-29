@@ -532,7 +532,7 @@ func (b *behavior) runJob(ctx context.Context, jobID uint, run *jobRun) {
 			r.failItem(&it, "AI 服务暂时不可用，可稍后重试")
 		}
 	}
-	b.stopJob(job.ID, jobDone, "")
+	// 先通知再标记完成：看到任务已完成的一方（页面、我的任务）随即能查到完成通知
 	db.First(&dst, dst.ID) // 目录阶段可能已把书名换成译名
 	var final TranslateJob
 	if db.First(&final, job.ID).Error == nil {
@@ -540,6 +540,7 @@ func (b *behavior) runJob(ctx context.Context, jobID uint, run *jobRun) {
 			map[string]string{"book": dst.Title, "done": fmt.Sprint(final.Done), "failed": fmt.Sprint(final.Failed)},
 			map[string]any{"link": fmt.Sprintf("/book/settings/%s/ai-translate?job=%d", src.Slug, final.ID)})
 	}
+	b.stopJob(job.ID, jobDone, "")
 }
 
 // interrupted 任务被暂停（作者暂停、额度不足）：进行中的章节回到待翻译，可继续。
