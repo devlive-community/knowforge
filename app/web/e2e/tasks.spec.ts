@@ -20,7 +20,7 @@ test('后台导入与我的任务', async ({ page }) => {
   await page.getByRole('button', { name: '导入书籍' }).click()
   const dialog = page.getByRole('dialog', { name: /导入/ })
   await dialog.getByRole('tab', { name: /书籍压缩包/ }).click()
-  await dialog.locator('input[type="file"]').setInputFiles({ name: 'book.zip', mimeType: 'application/zip', buffer: zip })
+  await dialog.locator('input[type="file"]').setInputFiles({ name: 'tasks-import.zip', mimeType: 'application/zip', buffer: zip })
   const imported = unique('导入结果 ')
   await dialog.getByPlaceholder(/./).last().fill(imported)
   await dialog.getByRole('button', { name: '开始导入' }).click()
