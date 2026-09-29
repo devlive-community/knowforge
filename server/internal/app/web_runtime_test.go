@@ -145,3 +145,41 @@ func TestWithEnvironmentReplacesValues(t *testing.T) {
 		t.Fatalf("unexpected environment: %v", env)
 	}
 }
+
+func TestCleanupStaleWebRuntimesKeepsOnlyActiveManagedDirectory(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	activeName := "0123456789abcdef"
+	staleNames := []string{
+		"1111111111111111",
+		"2222222222222222.tmp-1234",
+	}
+	keptNames := []string{
+		activeName,
+		"manual-backup",
+		"3333333333333333.tmp-not-a-pid",
+		"ABCDEF0123456789",
+	}
+	for _, name := range append(staleNames, keptNames...) {
+		if err := os.MkdirAll(filepath.Join(runtimeRoot, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	removed, err := cleanupStaleWebRuntimes(runtimeRoot, filepath.Join(runtimeRoot, activeName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != len(staleNames) {
+		t.Fatalf("removed %d directories, want %d", removed, len(staleNames))
+	}
+	for _, name := range staleNames {
+		if _, err := os.Stat(filepath.Join(runtimeRoot, name)); !os.IsNotExist(err) {
+			t.Fatalf("stale runtime %q still exists: %v", name, err)
+		}
+	}
+	for _, name := range keptNames {
+		if _, err := os.Stat(filepath.Join(runtimeRoot, name)); err != nil {
+			t.Fatalf("kept directory %q is unavailable: %v", name, err)
+		}
+	}
+}

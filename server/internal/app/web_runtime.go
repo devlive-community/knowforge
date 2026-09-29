@@ -175,9 +175,9 @@ func (w *webRuntime) Start(apiPort int) error {
 	cmd := exec.Command(w.nodePath, "server.js")
 	cmd.Dir = w.runtimeDir
 	cmd.Env = withEnvironment(os.Environ(), map[string]string{
-		"NODE_ENV":            "production",
-		"PORT":                strconv.Itoa(w.port),
-		"HOSTNAME":            "127.0.0.1",
+		"NODE_ENV":          "production",
+		"PORT":              strconv.Itoa(w.port),
+		"HOSTNAME":          "127.0.0.1",
 		"KNOWFORGE_API_URL": fmt.Sprintf("http://127.0.0.1:%d", apiPort),
 	})
 	cmd.Stdout = os.Stdout
@@ -189,6 +189,16 @@ func (w *webRuntime) Start(apiPort int) error {
 	w.running.Store(true)
 	log.Printf("内嵌 Web 已启动: Node.js %s, http://127.0.0.1:%d", w.nodeVersion, w.port)
 	go func() {
+		removed, err := cleanupStaleWebRuntimes(filepath.Dir(w.runtimeDir), w.runtimeDir)
+		if err != nil {
+			log.Printf("清理旧 Web 运行时未完全成功（已删除 %d 个）: %v", removed, err)
+			return
+		}
+		if removed > 0 {
+			log.Printf("已清理 %d 个旧 Web 运行时目录", removed)
+		}
+	}()
+	go func() {
 		err := cmd.Wait()
 		w.errMu.Lock()
 		w.waitErr = err
@@ -197,6 +207,52 @@ func (w *webRuntime) Start(apiPort int) error {
 		close(w.done)
 	}()
 	return nil
+}
+
+func cleanupStaleWebRuntimes(runtimeRoot, activeRuntimeDir string) (int, error) {
+	entries, err := os.ReadDir(runtimeRoot)
+	if err != nil {
+		return 0, err
+	}
+	activeName := filepath.Base(filepath.Clean(activeRuntimeDir))
+	removed := 0
+	var cleanupErr error
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == activeName || !entry.IsDir() || !isManagedWebRuntimeDir(name) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(runtimeRoot, name)); err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("删除 %s: %w", name, err))
+			continue
+		}
+		removed++
+	}
+	return removed, cleanupErr
+}
+
+func isManagedWebRuntimeDir(name string) bool {
+	bundleID := name
+	if before, after, found := strings.Cut(name, ".tmp-"); found {
+		if after == "" {
+			return false
+		}
+		for _, ch := range after {
+			if ch < '0' || ch > '9' {
+				return false
+			}
+		}
+		bundleID = before
+	}
+	if len(bundleID) != 16 {
+		return false
+	}
+	for _, ch := range bundleID {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (w *webRuntime) Stop(ctx context.Context) {
