@@ -25,6 +25,11 @@ describe('ai-translate 事件合并', () => {
     expect(applyDelta(base, { item_id: 3, seq: 8, text: 'New' }).current).toEqual({ item_id: 3, seq: 8, text: 'New' })
   })
 
+  it('快照中当前章节尚无译文（text 缺省）时，delta 不会拼出 undefined', () => {
+    const snap = { ...base, current: { item_id: 2, seq: 5 } as JobState['current'] }
+    expect(applyDelta(snap, { item_id: 2, seq: 6, text: '## 优化' }).current?.text).toBe('## 优化')
+  })
+
   it('进度按已完成与失败计算', () => {
     expect(progressPercent({ total: 4, done: 1, failed: 1 })).toBe(50)
     expect(progressPercent({ total: 0, done: 0, failed: 0 })).toBe(0)

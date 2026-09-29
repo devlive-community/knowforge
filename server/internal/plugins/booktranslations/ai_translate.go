@@ -49,7 +49,7 @@ type jobRun struct {
 type deltaEvent struct {
 	ItemID uint   `json:"item_id"`
 	Seq    int    `json:"seq"`
-	Text   string `json:"text,omitempty"`
+	Text   string `json:"text"` // 始终输出：快照中当前章节还没有译文时为空串（省略会让前端拼接出 undefined）
 }
 
 // begin 开始翻译一个章节：清空临时译文并推送 reset。

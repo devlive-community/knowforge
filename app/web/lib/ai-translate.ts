@@ -108,7 +108,7 @@ export function applyReset(state: JobState, ev: { item_id: number; seq: number }
 export function applyDelta(state: JobState, ev: { item_id: number; seq: number; text?: string }): JobState {
   const cur = state.current
   if (state.current_sync || ev.seq <= (cur?.seq ?? 0)) return state
-  const text = cur && cur.item_id === ev.item_id ? cur.text : ''
+  const text = cur && cur.item_id === ev.item_id ? cur.text || '' : '' // 快照中尚无译文时 text 可能缺省
   return { ...state, current: { item_id: ev.item_id, seq: ev.seq, text: text + (ev.text || '') } }
 }
 

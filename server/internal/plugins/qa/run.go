@@ -32,7 +32,7 @@ type runState struct {
 
 type deltaEvent struct {
 	Seq  int    `json:"seq"`
-	Text string `json:"text,omitempty"`
+	Text string `json:"text"`
 }
 
 // append 追加一个文本片段并推送 delta（在锁内推送，保证与快照一致）。
