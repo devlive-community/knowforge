@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next'
 import { serverApi, getSiteConfig, siteUrlFrom, authHeaderFrom, excerptFrom, isInstalled, getSSRUser } from '@/lib/server-api'
+import { parseDocMeta, safeMetaUrl } from '@/lib/doc-meta'
 import { renderMarkdown, extractHeadings, bindMarkdownInteractivity, fillChildrenToc, wikiDocsFromTree } from '@/lib/markdown'
 import { API_BASE, formatDate, formatNumber, api } from '@/lib/api'
 import { resolveMediaUrl } from '@/lib/media'
@@ -189,6 +190,9 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
 
   const flat = useMemo(() => flatten(tree), [tree])
   const headings = useMemo(() => extractHeadings(doc?.content), [doc])
+  // 章节元数据（文档开头的 front-matter）：简介与原文链接显示在标题下方，页面标题与简介用于 SEO
+  const docMeta = useMemo(() => parseDocMeta(doc?.content).meta, [doc])
+  const sourceUrl = safeMetaUrl(docMeta.url)
 
   // 目录搜索：按标题过滤（命中节点或其任意子孙命中即保留），搜索时全部展开命中分支
   const [tocSearch, setTocSearch] = useState('')
@@ -412,8 +416,8 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
     <div className="flex h-screen flex-col overflow-hidden bg-white">
       <Seo
         siteName={siteName}
-        title={doc ? `${chapterPrefix}${doc.title} · ${book.title}` : book.title}
-        description={doc ? excerptFrom(doc.content || book.description, 160) : book.description}
+        title={doc ? `${chapterPrefix}${docMeta.title || doc.title} · ${book.title}` : book.title}
+        description={doc ? (docMeta.description || excerptFrom(parseDocMeta(doc.content).body || book.description, 160)) : book.description}
         url={docUrl}
         image={book.cover_image || undefined}
         jsonLd={jsonLd}
@@ -540,6 +544,7 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
                   {book.watermark_enabled && book.watermark_text && ((site as { feature_plugins?: string[] }).feature_plugins || []).includes('watermark') && <WatermarkLayer text={book.watermark_text} />}
                   {parentDoc && <div className="mb-1 text-sm font-medium text-primary-600">{chapterPrefix}{parentDoc.title}</div>}
                   <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">{doc.title}</h1>
+                  {docMeta.description && <p className="mt-3 text-base leading-7 text-slate-500" data-testid="doc-meta-description">{docMeta.description}</p>}
                   <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
                     <UserAvatar user={author} size="h-6 w-6" />
                     <span className="text-slate-600">{displayName(author) || t('reader.anonymous')}</span>
@@ -551,6 +556,12 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
                         className="flex items-center gap-1 text-primary-600 transition-colors hover:text-primary-700">
                         <i className="fa-solid fa-pen-to-square text-xs" aria-hidden="true" /> {t('reader.edit')}
                       </Link>
+                    )}
+                    {sourceUrl && (
+                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer nofollow"
+                        className="flex items-center gap-1 text-slate-500 transition-colors hover:text-primary-600">
+                        <i className="fa-solid fa-arrow-up-right-from-square text-xs" aria-hidden="true" /> {t('reader.meta.source')}
+                      </a>
                     )}
                     <ReportButton targetType="document" targetId={doc.id} />
                   </div>

@@ -5251,4 +5251,10 @@ export const zh: Record<string, string> = {
   'writer.snip.cardTitle1': '卡片标题一',
   'writer.snip.cardTitle2': '卡片标题二',
   'writer.snip.cardBody': '卡片说明',
+  'writer.meta.previewTitle': '章节元数据',
+  'writer.meta.title': '标题',
+  'writer.meta.description': '简介',
+  'writer.meta.url': '原文',
+  'writer.meta.icon': '图标',
+  'reader.meta.source': '原文',
 }

@@ -2,6 +2,7 @@ import { marked, type TokenizerAndRendererExtension, type Tokens, type Renderer 
 import hljs from 'highlight.js'
 import DOMPurify from 'isomorphic-dompurify'
 import { markdownExtensions } from './markdown-extensions'
+import { parseDocMeta } from './doc-meta'
 
 type AlertKind = 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION'
 
@@ -37,8 +38,12 @@ const alertExtension: TokenizerAndRendererExtension = {
   },
 }
 
-// 章节内标题序号：为 H2/H3 生成稳定 id（h-1, h-2…），供“本章目录”锚点跳转
+// 章节内标题序号：为 H2/H3 生成稳定 id（h-1, h-2…），供“本章目录”锚点跳转；
+// 其他级别（H1、H4–H6）另行编号（hx-1…），不影响已有 H2/H3 锚点。
 let headingSeq = 0
+let otherHeadingSeq = 0
+// 本次渲染产生的全部标题（按出现顺序），供 [toc] 生成目录
+let renderedHeadings: Heading[] = []
 
 // 渲染时的当前书籍 slug，用于把 `doc:` 内部链接补全为阅读地址（渲染是同步的，模块级变量安全）
 let currentBookSlug = ''
@@ -103,13 +108,11 @@ const renderer: Renderer = new marked.Renderer()
 // 标题内的永久链接锚点：<a …>#</a> / 零宽字符 / 图标符号，指向页内锚点（未经清理的旧采集内容）
 const headingPermalinkRe = /<a\b[^>]*href="[^"]*#[^"]*"[^>]*>(?:\s|&#8203;|&#x200b;|&#35;|[​-‍⁠﻿#🔗¶§↩⚓†‡])*<\/a>/giu
 
-renderer.heading = (rawText: string, level: number): string => {
+renderer.heading = (rawText: string, level: number, raw: string): string => {
   const text = rawText.replace(headingPermalinkRe, '').trim()
-  if (level === 2 || level === 3) {
-    const id = `h-${++headingSeq}`
-    return `<h${level} id="${id}" class="md-h">${text}</h${level}>`
-  }
-  return `<h${level}>${text}</h${level}>`
+  const id = level === 2 || level === 3 ? `h-${++headingSeq}` : `hx-${++otherHeadingSeq}`
+  renderedHeadings.push({ level, text: headingPlainText(raw || ''), id })
+  return `<h${level} id="${id}" class="md-h">${text}</h${level}>`
 }
 
 renderer.code = (code: string, infostring: string | undefined, _escaped: boolean): string => {
@@ -152,14 +155,17 @@ renderer.link = (href: string | null, _title: string | null, text: string): stri
 
 marked.use({ renderer, extensions: [alertExtension, wikiLinkExtension, ...markdownExtensions], breaks: true, gfm: true })
 
-// buildTocHtml 用 H2/H3 标题构建 [toc] 占位的目录内容（自身产出的安全 HTML）
+const tocIndent = ['', 'pl-4', 'pl-8', 'pl-12', 'pl-16', 'pl-20']
+
+// buildTocHtml 用本章全部标题（H1–H6）构建 [toc] 占位的目录内容（自身产出的安全 HTML），按相对最高一级的层级缩进
 function buildTocHtml(headings: Heading[]): string {
-  if (!headings.length) return ''
-  const items = headings
+  const list = headings.filter((h) => h.text)
+  if (!list.length) return ''
+  const top = Math.min(...list.map((h) => h.level))
+  const items = list
     .map((h) => {
       const text = h.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      const indent = h.level === 3 ? 'pl-5' : ''
-      return `<li class="${indent}"><a href="#${h.id}" class="text-slate-600 hover:text-primary-600">${text}</a></li>`
+      return `<li class="${tocIndent[Math.min(h.level - top, 5)]}"><a href="#${h.id}" class="text-slate-600 hover:text-primary-600">${text}</a></li>`
     })
     .join('')
   return (
@@ -175,13 +181,17 @@ function buildTocHtml(headings: Heading[]): string {
 export function renderMarkdown(source: string | null | undefined, options?: { bookSlug?: string; docs?: WikiDoc[] }): string {
   if (!source) return ''
   headingSeq = 0 // 与 extractHeadings 保持相同的编号顺序
+  otherHeadingSeq = 0
+  renderedHeadings = []
   currentBookSlug = options?.bookSlug || ''
   currentDocs = options?.docs || null
-  const html = marked.parse(source, { async: false }) as string
+  // 开头的章节元数据（front-matter / 图标注释）不作为正文渲染
+  const html = marked.parse(parseDocMeta(source).body, { async: false }) as string
+  const headings = renderedHeadings
   let out = DOMPurify.sanitize(html, { ADD_ATTR: ['target', 'rel', 'id'] })
-  // [toc] 扩展：用文档标题填充占位（须与 marked 解析使用同一份 source）
+  // [toc] 扩展：用本次渲染产生的全部标题填充占位
   if (out.includes('data-md-toc')) {
-    out = out.replace(/<div[^>]*data-md-toc[^>]*>\s*<\/div>/g, buildTocHtml(extractHeadings(source)))
+    out = out.replace(/<div[^>]*data-md-toc[^>]*>\s*<\/div>/g, buildTocHtml(headings))
   }
   return out
 }
@@ -248,7 +258,7 @@ export function extractHeadings(source: string | null | undefined): Heading[] {
   const headings: Heading[] = []
   let inCode = false
   let seq = 0
-  source.split('\n').forEach((line) => {
+  parseDocMeta(source).body.split('\n').forEach((line) => {
     if (/^```/.test(line.trim())) inCode = !inCode
     if (inCode) return
     const m = /^(#{2,3})\s+(.+)$/.exec(line)

@@ -217,7 +217,7 @@ nav li{margin:.4em 0;}`, setting.FontSize, codeBg, codeFg)
 			continue
 		}
 		idx++
-		content, docImages := a.rewriteUploadsToLocal(doc.Content)
+		content, docImages := a.rewriteUploadsToLocal(docBody(doc.Content)) // 开头的章节元数据不导出
 		for n, d := range docImages {
 			images[n] = d
 		}

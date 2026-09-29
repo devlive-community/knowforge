@@ -23,6 +23,8 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     # BookCard/WriterWorkbench/detail: t(`book.status.${status}`)，BookStatus 共 5 种
     'book.status.': ['draft', 'in_progress', 'published', 'completed', 'archived'],
     # 我的任务: t(`userTasks.kind|status|tab|empty.${x}`)（任务种类与状态见 lib/user-tasks.ts）
+    # WriterWorkbench 预览的章节元数据卡片: t(`writer.meta.${key}`)
+    'writer.meta.': ['title', 'description', 'url', 'icon'],
     'userTasks.kind.': ['zipImport', 'pdfImport', 'imageLocalize', 'translate', 'siteCrawl', 'aiWriter', 'chapterGuide'],
     'userTasks.status.': ['queued', 'running', 'paused', 'done', 'failed', 'canceled'],
     'userTasks.tab.': ['active', 'done', 'failed'],

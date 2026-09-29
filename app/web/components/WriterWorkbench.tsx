@@ -5,6 +5,7 @@ import { api, formatDate, API_BASE, getToken } from '@/lib/api'
 import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { renderMarkdown, bindMarkdownInteractivity, headingPlainText, wikiDocsFromTree } from '@/lib/markdown'
+import { parseDocMeta, setDocIcon as setDocIconMeta, type DocMeta } from '@/lib/doc-meta'
 import Seo from '@/components/Seo'
 import DocTreeIcon from '@/components/DocTreeIcon'
 import { Button, Input, Textarea, Select, Field, Badge, Checkbox, ContextMenu, ContextMenuItem, EmptyState, Loading, SegmentedTabs, Switch, Tooltip, Modal, useFeedback } from '@/components/ui'
@@ -116,6 +117,17 @@ const SLASH_COMMANDS: { key: string; labelKey: string; kw: string }[] = [
   { key: 'import-md', labelKey: 'writer.slash.importMarkdown', kw: 'import markdown md file upload 导入 文件' },
   { key: 'link', labelKey: 'writer.slash.link', kw: 'link url href' },
 ]
+
+// metaPreviewHtml 预览顶部的章节元数据卡片（元数据本身不作为正文渲染）；值均经转义
+function metaPreviewHtml(meta: DocMeta, t: (key: string) => string): string {
+  const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const rows = (['title', 'description', 'url', 'icon'] as const)
+    .filter((k) => meta[k])
+    .map((k) => `<div class="flex gap-3"><dt class="w-16 shrink-0 text-slate-400">${esc(t(`writer.meta.${k}`))}</dt><dd class="m-0 min-w-0 break-all text-slate-700">${esc(meta[k] || '')}</dd></div>`)
+  if (!rows.length) return ''
+  return `<div class="not-prose mb-5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs" data-doc-meta="1">` +
+    `<div class="mb-1.5 font-semibold text-slate-500">${esc(t('writer.meta.previewTitle'))}</div><dl class="m-0 space-y-1">${rows.join('')}</dl></div>`
+}
 
 // Writer：书籍与章节编辑器（三栏工作台布局）
 export default function Writer({ user }: WriterProps) {
@@ -274,11 +286,11 @@ export default function Writer({ user }: WriterProps) {
   useEffect(() => {
     if (!preview && !splitPreview) return
     const timer = setTimeout(() => {
-      setPreviewHtml(renderMarkdown(content, { bookSlug, docs: wikiDocs }))
+      setPreviewHtml(metaPreviewHtml(parseDocMeta(content).meta, t) + renderMarkdown(content, { bookSlug, docs: wikiDocs }))
       if (previewRef.current) bindMarkdownInteractivity(previewRef.current)
     }, 300)
     return () => clearTimeout(timer)
-  }, [content, preview, splitPreview, bookSlug, wikiDocs])
+  }, [content, preview, splitPreview, bookSlug, wikiDocs, t])
 
   // 预览里的任务复选框可点击：点击第 idx 个复选框即翻转正文里第 idx 个任务项标记。
   useEffect(() => {
@@ -927,13 +939,12 @@ export default function Writer({ user }: WriterProps) {
     setInsertMenuOpen(false)
   }
 
-  // 元数据：章节图标（<!-- icon: xxx -->）。只识别「文档开头」的元数据（^\s* 锚定），正文中的同样注释不算元数据。
-  const DOC_ICON_RE = /^\s*<!--\s*icon:[^>]*-->[ \t]*\n?/i
+  // 元数据：章节图标。文档开头的 <!-- icon: xxx --> 或 front-matter 中的 icon 键（见 lib/doc-meta）；正文中的同样注释不算元数据。
   async function setDocIcon() {
     setMetaMenuOpen(false)
     const el = textareaRef.current
     const value = el?.value ?? content
-    const currentIcon = /^\s*<!--\s*icon:\s*([^>]+?)\s*-->/i.exec(value)?.[1]?.trim() || ''
+    const currentIcon = parseDocMeta(value).meta.icon || ''
     const input = await requestInput({
       title: t('writer.setIconTitle'),
       message: t('writer.setIconMsg'),
@@ -941,14 +952,7 @@ export default function Writer({ user }: WriterProps) {
     })
     if (input === null) return // 取消
     const icon = input.trim()
-    let next: string
-    if (!icon) {
-      next = value.replace(DOC_ICON_RE, '')
-    } else if (DOC_ICON_RE.test(value)) {
-      next = value.replace(DOC_ICON_RE, `<!-- icon: ${icon} -->\n`)
-    } else {
-      next = `<!-- icon: ${icon} -->\n` + value
-    }
+    const next = setDocIconMeta(value, icon)
     setContent(next)
     showToast({ message: icon ? t('writer.iconSet') : t('writer.iconRemoved'), tone: 'success' })
   }

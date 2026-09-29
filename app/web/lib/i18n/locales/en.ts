@@ -5251,4 +5251,10 @@ export const en: Record<string, string> = {
   'writer.snip.cardTitle1': 'Card title 1',
   'writer.snip.cardTitle2': 'Card title 2',
   'writer.snip.cardBody': 'Card description',
+  'writer.meta.previewTitle': 'Chapter metadata',
+  'writer.meta.title': 'Title',
+  'writer.meta.description': 'Description',
+  'writer.meta.url': 'Source',
+  'writer.meta.icon': 'Icon',
+  'reader.meta.source': 'Source',
 }

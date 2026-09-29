@@ -18,21 +18,14 @@ import (
 
 var docStatuses = map[string]bool{"draft": true, "published": true, "archived": true}
 
-// docIconPattern 匹配「文档开头」的图标元数据注释：<!-- icon: xxx -->（大小写不敏感）。
-// 用 ^\s* 锚定到正文起始，只解析开头的元数据，正文内容中出现的同样注释一律不当作元数据。
-var docIconPattern = regexp.MustCompile(`(?i)^\s*<!--\s*icon:\s*([^>]+?)\s*-->`)
-
 // docIconAllowed 仅保留 FontAwesome 类名允许的字符（字母数字、空格、连字符、下划线）
 var docIconAllowed = regexp.MustCompile(`[^a-zA-Z0-9 _-]+`)
 
-// extractDocIcon 从章节正文提取 <!-- icon: xxx --> 元数据，归一化为安全的图标名（供目录树替换默认图标）。
-// 返回小写、去除非法字符、长度不超过 64 的值；未配置或非法时返回空串。
+// extractDocIcon 从章节开头的元数据（<!-- icon: xxx --> 或 front-matter 的 icon，见 doc_meta.go）提取图标，
+// 归一化为安全的图标名（供目录树替换默认图标）。返回小写、去除非法字符、长度不超过 64 的值；未配置或非法时返回空串。
 func extractDocIcon(content string) string {
-	m := docIconPattern.FindStringSubmatch(content)
-	if m == nil {
-		return ""
-	}
-	icon := strings.ToLower(strings.TrimSpace(m[1]))
+	meta, _ := splitDocMeta(content)
+	icon := strings.ToLower(strings.TrimSpace(meta["icon"]))
 	icon = strings.TrimSpace(docIconAllowed.ReplaceAllString(icon, ""))
 	icon = strings.Join(strings.Fields(icon), " ") // 折叠多余空白
 	return truncateText(icon, 64)

@@ -405,7 +405,7 @@ func (a *App) writeBookDOCX(c *gin.Context, book *models.Book, includeDrafts boo
 		if !includeDrafts && doc.Status != "published" {
 			continue
 		}
-		content, docImages := a.rewriteUploadsToLocal(doc.Content)
+		content, docImages := a.rewriteUploadsToLocal(docBody(doc.Content)) // 开头的章节元数据不导出
 		for n, d := range docImages {
 			r.images[n] = d
 		}
