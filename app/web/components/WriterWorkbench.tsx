@@ -107,6 +107,7 @@ const SLASH_COMMANDS: { key: string; labelKey: string; kw: string }[] = [
   { key: 'warning', labelKey: 'writer.slash.warning', kw: 'warning warn 警告' },
   { key: 'accordion', labelKey: 'writer.slash.accordion', kw: 'accordion collapse 折叠 面板' },
   { key: 'steps', labelKey: 'writer.slash.steps', kw: 'steps step 步骤' },
+  { key: 'cards', labelKey: 'writer.slash.cards', kw: 'card cards cardgroup grid 卡片 卡片组' },
   { key: 'children', labelKey: 'writer.slash.children', kw: 'children subchapters toc 子章节 目录' },
   { key: 'hr', labelKey: 'writer.slash.hr', kw: 'hr rule divider' },
   { key: 'image', labelKey: 'writer.slash.image', kw: 'image img upload photo' },
@@ -906,13 +907,14 @@ export default function Writer({ user }: WriterProps) {
     insertText(`\n| ${t('writer.tableCol')} 1 | ${t('writer.tableCol')} 2 |\n| --- | --- |\n| ${t('writer.tableCell')} | ${t('writer.tableCell')} |\n`)
   }
 
-  // 插入结构化组件片段（Tabs / Note / Warning / Tip / Accordion / Steps）；阅读页与预览均可渲染
+  // 插入结构化组件片段（Tabs / Note / Warning / Tip / Accordion / Steps / CardGroup）；阅读页与预览均可渲染
   const COMPONENT_SNIPPETS: Record<string, string> = {
     tabs: `\n<Tabs>\n<Tab title="${t('writer.snip.tabTitle1')}">\n\n${t('writer.snip.content1')}\n\n</Tab>\n<Tab title="${t('writer.snip.tabTitle2')}">\n\n${t('writer.snip.content2')}\n\n</Tab>\n</Tabs>\n`,
     note: `\n<Note>\n**${t('writer.snip.noteTitle')}**\n\n${t('writer.snip.noteBody')}\n</Note>\n`,
     tip: `\n<Tip>\n**${t('writer.snip.tipTitle')}**\n\n${t('writer.snip.tipBody')}\n</Tip>\n`,
     warning: `\n<Warning>\n**${t('writer.snip.warnTitle')}**\n\n${t('writer.snip.warnBody')}\n</Warning>\n`,
     accordion: `\n<AccordionGroup>\n<Accordion title="${t('writer.snip.accTitle1')}">\n\n${t('writer.snip.content1')}\n\n</Accordion>\n<Accordion title="${t('writer.snip.accTitle2')}">\n\n${t('writer.snip.content2')}\n\n</Accordion>\n</AccordionGroup>\n`,
+    cards: `\n<CardGroup cols={2}>\n<Card title="${t('writer.snip.cardTitle1')}" icon="book">\n${t('writer.snip.cardBody')}\n</Card>\n<Card title="${t('writer.snip.cardTitle2')}" icon="rocket">\n${t('writer.snip.cardBody')}\n</Card>\n</CardGroup>\n`,
     steps: `\n<Steps>\n<Step title="${t('writer.snip.stepTitle1')}">\n\n${t('writer.snip.stepBody')}\n\n</Step>\n<Step title="${t('writer.snip.stepTitle2')}">\n\n${t('writer.snip.stepBody')}\n\n</Step>\n</Steps>\n`,
   }
   function insertComponent(kind: keyof typeof COMPONENT_SNIPPETS) {
@@ -1196,6 +1198,7 @@ export default function Writer({ user }: WriterProps) {
         case 'warning': insertComponent('warning'); break
         case 'accordion': insertComponent('accordion'); break
         case 'steps': insertComponent('steps'); break
+        case 'cards': insertComponent('cards'); break
         case 'children': insertChildrenToc(); break
         case 'hr': insertText('---\n'); break
         case 'image': fileInputRef.current?.click(); break
@@ -1611,6 +1614,7 @@ export default function Writer({ user }: WriterProps) {
                           <button type="button" onClick={() => insertComponent('warning')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50">{t('writer.insertMenu.warning')}</button>
                           <button type="button" onClick={() => insertComponent('accordion')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50">{t('writer.insertMenu.accordion')}</button>
                           <button type="button" onClick={() => insertComponent('steps')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50">{t('writer.insertMenu.steps')}</button>
+                          <button type="button" onClick={() => insertComponent('cards')} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50">{t('writer.insertMenu.cards')}</button>
                           <div className="my-1 h-px bg-slate-100" />
                           <button type="button" onClick={insertChildrenToc} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50">{t('writer.insertMenu.children')}</button>
                         </div>

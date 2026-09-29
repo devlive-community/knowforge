@@ -165,6 +165,28 @@ describe('M19 扩展', () => {
     expect(html).toContain('请改用其他方案')
   })
 
+  it('<CardGroup>/<Card> 卡片组', () => {
+    const html = renderMarkdown('<CardGroup cols={2}><Card title="工单路由" icon="headset" href="/docs/routing">\n按规则把工单分配给**客服组**。\n</Card>\n<Card title="外部文档" icon="github" iconType="brands" href="https://example.com" horizontal>\n说明\n</Card>\n</CardGroup>')
+    expect(html).toContain('md-card-group')
+    expect(html).toContain('sm:grid-cols-2')
+    expect(html).toContain('fa-solid fa-headset')
+    expect(html).toContain('fa-brands fa-github')
+    expect(html).toContain('href="/docs/routing"')
+    expect(html).toContain('工单路由')
+    expect(html).toContain('<strong>客服组</strong>')
+    expect(html).toMatch(/href="https:\/\/example.com"[^>]*target="_blank"/)
+    expect(html).not.toContain('&lt;Card')
+  })
+
+  it('<Card> 单独使用且过滤不安全的链接与图标', () => {
+    const html = renderMarkdown('<Card title="危险" icon="x&quot; onclick=&quot;1" href="javascript:alert(1)">\n正文\n</Card>')
+    expect(html).toContain('md-card')
+    expect(html).not.toContain('javascript:')
+    expect(html).not.toContain('onclick')
+    expect(html).not.toContain('<a ')
+    expect(html).toContain('正文')
+  })
+
   it('<Steps>/<Step> 编号步骤', () => {
     const html = renderMarkdown('<Steps>\n<Step title="安装 Git LFS">\n运行安装命令。\n</Step>\n<Step title="初始化">\n完成初始化。\n</Step>\n</Steps>')
     expect(html).toContain('<ol')

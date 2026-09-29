@@ -430,6 +430,114 @@ const stepsExtension: TokenizerAndRendererExtension = {
   },
 }
 
+// ── <CardGroup cols={2}> / <Card title="…" icon="…" href="…"> ────────────────
+// 卡片与卡片组（兼容 Mintlify 写法）：icon 为 Font Awesome 图标名（如 headset，可用 iconType 指定 regular/brands）
+// 或图片地址；href 使整张卡片可点击（站外链接新窗口打开）；horizontal 时图标与标题同行；color 为图标颜色。
+// 卡片正文递归解析；卡片组按 cols（1–4）分列，窄屏为单列。
+
+// parseTagAttrs 解析标签属性：name="v" / name='v' / name={v} / 仅写属性名（视为 true）
+export function parseTagAttrs(attrs: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const re = /([a-zA-Z][\w-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\}))?/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(attrs))) {
+    const raw = m[2] ?? m[3] ?? m[4]
+    out[m[1]] = raw === undefined ? 'true' : raw.trim().replace(/^["'](.*)["']$/, '$1')
+  }
+  return out
+}
+
+const cardGroupCols: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-1 sm:grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+  4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
+}
+
+// safeCardHref 只接受站内路径、锚点与 http(s)/mailto 链接
+function safeCardHref(href: string): string {
+  const v = href.trim()
+  return /^(https?:\/\/|mailto:|\/(?!\/)|#)/i.test(v) ? v : ''
+}
+
+function cardIconMarkup(icon: string, iconType: string, color: string): string {
+  if (!icon) return ''
+  const style = /^(#[0-9a-f]{3,8}|[a-z]+)$/i.test(color) ? ` style="color:${color}"` : ''
+  if (/^(https?:\/\/|\/(?!\/))/i.test(icon)) {
+    return `<img src="${escapeHtml(icon)}" alt="" class="h-6 w-6 shrink-0 object-contain" />`
+  }
+  if (!/^[a-z0-9-]+$/i.test(icon)) return ''
+  const family = iconType === 'regular' ? 'fa-regular' : iconType === 'brands' ? 'fa-brands' : 'fa-solid'
+  return `<i class="${family} fa-${icon.toLowerCase()} shrink-0 text-xl text-primary-600"${style} aria-hidden="true"></i>`
+}
+
+const cardExtension: TokenizerAndRendererExtension = {
+  name: 'md-card',
+  level: 'block',
+  start(src) {
+    return src.match(/<Card(?=[\s>])/)?.index
+  },
+  tokenizer(src) {
+    const open = /<Card(\s[^>]*)?>/.exec(src)
+    if (!open || open.index !== 0) return undefined
+    const block = scanTagBlock(src, 'Card', open)
+    if (!block) return undefined
+    const attrs = parseTagAttrs(open[1] || '')
+    return {
+      type: 'md-card',
+      raw: block.raw,
+      title: attrs.title || '',
+      icon: attrs.icon || '',
+      iconType: attrs.iconType || '',
+      color: attrs.color || '',
+      href: safeCardHref(attrs.href || ''),
+      horizontal: attrs.horizontal === 'true',
+      tokens: this.lexer.blockTokens(dedentBlock(block.content).trim()),
+    } as Tokens.Generic
+  },
+  renderer(token) {
+    const t = token as Tokens.Generic & { title: string; icon: string; iconType: string; color: string; href: string; horizontal: boolean }
+    const icon = cardIconMarkup(t.icon, t.iconType, t.color)
+    const title = t.title ? `<div class="font-semibold text-slate-900">${escapeHtml(t.title)}</div>` : ''
+    const body = this.parser.parse(token.tokens ?? [])
+    const bodyHtml = body.trim() ? `<div class="md-card-body mt-1 text-sm leading-6 text-slate-600 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">${body}</div>` : ''
+    const head = t.horizontal
+      ? `<div class="flex items-center gap-3">${icon}${title}</div>`
+      : `${icon ? `<div class="mb-3">${icon}</div>` : ''}${title}`
+    const cls = 'md-card my-4 block rounded-xl border border-slate-200 bg-white p-5 transition-colors'
+    if (!t.href) return `<div class="${cls}">${head}${bodyHtml}</div>`
+    const external = /^https?:\/\//i.test(t.href)
+    const rel = external ? ' target="_blank" rel="noopener noreferrer"' : ''
+    return `<a href="${escapeHtml(t.href)}"${rel} class="${cls} no-underline hover:border-primary-400 hover:shadow-sm">${head}${bodyHtml}</a>`
+  },
+}
+
+const cardGroupExtension: TokenizerAndRendererExtension = {
+  name: 'md-card-group',
+  level: 'block',
+  start(src) {
+    return src.match(/<CardGroup(?=[\s>])/)?.index
+  },
+  tokenizer(src) {
+    const open = /<CardGroup(\s[^>]*)?>/.exec(src)
+    if (!open || open.index !== 0) return undefined
+    const block = scanTagBlock(src, 'CardGroup', open)
+    if (!block) return undefined
+    const cols = Math.min(Math.max(parseInt(parseTagAttrs(open[1] || '').cols || '2', 10) || 2, 1), 4)
+    // 内容里的 <Card> 由 cardExtension 递归解析
+    return {
+      type: 'md-card-group',
+      raw: block.raw,
+      cols,
+      tokens: this.lexer.blockTokens(dedentBlock(block.content).trim()),
+    } as Tokens.Generic
+  },
+  renderer(token) {
+    const cols = (token as Tokens.Generic & { cols: number }).cols
+    return `<div class="md-card-group my-4 grid gap-4 ${cardGroupCols[cols]} [&>*]:my-0">${this.parser.parse(token.tokens ?? [])}</div>`
+  },
+}
+
 // ── :::grid ──────────────────────────────────────────────────────────────
 
 const gridExtension: TokenizerAndRendererExtension = {
@@ -1018,6 +1126,8 @@ export const markdownExtensions: TokenizerAndRendererExtension[] = [
   accordionGroupExtension,
   accordionExtension,
   stepsExtension,
+  cardGroupExtension,
+  cardExtension,
   gridExtension,
   diffExtension,
   katexExtension,

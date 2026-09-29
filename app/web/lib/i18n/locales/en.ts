@@ -5246,4 +5246,9 @@ export const en: Record<string, string> = {
   'userTasks.row.viewProgress': 'View progress',
   'userTasks.row.view': 'View',
   'userTasks.indicator.tooltip': '{n} task(s) in progress',
+  'writer.slash.cards': 'Card group',
+  'writer.insertMenu.cards': 'Card group',
+  'writer.snip.cardTitle1': 'Card title 1',
+  'writer.snip.cardTitle2': 'Card title 2',
+  'writer.snip.cardBody': 'Card description',
 }

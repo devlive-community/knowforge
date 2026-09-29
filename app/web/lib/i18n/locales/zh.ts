@@ -5246,4 +5246,9 @@ export const zh: Record<string, string> = {
   'userTasks.row.viewProgress': '查看进度',
   'userTasks.row.view': '查看',
   'userTasks.indicator.tooltip': '{n} 个任务进行中',
+  'writer.slash.cards': '卡片组',
+  'writer.insertMenu.cards': '卡片组 CardGroup',
+  'writer.snip.cardTitle1': '卡片标题一',
+  'writer.snip.cardTitle2': '卡片标题二',
+  'writer.snip.cardBody': '卡片说明',
 }
