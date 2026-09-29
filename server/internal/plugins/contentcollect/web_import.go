@@ -608,7 +608,7 @@ func extractWebArticle(page webPage) (webArticle, error) {
 	if err != nil {
 		return webArticle{}, err
 	}
-	markdown = strings.TrimSpace(markdown)
+	markdown = trimPageFeedback(strings.TrimSpace(markdown)) // 页尾的「Was this page helpful?」反馈组件
 	if utf8.RuneCountInString(markdown) < 20 {
 		return webArticle{}, errors.New("网页正文内容过少")
 	}
