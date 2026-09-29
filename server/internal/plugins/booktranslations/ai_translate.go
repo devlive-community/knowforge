@@ -280,6 +280,7 @@ func (r *runner) publishJob() {
 	if r.db().First(&job, r.job.ID).Error == nil {
 		*r.job = job
 		jobsHub.Publish(job.ID, "job", job)
+		publishUserTask(r.b.core, &job)
 	}
 }
 
@@ -499,6 +500,7 @@ func (b *behavior) runJob(ctx context.Context, jobID uint, run *jobRun) {
 		return
 	}
 	r := &runner{b: b, job: &job, run: run}
+	publishUserTask(b.core, &job) // 开始或继续
 	var user models.User
 	var src, dst models.Book
 	if db.First(&user, job.UserID).Error != nil || db.First(&src, job.SourceBookID).Error != nil || db.First(&dst, job.TargetBookID).Error != nil {
@@ -569,6 +571,7 @@ func (b *behavior) stopJob(id uint, status, errMsg string) {
 		var items []TranslateItem
 		db.Where("job_id = ?", id).Order("ord ASC").Find(&items)
 		jobsHub.Publish(id, "done", jobView{Job: job, Items: items})
+		publishUserTask(b.core, &job)
 	}
 }
 
@@ -585,6 +588,10 @@ func sweepInterruptedJobs(core plugincore.Core) {
 			db.Model(&TranslateItem{}).Where("job_id = ? AND status = ?", id, itemRunning).Update("status", itemPending)
 			db.Model(&TranslateJob{}).Where("id = ? AND status = ?", id, jobRunning).
 				Updates(map[string]any{"status": jobPaused, "error": "服务重启，翻译已暂停，可继续"})
+			var job TranslateJob
+			if db.First(&job, id).Error == nil {
+				publishUserTask(core, &job)
+			}
 		}
 	}
 }

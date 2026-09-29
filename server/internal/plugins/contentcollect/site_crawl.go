@@ -450,6 +450,7 @@ func (cc *behavior) StartSiteCrawl(c *gin.Context) {
 			return
 		}
 	}
+	cc.publishCrawlTask(job.ID)
 	cc.core.OK(c, gin.H{"job": job, "book": book})
 }
 
@@ -474,6 +475,7 @@ func (cc *behavior) runSiteCrawlJob(ctx context.Context, raw json.RawMessage) er
 	}
 	now := time.Now()
 	cc.core.Gorm().Model(&job).Updates(map[string]any{"status": "running", "started_at": &now})
+	cc.publishCrawlTask(job.ID)
 
 	var pages []CrawlPage
 	cc.core.Gorm().Where("job_id = ?", job.ID).Order("sort_order ASC").Find(&pages)
@@ -501,6 +503,7 @@ func (cc *behavior) runSiteCrawlJob(ctx context.Context, raw json.RawMessage) er
 		if err != nil {
 			failed++
 			cc.core.Gorm().Model(page).Updates(map[string]any{"status": "failed", "error": truncateText(err.Error(), 1000)})
+			cc.crawlProgress(&job, success, failed)
 			continue
 		}
 		var parentID *uint
@@ -526,11 +529,13 @@ func (cc *behavior) runSiteCrawlJob(ctx context.Context, raw json.RawMessage) er
 		if derr != nil {
 			failed++
 			cc.core.Gorm().Model(page).Updates(map[string]any{"status": "failed", "error": truncateText(derr.Error(), 1000)})
+			cc.crawlProgress(&job, success, failed)
 			continue
 		}
 		success++
 		urlToDoc[page.URL] = doc.ID
 		cc.core.Gorm().Model(page).Updates(map[string]any{"status": "success", "error": "", "doc_id": doc.ID, "title": truncateText(title, 500)})
+		cc.crawlProgress(&job, success, failed)
 	}
 
 	// 采集完成后改写内链：正文里指向本次采集页面的外链改为站内阅读链接。
@@ -553,6 +558,13 @@ func (cc *behavior) runSiteCrawlJob(ctx context.Context, raw json.RawMessage) er
 func (cc *behavior) finishCrawlJob(job *CrawlJob, status, lastErr string) {
 	now := time.Now()
 	cc.core.Gorm().Model(job).Updates(map[string]any{"status": status, "finished_at": &now, "last_error": truncateText(lastErr, 1000)})
+	cc.publishCrawlTask(job.ID)
+}
+
+// crawlProgress 每处理完一页记录进度并推送（「我的任务」实时显示已采集页数）。
+func (cc *behavior) crawlProgress(job *CrawlJob, success, failed int) {
+	cc.core.Gorm().Model(job).Updates(map[string]any{"success": success, "failed": failed})
+	cc.publishCrawlTask(job.ID)
 }
 
 // crawlSlugPattern 与 slugify 不同：保留大小写（不转小写），仅把非字母数字压成中划线。
@@ -663,6 +675,7 @@ func (cc *behavior) RetryCrawlJob(c *gin.Context) {
 	if queue := cc.core.JobQueue(); queue != nil {
 		_, _ = queue.Enqueue(context.Background(), siteCrawlJobType, siteCrawlJobPayload{JobID: job.ID}, 3)
 	}
+	cc.publishCrawlTask(job.ID)
 	cc.core.OK(c, gin.H{"retried": res.RowsAffected})
 }
 
@@ -693,6 +706,7 @@ func (cc *behavior) RetryCrawlPage(c *gin.Context) {
 	if queue := cc.core.JobQueue(); queue != nil {
 		_, _ = queue.Enqueue(context.Background(), siteCrawlJobType, siteCrawlJobPayload{JobID: job.ID}, 3)
 	}
+	cc.publishCrawlTask(job.ID)
 	cc.core.OK(c, gin.H{"retried": 1})
 }
 

@@ -31,7 +31,7 @@ func newNotificationHub() *notificationHub {
 }
 
 func (h *notificationHub) subscribe(userID uint) chan string {
-	ch := make(chan string, 8)
+	ch := make(chan string, 64) // 任务进度等高频消息也经此推送
 	h.Lock()
 	if h.subs[userID] == nil {
 		h.subs[userID] = map[chan string]struct{}{}

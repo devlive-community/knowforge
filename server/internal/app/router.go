@@ -237,6 +237,7 @@ func (a *App) Router() *gin.Engine {
 		api.POST("/import/pdf", a.RequireAuth(), a.RequirePermission(authz.BookImport), a.ImportPDFBook)
 		api.POST("/import/markdown", a.RequireAuth(), a.RequirePermission(authz.BookImport), a.ImportMarkdownBook)
 		api.GET("/tasks/:id", a.RequireAuth(), a.GetBackgroundJob)
+		api.GET("/users/me/tasks", a.RequireAuth(), a.RequirePermission(authz.UserTaskRead), a.ListMyTasks)
 
 		// ── 站内通知（notification:*；SSE 端点自行鉴权，EventSource 无法带请求头） ──
 		notif := api.Group("/notifications", a.RequireAuth())

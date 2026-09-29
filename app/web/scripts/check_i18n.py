@@ -22,6 +22,11 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'i18n.': ['enabled', 'content_enabled', 'ui_enabled', 'is_default'],
     # BookCard/WriterWorkbench/detail: t(`book.status.${status}`)，BookStatus 共 5 种
     'book.status.': ['draft', 'in_progress', 'published', 'completed', 'archived'],
+    # 我的任务: t(`userTasks.kind|status|tab|empty.${x}`)（任务种类与状态见 lib/user-tasks.ts）
+    'userTasks.kind.': ['zipImport', 'pdfImport', 'imageLocalize', 'translate', 'siteCrawl', 'aiWriter', 'chapterGuide'],
+    'userTasks.status.': ['queued', 'running', 'paused', 'done', 'failed', 'canceled'],
+    'userTasks.tab.': ['active', 'done', 'failed'],
+    'userTasks.empty.': ['active', 'done', 'failed'],
     # DatePicker: t(`ui.datepicker.weekday${k}`) / t(`ui.datepicker.month${m+1}`)
     'ui.datepicker.weekday': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     'ui.datepicker.month': [str(m) for m in range(1, 13)],

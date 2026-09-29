@@ -155,6 +155,7 @@ func (b *behavior) start(t Task, caller ai.Caller, prompt string) {
 	st := &runState{id: t.ID, cancel: cancel}
 	running.Add(t.ID, st)
 	b.core.Gorm().Model(&Task{}).Where("id = ?", t.ID).Update("runner", cluster.Self())
+	b.publishUserTask(t.ID)
 	go func() {
 		started := time.Now()
 		defer func() {
@@ -198,6 +199,7 @@ func (b *behavior) finish(id uint, started time.Time, status, result string, res
 	var final Task
 	if db.First(&final, id).Error == nil {
 		hub.Publish(id, "done", final)
+		plugincore.PublishUserTask(b.core, final.UserID, writerUserTask(b.core, &final))
 	}
 }
 
@@ -214,6 +216,10 @@ func sweepInterrupted(core plugincore.Core) {
 		if running.Orphaned(r.ID, r.Runner) {
 			db.Model(&Task{}).Where("id = ? AND status = ?", r.ID, statusRunning).
 				Updates(map[string]any{"status": statusFailed, "error": "服务重启，生成已中断，请重试"})
+			var task Task
+			if db.First(&task, r.ID).Error == nil {
+				plugincore.PublishUserTask(core, task.UserID, writerUserTask(core, &task))
+			}
 		}
 	}
 }

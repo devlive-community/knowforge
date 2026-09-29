@@ -780,7 +780,7 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | --- | --- | --- | --- |
 | GET | `/notifications?page=&per_page=&unread=true` | 当前用户通知（ newest 在前）+ `unread_count` | `notification:read` |
 | POST | `/notifications/read` | 标记已读：`{ids:[]}` 或 `{all:true}`，返回最新 `unread_count` | `notification:update` |
-| GET | `/notifications/stream` | SSE 实时流（`?ticket=` 事件流凭证鉴权）：连接即推 `{"unread_count":n}`，新通知实时推送；25s 心跳。不接受 URL 中的登录令牌 | `notification:read` |
+| GET | `/notifications/stream` | SSE 实时流（`?ticket=` 事件流凭证鉴权）：连接即推 `{"unread_count":n}`，新通知实时推送；「我的任务」的变化推送 `{"task":{...}}`（形状同 `/users/me/tasks`）；25s 心跳。不接受 URL 中的登录令牌 | `notification:read` |
 | POST | `/stream-tickets` | 签发事件流凭证 `{ticket, expires_in:60}`：EventSource 无法携带请求头，事件流接口（站内通知、问答进度、插件安装日志）以 `?ticket=` 鉴权，不接受 URL 中的登录令牌。凭证为 HMAC 签名的用户与过期时间，60 秒内用于建立连接（已建立的连接不受影响），不能当作 API 令牌；无状态，多实例可用。前端在连接被拒时自动换新凭证重连 | 登录 |
 
 - 通知类型：`comment`（评论/回复）、`reaction`（点赞/收藏）、`collaboration`（协作邀请）、`moderation`（举报处理结果）、`achievement`（成就解锁/授予）、`system`（升级完成等）
@@ -814,6 +814,7 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | POST | `/books/:id/documents/import-markdown` | 同上的 `files[]`，可选 `parent_id`（挂到该章节下，否则为第一级），导入为本书章节（状态按书籍默认规则或 front-matter `status`），返回 `{imported_doc}`；需书籍编辑权 | `document:create` |
 | POST | `/import/pdf` | multipart 上传 `file`（PDF，≤64MB），可选 `title`；文件以 0600 权限私有保存后返回 `202` 和 `task`，后台根据文本坐标、字号和字体样式重建 Markdown 标题、段落、列表及代码块，移除重复页眉页脚并修正双栏阅读顺序；结果固定为私有草稿。扫描版 PDF 需预先 OCR | `book:import` |
 | POST | `/books/:id/import/pdf` | multipart 上传 `file`（PDF，≤64MB）及 `mode=append\|replace`，仅书籍 owner/admin 可用；返回 `202` 和 `task` 后后台执行。`append` 将新解析的 Markdown 章节以草稿追加到目录末尾；`replace` 在同一事务内清理旧章节及关联状态后写入新草稿章节，并将书籍转为私有草稿。解析失败不会改动旧数据 | `book:import` |
+| GET | `/users/me/tasks?tab=active\|done\|failed` | 我的任务：合并核心任务（ZIP/PDF 导入、外链图片本地化）与已启用插件登记的任务（AI 翻译、整站采集、写作助手、章节导读），按创建时间倒序最多 50 条：`{items:[{kind,id,title,status(queued\|running\|paused\|done\|failed\|canceled),done,failed,total,remaining,link,error,created_at,updated_at,finished_at}]}`；`total` 为 0 表示进度不可计量。任务变化经 `/notifications/stream` 推送 `{"task":{...}}` | `user-task:read` |
 | GET | `/tasks/:id` | 查询当前用户自己的后台任务状态；成功时返回解密后的 `result`，等待/执行/重试/失败状态返回进度和有限错误信息；无法枚举或读取他人的任务，任务载荷永不返回 | 登录用户 |
 | POST | `/import/web` | JSON `{url,title?,render_mode?,include_source?}`（`include_source` 默认 false，为真则正文末尾附来源链接），`render_mode` 为 `auto`（默认）、`static` 或 `browser`；自动模式先静态抓取，检测到 SPA 空壳或正文不足时使用无头浏览器插件执行 JavaScript；`browser` 模式及自动模式的浏览器回退均依赖已安装的无头浏览器插件，未安装时 `browser` 直接报错、`auto` 退回静态；正文转为 Markdown 并将相对链接补全；结果固定为私有草稿 | `book:import` |
 | GET | `/import/browser-available` | 无头浏览器插件是否已安装（`{available}`），供前端联动禁用「浏览器渲染」采集模式 | `book:import` |

@@ -65,6 +65,7 @@ func (a *App) configureJobQueue() error {
 		}
 		return a.mailSender().Send(job.To, job.Subject, job.HTML)
 	})
+	queue.OnChange(a.onBackgroundJobChange)
 	queue.RegisterResult(pdfImportJobType, a.runPDFImportJob)
 	queue.RegisterResult(zipImportJobType, a.runZIPImportJob)
 	queue.RegisterResult(imageLocalizeJobType, a.runImageLocalizeJob)

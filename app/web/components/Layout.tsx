@@ -12,6 +12,7 @@ import { renderMarkdown } from '@/lib/markdown'
 import { Button, ButtonLink, Input, Modal, Tooltip, useFeedback } from '@/components/ui'
 import type { FooterLinkGroup } from '@/lib/types'
 import NotificationBell from '@/components/NotificationBell'
+import UserTasksIndicator from '@/components/UserTasksIndicator'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { SearchIcon } from '@/components/icons'
 import { displayName } from '@/lib/users'
@@ -52,6 +53,7 @@ function UserMenu() {
       { label: t('nav.menu.purchases'), href: '/user/purchases', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-bag-shopping ${className || ''}`} aria-hidden="true" /> },
       { label: t('nav.menu.earnings'), href: '/user/earnings', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-sack-dollar ${className || ''}`} aria-hidden="true" /> },
     ] : []),
+    { label: t('nav.menu.tasks'), href: '/user/tasks', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-list-check ${className || ''}`} aria-hidden="true" /> },
     { label: t('nav.menu.files'), href: '/user/files', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-folder-open ${className || ''}`} aria-hidden="true" /> },
     ...(site.ai_usage_enabled ? [{ label: t('nav.menu.aiUsage'), href: '/user/ai-usage', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-microchip ${className || ''}`} aria-hidden="true" /> }] : []),
     ...((site.feature_plugins || []).includes('qa') ? [{ label: t('nav.menu.qa'), href: '/user/qa', icon: ({ className }: { className?: string }) => <i className={`fa-solid fa-comments ${className || ''}`} aria-hidden="true" /> }] : []),
@@ -256,6 +258,7 @@ export default function Layout({ title, children }: { title?: string; children: 
           </form>
           <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
             <LanguageSwitcher />
+            <UserTasksIndicator />
             <NotificationBell />
             <UserMenu />
           </div>

@@ -53,6 +53,36 @@ type Queue struct {
 	mu             sync.RWMutex
 	now            func() time.Time
 	heartbeatEvery time.Duration // 执行中的任务刷新 locked_at 的间隔
+	onChange       func(job models.BackgroundJob)
+}
+
+// OnChange 登记任务状态变化回调（入队、开始执行、成功、失败或等待重试时调用，传入最新记录）。
+func (q *Queue) OnChange(fn func(job models.BackgroundJob)) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.onChange = fn
+}
+
+func (q *Queue) changed(id uint) {
+	q.mu.RLock()
+	fn := q.onChange
+	q.mu.RUnlock()
+	if fn == nil {
+		return
+	}
+	var job models.BackgroundJob
+	if q.db.First(&job, id).Error == nil {
+		fn(job)
+	}
+}
+
+// Payload 解密任务参数（供核心展示用户自己的任务名称等）。
+func (q *Queue) Payload(job *models.BackgroundJob, target any) error {
+	raw, err := q.decrypt(job.Type, job.Payload)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, target)
 }
 
 func New(db *gorm.DB, secret string) (*Queue, error) {
@@ -113,6 +143,7 @@ func (q *Queue) EnqueueOwned(ctx context.Context, ownerID uint, jobType string, 
 	if err := q.db.WithContext(ctx).Create(job).Error; err != nil {
 		return nil, fmt.Errorf("create background job: %w", err)
 	}
+	q.changed(job.ID)
 	return job, nil
 }
 
@@ -216,6 +247,8 @@ func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
 	if err := q.db.WithContext(ctx).First(&candidate, candidate.ID).Error; err != nil {
 		return true, fmt.Errorf("reload background job: %w", err)
 	}
+	q.changed(candidate.ID)
+	defer q.changed(candidate.ID) // 结束（成功/失败/等待重试）后推送最终状态
 	hbCtx, stopHeartbeat := context.WithCancel(ctx)
 	hbDone := make(chan struct{})
 	go func() {
@@ -353,6 +386,9 @@ func (q *Queue) Retry(ctx context.Context, id uint) (bool, error) {
 			"started_at": nil, "finished_at": nil, "locked_at": nil,
 			"last_error": "", "result": "", "updated_at": now,
 		})
+	if result.RowsAffected > 0 {
+		q.changed(id)
+	}
 	return result.RowsAffected > 0, result.Error
 }
 

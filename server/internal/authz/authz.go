@@ -72,6 +72,9 @@ const (
 	NotificationRead   Permission = "notification:read"   // 查看自己的通知（含 SSE 流）
 	NotificationUpdate Permission = "notification:update" // 标记通知已读
 
+	// 我的任务
+	UserTaskRead Permission = "user-task:read" // 查看自己发起的后台任务（导入、翻译、采集等）及进度
+
 	// 协作与团队
 	CollaboratorRead   Permission = "collaborator:read"   // 查看书籍协作者列表
 	CollaboratorCreate Permission = "collaborator:create" // 添加/更新协作者（仅书籍所有者）
@@ -148,6 +151,7 @@ var All = []Permission{
 	SearchRead,
 	AuthOauth, AuthPasswordReset,
 	NotificationRead, NotificationUpdate,
+	UserTaskRead,
 	CollaboratorRead, CollaboratorCreate, CollaboratorUpdate, CollaboratorDelete,
 	CommentRead, CommentCreate, CommentUpdate, CommentDelete,
 	ReportCreate, ReportRead, ReportUpdate,
@@ -174,6 +178,7 @@ var userPermissions = []Permission{
 	SearchRead,
 	AuthOauth, AuthPasswordReset,
 	NotificationRead, NotificationUpdate,
+	UserTaskRead,
 	CollaboratorRead, CollaboratorCreate, CollaboratorUpdate, CollaboratorDelete,
 	CommentRead, CommentCreate, CommentUpdate, CommentDelete,
 	ReportCreate,

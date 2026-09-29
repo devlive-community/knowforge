@@ -8,6 +8,7 @@ import { Button, Loading } from '@/components/ui'
 import { BellIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import { notificationTitle, type NotificationPayload } from '@/lib/notification'
+import { emitUserTask, type UserTask } from '@/lib/user-tasks'
 
 type TFn = (key: string, vars?: Record<string, string | number>) => string
 
@@ -60,17 +61,23 @@ export default function NotificationBell() {
     load()
 
     // SSE 实时推送（EventSource 无法带请求头，用短时事件流凭证鉴权，登录令牌不出现在 URL 中）
+    // 同一事件流也推送「我的任务」的变化（转发给任务订阅者）；重连后让订阅者重新拉取，补上断开期间的变化
     if (!getToken()) return
-    return openTicketedStream('/notifications/stream', (source) => { source.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data) as { unread_count?: number; notification?: NotificationItem }
-        if (typeof data.unread_count === 'number') setUnread(data.unread_count)
-        if (data.notification) {
-          setUnread((n) => n + 1)
-          setItems((list) => [data.notification as NotificationItem, ...list].slice(0, 10))
-        }
-      } catch { /* 忽略无法解析的帧 */ }
-    } })
+    let connections = 0
+    return openTicketedStream('/notifications/stream', (source) => {
+      if (connections++ > 0) emitUserTask(null)
+      source.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data) as { unread_count?: number; notification?: NotificationItem; task?: UserTask }
+          if (data.task) { emitUserTask(data.task); return }
+          if (typeof data.unread_count === 'number') setUnread(data.unread_count)
+          if (data.notification) {
+            setUnread((n) => n + 1)
+            setItems((list) => [data.notification as NotificationItem, ...list].slice(0, 10))
+          }
+        } catch { /* 忽略无法解析的帧 */ }
+      }
+    })
   }, [user, load])
 
   // 点击面板外部关闭

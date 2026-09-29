@@ -91,6 +91,7 @@ func (b *behavior) publishGuide(bookID uint, g Guide) {
 	if b.core.Gorm().First(&doc, g.DocID).Error == nil {
 		booksHub.Publish(bookID, "guide", toGuideView(g, &doc))
 	}
+	b.publishUserTask(bookID)
 }
 
 func (b *behavior) publishOverview(bookID uint) {
@@ -98,6 +99,7 @@ func (b *behavior) publishOverview(bookID uint) {
 	if b.core.Gorm().First(&o, bookID).Error == nil {
 		booksHub.Publish(bookID, "overview", b.toOverviewView(o))
 	}
+	b.publishUserTask(bookID)
 }
 
 func (b *behavior) toOverviewView(o Overview) overviewView {
