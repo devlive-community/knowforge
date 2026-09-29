@@ -165,6 +165,19 @@ describe('M19 扩展', () => {
     expect(html).toContain('请改用其他方案')
   })
 
+  it('连续的 GitHub 提示块以空行分隔，各自独立', () => {
+    const html = renderMarkdown('> [!NOTE]\n> 备注内容\n\n> [!TIP]\n> 提示内容\n\n普通段落')
+    expect(html.match(/class="md-alert /g)?.length).toBe(2)
+    expect(html).toContain('md-alert-tip')
+    expect(html).not.toContain('[!TIP]')
+    expect(html).toMatch(/<p>普通段落<\/p>/)
+  })
+
+  it('按钮与 Issue 徽章带标记类（不套用正文链接颜色）', () => {
+    expect(renderMarkdown('!btn[开始](/books)')).toContain('class="md-btn ')
+    expect(renderMarkdown('见 devlive-community/knowforge#1')).toContain('class="md-issue ')
+  })
+
   it('<CardGroup>/<Card> 卡片组', () => {
     const html = renderMarkdown('<CardGroup cols={2}><Card title="工单路由" icon="headset" href="/docs/routing">\n按规则把工单分配给**客服组**。\n</Card>\n<Card title="外部文档" icon="github" iconType="brands" href="https://example.com" horizontal>\n说明\n</Card>\n</CardGroup>')
     expect(html).toContain('md-card-group')

@@ -248,9 +248,9 @@ body {
 .markdown-body ol { @apply my-3 list-decimal pl-6; }
 .markdown-body li { @apply my-1; }
 .markdown-body blockquote { @apply my-4 border-l-4 border-slate-300 bg-slate-100 px-4 py-2 text-slate-600; }
-.markdown-body a { @apply text-primary-600 hover:underline; }
-/* 可点击的卡片（<Card href>）整体是链接：不加下划线，文字沿用卡片内的颜色 */
-.markdown-body a.md-card { @apply text-inherit no-underline hover:no-underline; }
+/* 普通链接的颜色与下划线；自带样式的链接（按钮 !btn、卡片 <Card href>、Issue 徽章）不套用，由各自的样式类决定 */
+.markdown-body a:not(.md-btn):not(.md-card):not(.md-issue) { @apply text-primary-600 hover:underline; }
+.markdown-body a.md-card { @apply no-underline; }
 /* 双向链接：无法解析的目标（章节不存在或未发布） */
 .markdown-body .md-wikilink-missing { @apply cursor-help text-slate-400 underline decoration-dashed underline-offset-2; }
 .markdown-body img { @apply my-4 max-w-full rounded-lg; }

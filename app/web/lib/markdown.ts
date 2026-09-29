@@ -14,7 +14,8 @@ const alertExtension: TokenizerAndRendererExtension = {
     return src.match(/^> ?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i)?.index
   },
   tokenizer(src: string) {
-    const match = /^> ?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*\n([\s\S]*?)(?=\n(?:[^>\s]|\s*$)|$)/i.exec(src)
+    // 与 GitHub 一致：提示块到第一个不以 > 开头的行（含空行）结束，连续的多个提示块用空行分隔
+    const match = /^> ?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*\n((?:>.*(?:\n|$))*)/i.exec(src)
     if (match) {
       const inner = match[2].replace(/^> ?/gm, '')
       return {
