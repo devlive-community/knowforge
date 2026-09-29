@@ -355,6 +355,8 @@ Authorization: Bearer kf_pat_…
 | GET | `/documents/:id` | 文档详情（含正文） | `document:read` |
 | PUT | `/documents/:id` | 更新（title/content/parent_id/sort_order/status/slug；防环校验）；改 `status` 时传 `cascade_status: true` 可把新状态一并应用到整棵子章节树；手动保存传 `create_revision: true` 与 `revision_reason: save|publish` 生成不可变版本 | `document:update` |
 | DELETE | `/documents/:id` | 将文档及其子树作为同一批次移入 30 天回收站 | `document:delete` |
+| POST | `/books/:id/documents/batch-status` | 批量改状态 `{ids[], status}`（含子章节级联，行为与单个修改一致），响应为事件流：`start{total}`、每个章节 `item{result{id,ok,status,held,error}, done, total}`、`done{total,done,failed}`；校验失败在推送前以 JSON 返回 | `document:update` |
+| POST | `/books/:id/documents/batch-delete` | 批量移入回收站 `{ids[]}`（含子章节），事件流同上，已随父章节删除的记 `skipped`；需二次认证（开启时） | `document:delete` |
 | POST | `/documents/:id/view` | 章节浏览计数 +1，并同步累加所属书籍的 `view_count` 及按日分析聚合；可选 JSON `{referrer}`；不可见返回 404 | `document:read` |
 | GET | `/documents/:id/revisions` | 章节版本列表（分页，不含正文）；未授权统一 404 | `document-revision:read` |
 | GET | `/documents/:id/revisions/:revisionId` | 版本详情（含正文）；未授权或版本不属于章节时统一 404 | `document-revision:read` |

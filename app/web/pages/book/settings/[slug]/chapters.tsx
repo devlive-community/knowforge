@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { InferGetServerSidePropsType } from 'next'
+import { postEventStream } from '@/lib/event-stream'
 import { api } from '@/lib/api'
 import { Badge, Button, ButtonLink, Checkbox, DropdownMenu, Field, Loading, EmptyState, Modal, Select, Tooltip, useFeedback } from '@/components/ui'
 import { ChevronDownIcon, ChevronRightIcon, GripIcon, HistoryIcon, LinkIcon, PencilIcon, TrashIcon } from '@/components/icons'
@@ -114,30 +115,33 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
     setDocs((ds) => (ds ? apply(ds, false) : ds))
   }
 
-  // 批量改状态：按目录顺序逐个应用（含子章节级联）；进度显示在工具栏，正在处理的章节显示处理中，完成的章节即时切换状态；
-  // 失败的章节保持选中，便于重试。
+  // 批量改状态：一次提交所选章节（按目录顺序），服务端逐个处理并以事件流推送进度（含子章节级联）；
+  // 工具栏显示进度，正在处理的章节显示处理中，完成的章节即时切换状态；失败的章节保持选中，便于重试。
   async function bulkStatus(status: DocumentStatus) {
     const ids = flat.filter((d) => selected.has(d.id)).map((d) => d.id)
     if (ids.length === 0) return
     const failed: number[] = []
-    setBulk({ kind: 'status', status, done: 0, total: ids.length, current: null, failed: 0 })
-    for (const id of ids) {
-      setBulk((b) => (b ? { ...b, current: id } : b))
-      try {
-        await api(`/documents/${id}`, { method: 'PUT', body: { status, cascade_status: true } })
-        setStatusLocal(id, status)
-      } catch {
-        failed.push(id)
+    setBulk({ kind: 'status', status, done: 0, total: ids.length, current: ids[0], failed: 0 })
+    try {
+      await postEventStream(`/books/${book.id}/documents/batch-status`, { ids, status }, (name, data) => {
+        if (name !== 'item') return
+        const r = data.result as { id: number; ok: boolean; status?: DocumentStatus }
+        if (r.ok && r.status) setStatusLocal(r.id, r.status)
+        if (!r.ok) failed.push(r.id)
+        setBulk((b) => (b ? { ...b, done: data.done, failed: failed.length, current: ids[data.done] ?? null } : b))
+      })
+      if (failed.length === 0) {
+        showToast({ message: t('bookSettings.chapters.bulk.statusDone', { count: ids.length }), tone: 'success' })
+      } else {
+        showToast({ title: t('bookSettings.chapters.error.status'), message: t('bookSettings.chapters.bulk.partialFailed', { done: ids.length - failed.length, failed: failed.length }), tone: 'error' })
       }
-      setBulk((b) => (b ? { ...b, done: b.done + 1, failed: failed.length } : b))
+      setSelected(new Set(failed))
+    } catch (e) {
+      showToast({ title: t('bookSettings.chapters.error.status'), message: (e as Error).message, tone: 'error' })
+    } finally {
+      setBulk(null)
+      load()
     }
-    setBulk(null)
-    if (failed.length === 0) {
-      showToast({ message: t('bookSettings.chapters.bulk.statusDone', { count: ids.length }), tone: 'success' })
-    } else {
-      showToast({ title: t('bookSettings.chapters.error.status'), message: t('bookSettings.chapters.bulk.partialFailed', { done: ids.length - failed.length, failed: failed.length }), tone: 'error' })
-    }
-    setSelected(new Set(failed)); load()
   }
 
   // 批量删除：删除父章节会连带其子树，逐个删除并忽略已随父级删除的项。
@@ -145,16 +149,25 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
     const ids = Array.from(selected)
     if (ids.length === 0) return
     if (!(await confirmAction({ title: t('bookSettings.chapters.bulk.deleteTitle'), message: t('bookSettings.chapters.bulk.deleteMessage', { count: ids.length }), confirmLabel: t('books.delete.confirm'), danger: true }))) return
-    setBulk({ kind: 'delete', done: 0, total: ids.length, current: null, failed: 0 })
+    const ordered = flat.filter((d) => selected.has(d.id)).map((d) => d.id)
+    const failed: number[] = []
+    setBulk({ kind: 'delete', done: 0, total: ordered.length, current: ordered[0], failed: 0 })
     try {
-      for (const id of ids) {
-        setBulk((b) => (b ? { ...b, current: id } : b))
-        try { await api(`/documents/${id}`, { method: 'DELETE' }) } catch { /* 可能已随父章节删除 */ }
-        setBulk((b) => (b ? { ...b, done: b.done + 1 } : b))
-      }
-      showToast({ message: t('bookSettings.chapters.bulk.deleteDone', { count: ids.length }), tone: 'success' })
-      setSelected(new Set()); load()
-    } finally { setBulk(null) }
+      // 服务端逐个移入回收站并推送进度；已随父章节删除的子章节记为跳过
+      await postEventStream(`/books/${book.id}/documents/batch-delete`, { ids: ordered }, (name, data) => {
+        if (name !== 'item') return
+        if (!data.result.ok) failed.push(data.result.id)
+        setBulk((b) => (b ? { ...b, done: data.done, failed: failed.length, current: ordered[data.done] ?? null } : b))
+      })
+      if (failed.length === 0) showToast({ message: t('bookSettings.chapters.bulk.deleteDone', { count: ordered.length }), tone: 'success' })
+      else showToast({ title: t('books.error.delete'), message: t('bookSettings.chapters.bulk.partialFailed', { done: ordered.length - failed.length, failed: failed.length }), tone: 'error' })
+      setSelected(new Set(failed))
+    } catch (e) {
+      showToast({ title: t('books.error.delete'), message: (e as Error).message, tone: 'error' })
+    } finally {
+      setBulk(null)
+      load()
+    }
   }
 
   async function copyLink(doc: Document) {

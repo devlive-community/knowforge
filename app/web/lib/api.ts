@@ -39,6 +39,24 @@ export function setStepUpHandler(handler: (() => Promise<boolean>) | null): void
   stepUpHandler = handler
 }
 
+// runStepUp 交给全局处理器完成二次认证（未设置处理器时返回 false），供非 JSON 响应的请求（如事件流）复用。
+export async function runStepUp(): Promise<boolean> {
+  return stepUpHandler ? stepUpHandler() : false
+}
+
+// requestHeaders 与 api() 一致的请求头：界面语言、登录令牌，有请求体时带 JSON 类型。
+export function requestHeaders(withBody: boolean, token?: string | null): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (typeof document !== 'undefined') {
+    const locale = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('knowforge_locale='))?.split('=')[1]
+    if (locale) { try { headers['X-KnowForge-Locale'] = decodeURIComponent(locale) } catch { /* invalid cookie */ } }
+  }
+  if (withBody) headers['Content-Type'] = 'application/json'
+  const t = token ?? getToken()
+  if (t) headers.Authorization = `Bearer ${t}`
+  return headers
+}
+
 export async function api<T = any>(
   path: string,
   { method = 'GET', body, params, token }: {
@@ -55,14 +73,7 @@ export async function api<T = any>(
           .map(([k, v]) => [k, String(v)]),
       )
     : ''
-  const headers: Record<string, string> = {}
-  if (typeof document !== 'undefined') {
-    const locale = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('knowforge_locale='))?.split('=')[1]
-    if (locale) { try { headers['X-KnowForge-Locale'] = decodeURIComponent(locale) } catch { /* invalid cookie */ } }
-  }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
-  const t = token ?? getToken()
-  if (t) headers.Authorization = `Bearer ${t}`
+  const headers = requestHeaders(body !== undefined, token)
 
   const run = async () => {
     const res = await fetch(`${API_BASE}/api/v1${path}${query}`, {

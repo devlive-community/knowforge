@@ -638,25 +638,10 @@ func (a *App) DeleteDocument(c *gin.Context) {
 		return
 	}
 
-	ids := []uint{doc.ID}
-	frontier := []uint{doc.ID}
-	for len(frontier) > 0 {
-		var next []uint
-		for _, pid := range frontier {
-			var children []uint
-			a.DB.Model(&models.Document{}).Where("parent_id = ?", pid).Pluck("id", &children)
-			ids = append(ids, children...)
-			next = append(next, children...)
-		}
-		frontier = next
-	}
-	now := currentTime()
-	group := randomSlug("trash")
-	if err := a.DB.Model(&models.Document{}).Where("id IN ?", ids).Updates(map[string]any{
-		"deleted_at": now, "deleted_by": currentUser(c).ID, "trash_group": group,
-	}).Error; err != nil {
+	count, expires, err := a.trashDocumentSubtree(currentUser(c), doc)
+	if err != nil {
 		fail(c, http.StatusInternalServerError, "删除失败: "+err.Error())
 		return
 	}
-	ok(c, gin.H{"message": "已移入回收站", "count": len(ids), "expires_at": now.Add(trashRetention)})
+	ok(c, gin.H{"message": "已移入回收站", "count": count, "expires_at": expires})
 }
