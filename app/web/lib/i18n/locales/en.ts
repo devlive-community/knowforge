@@ -5205,4 +5205,6 @@ export const en: Record<string, string> = {
   'bookSettings.chapters.bulk.deleting': 'Deleting: {done}/{total}',
   'bookSettings.chapters.bulk.failedCount': '{n} failed',
   'bookSettings.chapters.bulk.partialFailed': '{done} done, {failed} failed (still selected so you can retry)',
+  'chapterGuide.overview.expand': 'Show more',
+  'chapterGuide.overview.collapse': 'Show less',
 }

@@ -5205,4 +5205,6 @@ export const zh: Record<string, string> = {
   'bookSettings.chapters.bulk.deleting': '正在删除：{done}/{total}',
   'bookSettings.chapters.bulk.failedCount': '{n} 个失败',
   'bookSettings.chapters.bulk.partialFailed': '{done} 个已完成，{failed} 个失败（仍保持选中，可重试）',
+  'chapterGuide.overview.expand': '展开全文',
+  'chapterGuide.overview.collapse': '收起',
 }
