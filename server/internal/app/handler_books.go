@@ -83,12 +83,15 @@ func (a *App) attachChapterCounts(books []models.Book) {
 
 // canManageBook 判断用户能否管理书籍（设置与删除：owner/admin）
 func (a *App) canManageBook(u *models.User, b *models.Book) bool {
+	if !u.TokenAllowsBook(b.ID) {
+		return false
+	}
 	return IsAdmin(u) || (u != nil && u.ID == b.UserID)
 }
 
 // collaboratorRole 查询用户在书籍上的协作者角色；非协作者返回 ("", false)
 func (a *App) collaboratorRole(u *models.User, bookID uint) (string, bool) {
-	if u == nil {
+	if u == nil || !u.TokenAllowsBook(bookID) {
 		return "", false
 	}
 	var c models.BookCollaborator
@@ -110,6 +113,9 @@ func (a *App) canEditBookContent(u *models.User, b *models.Book) bool {
 
 // canReadBook 判断书籍是否对当前用户可见
 func (a *App) canReadBook(u *models.User, b *models.Book) bool {
+	if !u.TokenAllowsBook(b.ID) {
+		u = nil // 限定书籍的令牌读其他书籍：按游客处理
+	}
 	// 公开且可读：默认所有人可读；开启「仅登录可读」时未登录游客不可读
 	if b.IsPublic && isPubliclyReadableBookStatus(b.Status) && (!b.LoginRequired || u != nil) {
 		return true
@@ -181,6 +187,9 @@ func (a *App) ListBooks(c *gin.Context) {
 				Where("bc.user_id = ? AND bc.status = ?", u.ID, "accepted")
 		} else {
 			query = query.Where("books.user_id = ?", u.ID)
+		}
+		if u.TokenBookID != 0 {
+			query = query.Where("books.id = ?", u.TokenBookID)
 		}
 		if s := c.Query("status"); s != "" && bookStatuses[s] {
 			query = query.Where("books.status = ?", s)
@@ -282,6 +291,9 @@ func (a *App) MyBookCounts(c *gin.Context) {
 			Where("bc.user_id = ? AND bc.status = ?", u.ID, "accepted")
 	} else {
 		query = query.Where("books.user_id = ?", u.ID)
+	}
+	if u.TokenBookID != 0 {
+		query = query.Where("books.id = ?", u.TokenBookID)
 	}
 	query.Select("books.status, COUNT(*) as count").Group("books.status").Scan(&rows)
 

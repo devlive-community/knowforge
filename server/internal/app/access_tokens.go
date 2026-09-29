@@ -91,14 +91,52 @@ func tokenIdentityRequest(c *gin.Context) bool {
 	return c.Request.Method == http.MethodGet && (path == "/api/v1/auth/me" || path == "/api/v1/auth/permissions")
 }
 
-// tokenScopes 本次请求所用限定权限令牌的权限集合；未使用令牌或令牌为全部权限时 restricted 为 false。
-func tokenScopes(c *gin.Context) (scopes map[authz.Permission]bool, restricted bool) {
+// tokenLimit 受限访问令牌的限制：perms 为自定义权限（nil 表示不限权限）；book 非 0 时只能操作这本书，
+// 且只能调用书籍相关的权限（见 bookScopedPermission）。
+type tokenLimit struct {
+	perms map[authz.Permission]bool
+	book  uint
+}
+
+// bookScopedResources 限定书籍的令牌可调用的权限资源：围绕这本书的内容与管理；
+// 不含用户级数据（通知、阅读进度、笔记等）与会新建书籍的操作。
+var bookScopedResources = map[string]bool{
+	"book": true, "book-analytics": true, "document": true, "document-revision": true, "comment": true,
+	"tag": true, "collaborator": true, "upload": true, "chapterguide": true, "aiwriter": true,
+}
+
+// bookScopedPermission 限定书籍的令牌是否可使用该权限（book:create / book:import 会新建书籍，不允许）。
+func bookScopedPermission(perm authz.Permission) bool {
+	if perm == authz.BookCreate || perm == authz.BookImport {
+		return false
+	}
+	return bookScopedResources[strings.SplitN(string(perm), ":", 2)[0]]
+}
+
+// allows 受限令牌是否可使用该权限。
+func (l *tokenLimit) allows(perm authz.Permission) bool {
+	if l.perms != nil && !l.perms[perm] {
+		return false
+	}
+	return l.book == 0 || bookScopedPermission(perm)
+}
+
+// denyMessage 受限令牌不能使用该权限时的说明。
+func (l *tokenLimit) denyMessage(perm authz.Permission) string {
+	if l.book != 0 && !bookScopedPermission(perm) {
+		return "限定书籍的访问令牌不能调用该接口（" + string(perm) + "）"
+	}
+	return "访问令牌没有 " + string(perm) + " 权限"
+}
+
+// tokenLimits 本次请求所用受限令牌（自定义权限或限定书籍）的限制；未使用令牌或令牌不受限时 ok 为 false。
+func tokenLimits(c *gin.Context) (*tokenLimit, bool) {
 	v, ok := c.Get(ctxTokenScopes)
 	if !ok {
 		return nil, false
 	}
-	scopes, restricted = v.(map[authz.Permission]bool)
-	return scopes, restricted
+	l, ok := v.(*tokenLimit)
+	return l, ok
 }
 
 // chainDeclaresPermission 本路由的处理链是否声明了所需权限（RequirePermission / DeclarePermission）；身份查询接口视为已声明。
@@ -118,7 +156,7 @@ func chainDeclaresPermission(c *gin.Context) bool {
 // 限定权限的令牌缺少该权限时按游客处理本次请求（只能看到公开内容）。
 func (a *App) DeclarePermission(perm authz.Permission) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if scopes, restricted := tokenScopes(c); restricted && !scopes[perm] {
+		if lim, restricted := tokenLimits(c); restricted && !lim.allows(perm) {
 			c.Set("user", (*models.User)(nil))
 		}
 		c.Next()
@@ -168,7 +206,16 @@ func (a *App) TokenPermissions(c *gin.Context) {
 		}
 		g.Permissions = append(g.Permissions, string(p))
 	}
-	ok(c, gin.H{"groups": groups})
+	// book_scoped：限定书籍时可选的权限（前端据此隐藏不可用的权限）
+	bookScoped := []string{}
+	for _, g := range groups {
+		for _, p := range g.Permissions {
+			if bookScopedPermission(authz.Permission(p)) {
+				bookScoped = append(bookScoped, p)
+			}
+		}
+	}
+	ok(c, gin.H{"groups": groups, "book_scoped": bookScoped})
 }
 
 // resolveAccessToken 校验个人访问令牌：有效时返回按普通用户鉴权的用户；令牌有效但不允许本次请求时 denied 非空。
@@ -190,12 +237,16 @@ func (a *App) resolveAccessToken(c *gin.Context, raw string) (u *models.User, de
 	}
 	user.Role = "user" // 令牌不具备管理员等角色权限
 	c.Set("access_token_id", t.ID)
-	if t.Scope == tokenScopeCustom {
-		scopes := make(map[authz.Permission]bool, len(t.Permissions))
-		for _, p := range t.Permissions {
-			scopes[authz.Permission(p)] = true
+	if t.Scope == tokenScopeCustom || t.BookID != 0 {
+		lim := &tokenLimit{book: t.BookID}
+		if t.Scope == tokenScopeCustom {
+			lim.perms = make(map[authz.Permission]bool, len(t.Permissions))
+			for _, p := range t.Permissions {
+				lim.perms[authz.Permission(p)] = true
+			}
 		}
-		c.Set(ctxTokenScopes, scopes)
+		user.TokenBookID = t.BookID
+		c.Set(ctxTokenScopes, lim)
 	}
 	return &user, ""
 }
@@ -203,10 +254,25 @@ func (a *App) resolveAccessToken(c *gin.Context, raw string) (u *models.User, de
 type accessTokenView struct {
 	models.PersonalAccessToken
 	Expired bool `json:"expired"`
+	// Book 限定的书籍（不限定时为 null）
+	Book *tokenBookView `json:"book"`
 }
 
-func toTokenView(t models.PersonalAccessToken) accessTokenView {
-	return accessTokenView{PersonalAccessToken: t, Expired: t.ExpiresAt != nil && time.Now().After(*t.ExpiresAt)}
+type tokenBookView struct {
+	ID    uint   `json:"id"`
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+}
+
+func (a *App) toTokenView(t models.PersonalAccessToken) accessTokenView {
+	v := accessTokenView{PersonalAccessToken: t, Expired: t.ExpiresAt != nil && time.Now().After(*t.ExpiresAt)}
+	if t.BookID != 0 {
+		var b models.Book
+		if a.DB.Unscoped().Select("id", "slug", "title").First(&b, t.BookID).Error == nil {
+			v.Book = &tokenBookView{ID: b.ID, Slug: b.Slug, Title: b.Title}
+		}
+	}
+	return v
 }
 
 func (a *App) activeTokenCount(userID uint) int64 {
@@ -222,7 +288,7 @@ func (a *App) MyAccessTokens(c *gin.Context) {
 	a.DB.Where("user_id = ?", u.ID).Order("id DESC").Limit(100).Find(&rows)
 	items := make([]accessTokenView, 0, len(rows))
 	for _, t := range rows {
-		items = append(items, toTokenView(t))
+		items = append(items, a.toTokenView(t))
 	}
 	ok(c, gin.H{"items": items, "active": a.activeTokenCount(u.ID), "limit": a.entitlement(u, entAPITokensMax)})
 }
@@ -235,6 +301,7 @@ func (a *App) CreateAccessToken(c *gin.Context) {
 		Name        string   `json:"name"`
 		Scope       string   `json:"scope"`
 		Permissions []string `json:"permissions"`
+		BookID      uint     `json:"book_id"`
 		ExpiresDays int      `json:"expires_days"`
 	}
 	if c.ShouldBindJSON(&req) != nil {
@@ -262,6 +329,10 @@ func (a *App) CreateAccessToken(c *gin.Context) {
 				fail(c, http.StatusBadRequest, "不支持的权限："+p)
 				return
 			}
+			if req.BookID != 0 && !bookScopedPermission(authz.Permission(p)) {
+				fail(c, http.StatusBadRequest, "限定书籍的令牌不能包含该权限："+p)
+				return
+			}
 			if !seen[p] {
 				seen[p] = true
 				perms = append(perms, p)
@@ -283,6 +354,13 @@ func (a *App) CreateAccessToken(c *gin.Context) {
 		return
 	}
 	u := currentUser(c)
+	if req.BookID != 0 {
+		var book models.Book
+		if a.DB.First(&book, req.BookID).Error != nil || !a.canEditBookContent(u, &book) {
+			fail(c, http.StatusBadRequest, "只能限定为你可以编辑的书籍")
+			return
+		}
+	}
 	if limit := a.entitlement(u, entAPITokensMax); limit != plugincore.Unlimited && a.activeTokenCount(u.ID) >= limit {
 		if limit == 0 {
 			fail(c, http.StatusForbidden, "当前等级或会员暂不支持访问令牌")
@@ -296,7 +374,7 @@ func (a *App) CreateAccessToken(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "生成令牌失败")
 		return
 	}
-	t := models.PersonalAccessToken{UserID: u.ID, Name: req.Name, Prefix: token[:len(accessTokenPrefix)+4], TokenHash: hashAccessToken(token), Scope: req.Scope, Permissions: perms}
+	t := models.PersonalAccessToken{UserID: u.ID, Name: req.Name, Prefix: token[:len(accessTokenPrefix)+4], TokenHash: hashAccessToken(token), Scope: req.Scope, Permissions: perms, BookID: req.BookID}
 	if req.ExpiresDays > 0 {
 		at := time.Now().AddDate(0, 0, req.ExpiresDays)
 		t.ExpiresAt = &at
@@ -305,7 +383,7 @@ func (a *App) CreateAccessToken(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "保存失败")
 		return
 	}
-	ok(c, gin.H{"token": token, "item": toTokenView(t)})
+	ok(c, gin.H{"token": token, "item": a.toTokenView(t)})
 }
 
 // RevokeAccessToken DELETE /auth/tokens/:id 吊销令牌（立即失效，记录保留）。

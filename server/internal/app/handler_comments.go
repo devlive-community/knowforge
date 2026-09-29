@@ -25,7 +25,7 @@ func (a *App) canManageComment(c *gin.Context, comment *models.Comment, book *mo
 		return true
 	}
 	// 书籍作者可以管理自己书下的评论
-	return book.UserID == u.ID
+	return book.UserID == u.ID && u.TokenAllowsBook(book.ID)
 }
 
 func publicCommentUser(u *models.User) gin.H {

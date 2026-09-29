@@ -5207,4 +5207,9 @@ export const en: Record<string, string> = {
   'bookSettings.chapters.bulk.partialFailed': '{done} done, {failed} failed (still selected so you can retry)',
   'chapterGuide.overview.expand': 'Show more',
   'chapterGuide.overview.collapse': 'Show less',
+  'account.tokens.bookLabel': 'Books',
+  'account.tokens.allBooks': 'All books',
+  'account.tokens.bookHintAll': 'The token can reach every book you can access',
+  'account.tokens.bookHintOne': 'The token can only work on this book, with book-related permissions and no new books; other books look as they do to guests',
+  'account.tokens.bookBadge': 'Only "{title}"',
 }

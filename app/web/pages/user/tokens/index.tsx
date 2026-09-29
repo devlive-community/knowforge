@@ -14,6 +14,7 @@ interface AccessToken {
   prefix: string
   scope: 'all' | 'custom' | 'read' | 'write' // read / write 为旧令牌（write 等同全部权限）
   permissions: string[] | null
+  book: { id: number; slug: string; title: string } | null
   expires_at: string | null
   last_used_at: string | null
   last_used_ip: string
@@ -119,6 +120,7 @@ export default function AccessTokensPage() {
                             <Badge tone={tk.scope === 'all' || tk.scope === 'write' ? 'amber' : 'sky'}>
                               {tk.scope === 'custom' ? t('account.tokens.scope.customCount', { n: tk.permissions?.length || 0 }) : t(`account.tokens.scope.${tk.scope === 'write' ? 'all' : tk.scope}`)}
                             </Badge>
+                            {tk.book && <Badge tone="violet">{t('account.tokens.bookBadge', { title: tk.book.title })}</Badge>}
                             {tk.revoked_at ? <Badge tone="slate">{t('account.tokens.status.revoked')}</Badge> : tk.expired && <Badge tone="slate">{t('account.tokens.status.expired')}</Badge>}
                           </div>
                           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
@@ -161,15 +163,28 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [scope, setScope] = useState<'all' | 'custom'>('custom')
   const [expires, setExpires] = useState('30')
   const [saving, setSaving] = useState(false)
-  const [groups, setGroups] = useState<PermissionGroup[] | null>(null)
+  const [catalog, setCatalog] = useState<PermissionGroup[] | null>(null)
+  const [bookScoped, setBookScoped] = useState<Set<string>>(new Set())
+  const [books, setBooks] = useState<{ id: number; title: string }[]>([])
+  const [bookId, setBookId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    api<{ groups: PermissionGroup[] }>('/auth/tokens/permissions').then((d) => setGroups(d.groups))
-      .catch((e) => { setGroups([]); showToast({ message: (e as Error).message, tone: 'error' }) })
+    api<{ groups: PermissionGroup[]; book_scoped: string[] }>('/auth/tokens/permissions').then((d) => { setCatalog(d.groups); setBookScoped(new Set(d.book_scoped)) })
+      .catch((e) => { setCatalog([]); showToast({ message: (e as Error).message, tone: 'error' }) })
+    api<{ items: { id: number; title: string }[] }>('/books', { params: { mine: 'true', page_size: 100 } })
+      .then((d) => setBooks(d.items)).catch(() => setBooks([]))
   }, [showToast])
 
+  // 限定书籍时只能选择书籍相关的权限
+  const groups = useMemo(() => {
+    if (!catalog || !bookId) return catalog
+    return catalog.map((g) => ({ ...g, permissions: g.permissions.filter((p) => bookScoped.has(p)) })).filter((g) => g.permissions.length > 0)
+  }, [catalog, bookId, bookScoped])
   const all = useMemo(() => (groups || []).flatMap((g) => g.permissions), [groups])
+  useEffect(() => {
+    if (bookId) setSelected((cur) => new Set(Array.from(cur).filter((p) => bookScoped.has(p))))
+  }, [bookId, bookScoped])
   const toggle = (perms: string[], on: boolean) => setSelected((cur) => {
     const next = new Set(cur)
     perms.forEach((p) => (on ? next.add(p) : next.delete(p)))
@@ -180,7 +195,7 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
   async function submit() {
     setSaving(true)
     try {
-      const body = { name: name.trim(), scope, expires_days: Number(expires), ...(scope === 'custom' ? { permissions: Array.from(selected) } : {}) }
+      const body = { name: name.trim(), scope, expires_days: Number(expires), book_id: Number(bookId) || 0, ...(scope === 'custom' ? { permissions: Array.from(selected) } : {}) }
       const r = await api<{ token: string }>('/auth/tokens', { method: 'POST', body })
       onCreated(r.token)
     } catch (e) {
@@ -204,6 +219,10 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
               options={EXPIRY_OPTIONS.map((d) => ({ value: d, label: d === '0' ? t('account.tokens.neverExpires') : t('account.tokens.days', { n: d }) }))} />
           </Field>
         </div>
+        <Field label={t('account.tokens.bookLabel')} hint={t(bookId ? 'account.tokens.bookHintOne' : 'account.tokens.bookHintAll')}>
+          <Select value={bookId} onChange={setBookId} searchable
+            options={[{ value: '', label: t('account.tokens.allBooks') }, ...books.map((b) => ({ value: String(b.id), label: b.title }))]} />
+        </Field>
         <Field label={t('account.tokens.scopeLabel')} hint={t(`account.tokens.scopeHint.${scope}`)}>
           <SegmentedTabs fullWidth size="sm" value={scope} ariaLabel={t('account.tokens.scopeLabel')} onChange={(v) => setScope(v as 'all' | 'custom')}
             items={[{ value: 'custom', label: t('account.tokens.scope.custom') }, { value: 'all', label: t('account.tokens.scope.all') }]} />

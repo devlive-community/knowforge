@@ -62,6 +62,7 @@ Authorization: Bearer kf_pat_…
   - `all`（全部权限）：可调用普通用户能调用的全部接口；
   - `custom`（自定义）：只允许 `permissions` 中勾选的权限（`resource:action`，可选项见 `GET /auth/tokens/permissions`）。路由上 `RequirePermission` 要求的权限不在其中时返回 403 `TOKEN_FORBIDDEN`；**未登记所需权限的登录接口一律拒绝**，未登记权限的公开接口按游客处理；读取书籍/章节、导出等公开接口登记了 `book:read` / `document:read` / `book:export`，令牌缺少时按游客处理（只能看到公开内容）。`GET /auth/permissions` 只返回令牌拥有的权限；
   - 旧令牌：`read`（只能 `GET` / `HEAD`）继续有效，`write` 等同 `all`
+- 限定书籍 `book_id`（可选，只能是自己可编辑的书）：令牌只能操作这本书——对其他书籍读取按游客处理、写入与管理一律拒绝，「我的书籍」只列出这本；且只能使用书籍相关的权限（书籍、章节、历史版本、评论、标签、协作者、上传、书籍分析、章节导读、AI 写作），不能新建或导入新书（`book:create` / `book:import`），也不能访问通知、阅读进度等用户级接口（403 `TOKEN_FORBIDDEN`）。`GET /auth/tokens/permissions` 另返回 `book_scoped`（限定书籍时可选的权限）；令牌列表项含 `book{id,slug,title}`
 - 令牌始终按普通用户鉴权，不具备管理员等角色权限；不能访问 `/auth/*` 下的账号与安全接口（`GET /auth/me`、`GET /auth/permissions` 除外），这些请求返回 403 `code: TOKEN_FORBIDDEN`
 - 每人的有效令牌数为权益 `api.tokens_max`（基础 10 个，0 表示不开放），可由会员方案与成长等级提升
 
@@ -230,7 +231,7 @@ Authorization: Bearer kf_pat_…
 | GET | `/auth/permissions` | 当前用户权限列表（`string[]`） | 登录 |
 | GET | `/auth/tokens` | 我的个人访问令牌 `items:[{id,name,prefix,scope,permissions,expires_at,last_used_at,last_used_ip,revoked_at,expired,created_at}]` + `active`（有效数）+ `limit`（上限，-1 不限）；令牌本身不能调用 | 登录 |
 | GET | `/auth/tokens/permissions` | 创建令牌时可选的权限 `groups:[{resource, permissions[]}]`（普通用户当前拥有的权限，含已启用插件，不含 `auth:*`） | 登录 |
-| POST | `/auth/tokens` | `{name, scope: all\|custom, permissions[]（custom 必填）, expires_days: 0\|7\|30\|90\|365}` 生成令牌，返回 `{token（明文，仅此一次）, item}`；超出权益上限 403；仍接受旧的 `read` / `write`（`write` 保存为 `all`） | 登录 |
+| POST | `/auth/tokens` | `{name, scope: all\|custom, permissions[]（custom 必填）, book_id?（限定书籍）, expires_days: 0\|7\|30\|90\|365}` 生成令牌，返回 `{token（明文，仅此一次）, item}`；超出权益上限 403；仍接受旧的 `read` / `write`（`write` 保存为 `all`） | 登录 |
 | DELETE | `/auth/tokens/:id` | 吊销令牌（立即失效，记录保留） | 登录 |
 | PUT | `/auth/profile` | 更新资料（email/avatar/bio/github_url/nickname/name_display/website/location/company；改邮箱受二次认证保护）。`name_display` 为名字显示方式：`nickname`（默认，有昵称时显示昵称）或 `username`（始终显示用户名）；各接口返回的用户都带按此计算的 `display_name` | `user:update` |
 | GET/PUT | `/auth/export-settings` | 当前用户 PDF 导出样式偏好：`page_size`(A4\|Letter)、`include_cover`、`include_toc`、`font_size`(12–20)、`code_theme`(light\|dark)、`margin`(narrow\|normal\|wide)、`footer`（每页页脚 Powered by 文案，≤100 字，留空用默认 `Powered by <站点名>`） | `user:read` / `user:update` |

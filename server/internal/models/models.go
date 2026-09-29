@@ -29,6 +29,8 @@ type User struct {
 	NameDisplay string `gorm:"size:10;default:''" json:"name_display"`
 	// DisplayName 非持久化：按名字显示方式得出的展示名，查询后自动回填（见 AfterFind）
 	DisplayName string `gorm:"-" json:"display_name"`
+	// TokenBookID 非持久化：以限定书籍的访问令牌访问时只能操作这本书（见 app/access_tokens.go）
+	TokenBookID uint `gorm:"-" json:"-"`
 	// DeletionRequestedAt 用户自助注销请求时间；非空表示进入冷静期，到期后由维护任务自动删除
 	DeletionRequestedAt *time.Time `gorm:"index" json:"deletion_requested_at"`
 	// EmailVerified 邮箱是否已激活；开启「注册后必须激活邮箱」时，未激活用户只读
@@ -69,6 +71,11 @@ func (u *User) PublicName() string {
 		return u.Username
 	}
 	return u.Nickname
+}
+
+// TokenAllowsBook 以限定书籍的访问令牌访问时，是否允许操作该书（未使用令牌或令牌不限书籍时恒为 true）。
+func (u *User) TokenAllowsBook(bookID uint) bool {
+	return u == nil || u.TokenBookID == 0 || u.TokenBookID == bookID
 }
 
 // AfterFind 查询后回填展示名（只选部分列时未选 name_display 按默认的「优先昵称」处理）。
@@ -833,12 +840,14 @@ type PersonalAccessToken struct {
 	TokenHash string `gorm:"size:64;uniqueIndex" json:"-"`
 	Scope     string `gorm:"size:10" json:"scope"` // all（全部权限）| custom（Permissions 所列权限）；旧令牌为 read（只读）| write（等同 all）
 	// Permissions scope=custom 时令牌可用的权限（resource:action），见 app/access_tokens.go
-	Permissions []string   `gorm:"type:text;serializer:json" json:"permissions"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
-	LastUsedIP  string     `gorm:"size:64" json:"last_used_ip"`
-	RevokedAt   *time.Time `json:"revoked_at"`
-	CreatedAt   time.Time  `json:"created_at"`
+	Permissions []string `gorm:"type:text;serializer:json" json:"permissions"`
+	// BookID 限定书籍：非 0 时令牌只能操作这本书（且只能调用书籍相关的权限）
+	BookID     uint       `gorm:"index;default:0" json:"book_id"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	LastUsedAt *time.Time `json:"last_used_at"`
+	LastUsedIP string     `gorm:"size:64" json:"last_used_ip"`
+	RevokedAt  *time.Time `json:"revoked_at"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 func All(db *gorm.DB) error {

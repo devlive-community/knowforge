@@ -5207,4 +5207,9 @@ export const zh: Record<string, string> = {
   'bookSettings.chapters.bulk.partialFailed': '{done} 个已完成，{failed} 个失败（仍保持选中，可重试）',
   'chapterGuide.overview.expand': '展开全文',
   'chapterGuide.overview.collapse': '收起',
+  'account.tokens.bookLabel': '适用书籍',
+  'account.tokens.allBooks': '全部书籍',
+  'account.tokens.bookHintAll': '令牌可以访问你有权限的全部书籍',
+  'account.tokens.bookHintOne': '令牌只能操作这本书，只能使用书籍相关的权限，也不能新建书籍；其他书籍按游客可见',
+  'account.tokens.bookBadge': '仅限《{title}》',
 }

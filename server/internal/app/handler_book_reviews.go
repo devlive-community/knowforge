@@ -158,7 +158,7 @@ func (a *App) DeleteBookReview(c *gin.Context) {
 		fail(c, http.StatusNotFound, "书籍不存在")
 		return
 	}
-	if !(u.ID == review.UserID || u.Role == "admin" || book.UserID == u.ID) {
+	if !(u.ID == review.UserID || u.Role == "admin" || (book.UserID == u.ID && u.TokenAllowsBook(book.ID))) {
 		fail(c, http.StatusForbidden, "无权删除该评论")
 		return
 	}
