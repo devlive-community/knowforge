@@ -153,7 +153,7 @@ nginx (:80/:443)
 ### Releasing a new version
 
 ```bash
-deploy/release.sh        # tag and push the current version in handler_setup.go, then open the next version
+deploy/release.sh        # tag and push the current version in handler_setup.go, then open and commit the next version (not pushed)
 deploy/new-version.sh    # open a new version manually: bump versions everywhere and draft the CHANGELOG
 ```
 

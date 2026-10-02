@@ -8,7 +8,7 @@
 #   deploy/release.sh --next 2026.1.0       # 指定发布后开启的下一个版本号
 #   deploy/release.sh 2026.0.1 --next 2026.1.0
 #   deploy/release.sh --allow-dirty         # 工作区有未提交改动时仍允许发布（标签不含这些改动）
-# 发布成功后自动开启下一版本（默认 patch +1），版本改动留在工作区待检查提交。
+# 发布成功后自动开启下一版本（默认 patch +1）并提交为 chore: start version X（只提交版本文件，不推送）。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -127,8 +127,19 @@ git push origin "$TAG"
 
 echo "✅ 已推送标签 ${TAG}，Release 工作流开始构建并发布。"
 
-# ── 开启下一版本：统一 bump 各处版本号并转正 CHANGELOG，改动留在工作区待检查提交 ──
+# ── 开启下一版本：统一 bump 各处版本号并转正 CHANGELOG，并自动提交（只提交这些版本文件，不推送） ──
 deploy/new-version.sh "$NEXT"
+VERSION_FILES=(
+  "$SETUP_GO" CHANGELOG.md app/web/package.json app/desktop/package.json
+  app/desktop/src-tauri/tauri.conf.json app/desktop/src-tauri/Cargo.toml
+)
+git add -- "${VERSION_FILES[@]}"
+if git diff --cached --quiet; then
+  echo "版本文件没有变化，跳过提交。"
+else
+  git commit --quiet -m "chore: start version ${NEXT}" -- "${VERSION_FILES[@]}"
+  echo "✅ 已提交下一版本 ${NEXT}（chore: start version ${NEXT}），确认后执行：git push origin ${RELEASE_BRANCH}"
+fi
 if command -v gh >/dev/null 2>&1; then
   echo "查看进度：gh run watch"
   gh run list --workflow=Release --limit=1 2>/dev/null || true

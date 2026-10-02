@@ -153,7 +153,7 @@ nginx (:80/:443)
 ### 发布新版本
 
 ```bash
-deploy/release.sh        # 为 handler_setup.go 中的当前版本打 v 标签并推送，发布后自动开启下一版本
+deploy/release.sh        # 为 handler_setup.go 中的当前版本打 v 标签并推送，发布后自动开启并提交下一版本（不推送）
 deploy/new-version.sh    # 手动开启新版本：统一 bump 各处版本号并生成 CHANGELOG 草稿
 ```
 
