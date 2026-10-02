@@ -199,3 +199,31 @@ func TestExtractWebArticleDropsDocusaurusChrome(t *testing.T) {
 		}
 	}
 }
+
+// 导航链接的 class 含 nav（如 Just the Docs 的 nav-list-link）时，目录标题仍取链接文字，而不是退回 URL 片段。
+func TestExtractNavTreeUsesLinkTextForNavClasses(t *testing.T) {
+	page := `<html><body><nav id="site-nav" class="site-nav"><ul class="nav-list">
+<li class="nav-list-item"><a href="/gluten/" class="nav-list-link">Home</a></li>
+<li class="nav-list-item"><a href="/gluten/getting-started/" class="nav-list-link">Getting Started</a></li>
+<li class="nav-list-item"><button class="nav-list-expander" aria-label="Developer Overview submenu"><svg><title>x</title></svg></button><a href="/gluten/developer-overview/" class="nav-list-link">Developer Overview</a>
+<ul class="nav-list"><li class="nav-list-item"><a href="/gluten/developers/NewToGluten.html" class="nav-list-link">New To <span aria-hidden="true">✦</span>Gluten</a></li></ul></li>
+</ul></nav></body></html>`
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, _ := url.Parse("https://apache.github.io/gluten/getting-started/")
+	tree := extractNavTree(doc, base, 50)
+	want := []string{"Home", "Getting Started", "Developer Overview", "New To Gluten"}
+	if len(tree) != len(want) {
+		t.Fatalf("目录项数量异常: %+v", tree)
+	}
+	for i, title := range want {
+		if tree[i].Title != title {
+			t.Fatalf("第 %d 项标题 %q，应为 %q", i, tree[i].Title, title)
+		}
+	}
+	if tree[3].Depth != 1 || tree[3].ParentURL != "https://apache.github.io/gluten/developer-overview/" {
+		t.Fatalf("子项层级异常: %+v", tree[3])
+	}
+}

@@ -60,7 +60,10 @@ func extractNavTree(root *html.Node, base *url.URL, limit int) []crawlNode {
 			}
 			if strings.EqualFold(child.Data, "a") {
 				if u := normalizeCrawlURL(attribute(child, "href"), base); u != "" && !seen[u] {
-					title := strings.TrimSpace(nodeText(child))
+					title := linkText(child)
+					if title == "" {
+						title = strings.TrimSpace(attribute(child, "title"))
+					}
 					if title == "" {
 						title = lastURLSegment(u)
 					}
@@ -100,6 +103,33 @@ func extractNavTree(root *html.Node, base *url.URL, limit int) []crawlNode {
 		}
 	}
 	return out
+}
+
+// linkText 导航链接的显示文字：只跳过脚本、样式、图标与隐藏元素。不能用正文提取的 nodeText——
+// 它会按 class 关键词忽略导航类元素（如 class="nav-list-link"），导致链接文字为空、退回为 URL 片段。
+func linkText(n *html.Node) string {
+	var parts []string
+	var walk func(*html.Node)
+	walk = func(m *html.Node) {
+		switch m.Type {
+		case html.TextNode:
+			if t := strings.TrimSpace(m.Data); t != "" {
+				parts = append(parts, t)
+			}
+			return
+		case html.ElementNode:
+			tag := strings.ToLower(m.Data)
+			if tag == "script" || tag == "style" || tag == "svg" || tag == "template" ||
+				strings.EqualFold(attribute(m, "aria-hidden"), "true") || hasAttribute(m, "hidden") {
+				return
+			}
+		}
+		for c := m.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(n)
+	return strings.Join(strings.Fields(strings.Join(parts, " ")), " ")
 }
 
 // pickNavContainer 在页面中挑选「后代 <a> 链接最多」的导航容器：
