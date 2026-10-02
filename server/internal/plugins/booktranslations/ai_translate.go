@@ -35,8 +35,8 @@ var (
 // segmentRunes 每次调用翻译的原文长度（按段落切分，单个段落或代码块不拆开）。
 const segmentRunes = 3000
 
-// errMarkupLost 译文反复未能保留占位符（原文的格式与组件语法），该章记为失败，不保存损坏的内容。
-var errMarkupLost = errors.New("译文未能保留原文的格式与组件语法，请重试该章节")
+// errMarkupLost 某段译文反复未能保留占位符（原文的格式与组件语法）。
+var errMarkupLost = errors.New("译文未能保留原文的格式与组件语法")
 
 var errCharsExhausted = errors.New("本月翻译字数已用完，下月恢复，或提升等级/开通会员获得更多额度；可稍后继续")
 
@@ -408,9 +408,9 @@ func (r *runner) failItem(it *TranslateItem, msg string) {
 }
 
 // chapter 翻译一个章节的正文并写入译本章节（记录版本；已发布的章节交发布守卫审查）。
-// translateSegment 翻译一段已掩码的文字：流式推送还原后的译文；占位符不一致时撤回该段输出并重试一次，
-// 仍不一致返回 errMarkupLost。done 为本章已完成的段落（用于撤回时恢复临时译文）。
-func (r *runner) translateSegment(ctx context.Context, system string, masked *mdmask.Masked, text string, done []string, total *usageTotals) (string, error) {
+// translateOnce 翻译一段已掩码的文字：流式推送还原后的译文；占位符不一致时撤回该段输出并重试一次，
+// 仍不一致返回 errMarkupLost。done 为本章已完成的内容（用于撤回时恢复临时译文）。
+func (r *runner) translateOnce(ctx context.Context, system string, masked *mdmask.Masked, text string, done []string, total *usageTotals) (string, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		sys := system
 		if attempt > 0 {
@@ -442,6 +442,42 @@ func (r *runner) translateSegment(ctx context.Context, system string, masked *md
 		r.run.rewind(prev)
 	}
 	return "", errMarkupLost
+}
+
+// translateSegment 翻译一段：整段失败时按块（空行分隔）逐块翻译，块越小占位符越少、越容易保留；
+// 某块仍无法保留格式时该块保留原文，不让整章失败。返回译文与保留原文的块数。
+func (r *runner) translateSegment(ctx context.Context, system string, masked *mdmask.Masked, text string, done []string, total *usageTotals) (string, int, error) {
+	out, err := r.translateOnce(ctx, system, masked, text, done, total)
+	if !errors.Is(err, errMarkupLost) {
+		return out, 0, err
+	}
+	blocks := strings.Split(text, "\n\n")
+	if len(blocks) == 1 {
+		original, _ := masked.Restore(text)
+		r.run.append(original)
+		return original, 1, nil
+	}
+	var outs []string
+	kept := 0
+	for _, block := range blocks {
+		piece, err := "", errMarkupLost
+		if mdmask.HasText(block) {
+			prior := append(append([]string(nil), done...), strings.Join(outs, "\n\n"))
+			piece, err = r.translateOnce(ctx, system, masked, block, prior, total)
+			if errors.Is(err, errMarkupLost) {
+				kept++
+			} else if err != nil {
+				return "", 0, err
+			}
+		}
+		if errors.Is(err, errMarkupLost) { // 只有占位符的块，或无法保留格式的块：保留原文
+			piece, _ = masked.Restore(block)
+			r.run.append(piece)
+		}
+		outs = append(outs, piece)
+		r.run.append("\n\n")
+	}
+	return strings.Join(outs, "\n\n"), kept, nil
 }
 
 // wikiTarget 把双向链接的目标（原书章节标题或 slug）解析为章节 slug，译本中章节 slug 与原书一致，链接仍然有效。
@@ -502,6 +538,7 @@ func (r *runner) chapter(ctx context.Context, it *TranslateItem) error {
 		masked.SetFrontTranslations(out)
 	}
 	var parts []string
+	keptOriginal := 0 // 无法保留格式而保留原文的块数
 	for _, seg := range splitSegments(masked.Text, segmentRunes) {
 		if seg.code || !mdmask.HasText(seg.text) {
 			out, _ := masked.Restore(seg.text)
@@ -509,12 +546,8 @@ func (r *runner) chapter(ctx context.Context, it *TranslateItem) error {
 			r.run.append(out + "\n\n")
 			continue
 		}
-		out, err := r.translateSegment(ctx, system, masked, seg.text, parts, &total)
-		if errors.Is(err, errMarkupLost) {
-			r.addJobUsage(total)
-			r.failItem(it, err.Error())
-			return nil
-		}
+		out, n, err := r.translateSegment(ctx, system, masked, seg.text, parts, &total)
+		keptOriginal += n
 		if err != nil {
 			r.addJobUsage(total)
 			return err
@@ -545,8 +578,12 @@ func (r *runner) chapter(ctx context.Context, it *TranslateItem) error {
 	}
 	r.db().Model(&TranslatedDoc{}).Where("target_book_id = ? AND source_doc_id = ?", r.dst.ID, src.ID).
 		Updates(map[string]any{"target_doc_id": dst.ID, "source_hash": hash})
+	note := ""
+	if keptOriginal > 0 {
+		note = fmt.Sprintf("有 %d 处内容未能在翻译时保留格式，已保留原文，可在译稿中手动翻译", keptOriginal)
+	}
 	r.db().Model(it).Updates(map[string]any{"status": itemDone, "target_title": dst.Title, "chars": total.chars, "input_tokens": total.in,
-		"output_tokens": total.out, "duration_ms": time.Since(started).Milliseconds()})
+		"output_tokens": total.out, "duration_ms": time.Since(started).Milliseconds(), "error": note})
 	r.db().Model(&TranslateJob{}).Where("id = ?", r.job.ID).Update("done", gorm.Expr("done + 1"))
 	r.publishItem(it.ID)
 	r.addJobUsage(total)

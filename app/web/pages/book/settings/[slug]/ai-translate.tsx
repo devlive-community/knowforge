@@ -369,7 +369,7 @@ function JobDetail({ jobId, overview, backHref, onChanged }: { jobId: number; ov
             <Badge tone={ITEM_TONE[it.status] || 'slate'}>{t(`bookSettings.aiTranslate.itemStatus.${it.status}`)}</Badge>
             <span className="min-w-0 truncate text-slate-800">{it.title}</span>
             {it.target_title && it.target_title !== it.title && <span className="min-w-0 truncate text-slate-400">→ {it.target_title}</span>}
-            {it.error && <span className="text-xs text-rose-600">{it.error}</span>}
+            {it.error && <span className={`text-xs ${it.status === 'done' ? 'text-amber-600' : 'text-rose-600'}`}>{it.error}</span>}
             {it.status === 'done' && (
               <span className="ml-auto text-xs tabular-nums text-slate-400">{t('bookSettings.aiTranslate.itemUsage', { chars: it.chars.toLocaleString(), tokens: (it.input_tokens + it.output_tokens).toLocaleString(), s: (it.duration_ms / 1000).toFixed(1) })}</span>
             )}

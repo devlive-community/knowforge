@@ -398,25 +398,21 @@ func TestAIBookTranslation(t *testing.T) {
 		t.Fatalf("重试结果异常: %v", jobOf(done))
 	}
 
-	// 模型丢失占位符（格式/组件语法）：重试一次后该章记为失败，不保存损坏的译文
-	lossy := e.doc(t, author, bookID, `{"title":"第五章","slug":"lossy","content":"丢占位的章节 [children]。","status":"draft","sort_order":4}`)
+	// 模型丢失占位符（格式/组件语法）：重试一次，仍不行则该处保留原文、章节照常完成并说明，不保存损坏的译文
+	lossy := e.doc(t, author, bookID, `{"title":"第五章","slug":"lossy","content":"丢占位的章节 [children]。\n\n正常的段落。","status":"draft","sort_order":4}`)
 	_, p = e.as(t, author, http.MethodPost, base+"/jobs", fmt.Sprintf(`{"target_book_id":%d}`, targetID))
 	lossyJob := num(jobOf(data(p))["id"])
 	lossyDone := e.wait(t, author, lossyJob)
-	if jobOf(lossyDone)["status"] != "done" || num(jobOf(lossyDone)["failed"]) != 1 {
-		t.Fatalf("丢失占位符的章节应记为失败: %v", jobOf(lossyDone))
+	if jobOf(lossyDone)["status"] != "done" || num(jobOf(lossyDone)["failed"]) != 0 || num(jobOf(lossyDone)["done"]) != 1 {
+		t.Fatalf("无法保留格式的段落不应让整章失败: %v", jobOf(lossyDone))
 	}
-	for _, it := range lossyDone["items"].([]any) {
-		if item := it.(map[string]any); item["status"] == "failed" && !strings.Contains(item["error"].(string), "格式与组件语法") {
-			t.Fatalf("失败原因应说明格式未保留: %v", item)
-		}
+	if item := lossyDone["items"].([]any)[0].(map[string]any); !strings.Contains(item["error"].(string), "已保留原文") {
+		t.Fatalf("应说明保留了原文: %v", item)
 	}
 	var lossyDst models.Document
-	if e.db.Where("book_id = ? AND slug = ?", targetID, "lossy").First(&lossyDst).Error == nil && strings.Contains(lossyDst.Content, "丢占位") {
-		t.Fatalf("不应保存损坏的译文: %q", lossyDst.Content)
-	}
-	if n := strings.Count(strings.Join(fake.inputsContaining("丢占位"), "\n"), "丢占位"); n != 2 {
-		t.Fatalf("应重试一次（共调用 2 次），实际 %d", n)
+	e.db.Where("book_id = ? AND slug = ?", targetID, "lossy").First(&lossyDst)
+	if !strings.Contains(lossyDst.Content, "丢占位的章节 [children]。") || !strings.Contains(lossyDst.Content, "EN:正常的段落。") {
+		t.Fatalf("无法保留格式的段落保留原文、其余段落照常翻译: %q", lossyDst.Content)
 	}
 	e.db.Delete(&models.Document{}, lossy.ID)
 

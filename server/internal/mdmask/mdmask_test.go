@@ -172,3 +172,53 @@ func TestRestoreKeepsBlockTagsAtLineStart(t *testing.T) {
 		t.Fatalf("块级标签应在行首、行内标签不受影响:\n%s", out)
 	}
 }
+
+// HTML 表格（如 Sphinx 文档采集的 <table class="docutils">）：结构标签合并为少量占位符，单元格文字仍交给翻译。
+func TestMaskHTMLTable(t *testing.T) {
+	src := `<table class="docutils align-default">
+  <thead>
+    <tr class="row-odd">
+      <th class="head" rowspan="2">Backend</th>
+      <th class="head">Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="row-even">
+      <td><p>Velox</p></td>
+      <td><p>Meta's C++ execution library, see <a class="reference external" href="https://velox.dev">docs</a></p></td>
+    </tr>
+  </tbody>
+</table>`
+	m := Mask(src, Options{})
+	out, err := m.Restore(m.Text)
+	if err != nil || out != src {
+		t.Fatalf("往返不一致: %v\n%s", err, out)
+	}
+	visible := placeholder.ReplaceAllString(m.Text, "")
+	for _, text := range []string{"Backend", "Description", "Velox", "Meta's C++ execution library, see", "docs"} {
+		if !strings.Contains(visible, text) {
+			t.Fatalf("单元格文字 %q 应交给翻译:\n%s", text, m.Text)
+		}
+	}
+	for _, hidden := range []string{"<", "class", "rowspan", "velox.dev"} {
+		if strings.Contains(visible, hidden) {
+			t.Fatalf("%q 不应交给翻译:\n%s", hidden, m.Text)
+		}
+	}
+	if n := len(Placeholders(m.Text)); n > 14 {
+		t.Fatalf("占位符过多（%d 个），模型容易漏掉:\n%s", n, m.Text)
+	}
+}
+
+// 属性分多行书写的 HTML 标签整体保持原样，不交给翻译。
+func TestMaskMultilineTag(t *testing.T) {
+	src := "说明文字\n\n<img\n  src=\"https://example.com/a.png\"\n  alt=\"示意图\">\n\n后续段落"
+	m := Mask(src, Options{})
+	if out, err := m.Restore(m.Text); err != nil || out != src {
+		t.Fatalf("往返不一致: %v %q", err, out)
+	}
+	visible := placeholder.ReplaceAllString(m.Text, "")
+	if strings.Contains(visible, "src=") || !strings.Contains(visible, "后续段落") {
+		t.Fatalf("多行标签应整体隐藏: %s", m.Text)
+	}
+}

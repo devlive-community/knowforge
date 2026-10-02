@@ -84,6 +84,7 @@ var (
 	macroLine     = regexp.MustCompile(`(?i)^\s*\[(toc|children)\]\s*$`)
 	frontKey      = regexp.MustCompile(`^([A-Za-z_][\w-]*)([ \t]*:[ \t]?)(.*)$`)
 	leadingSpace  = regexp.MustCompile(`^[ \t]{2,}`)
+	openTagLine   = regexp.MustCompile(`^\s*<[A-Za-z][\w.-]*(\s[^<>]*)?$`)
 )
 
 // Mask 掩码整篇 Markdown（front-matter、代码块等块级结构需要整篇上下文，应对整篇调用后再分段翻译）。
@@ -149,6 +150,23 @@ func Mask(src string, opts Options) *Masked {
 			out = append(out, m.keepLine(strings.Join(block, "\n")))
 			continue
 		}
+		// 跨行的 HTML 标签（属性分多行写，如 <img\n  src="…"\n  alt="…">）：到 > 为止整体保持原样
+		if openTagLine.MatchString(line) {
+			block := []string{line}
+			j := i
+			for j+1 < len(lines) && j-i < 50 {
+				j++
+				block = append(block, lines[j])
+				if strings.Contains(lines[j], ">") {
+					break
+				}
+			}
+			if strings.Contains(block[len(block)-1], ">") {
+				out = append(out, m.keepLine(strings.Join(block, "\n")))
+				i = j
+				continue
+			}
+		}
 		switch {
 		case trimmed == "":
 			out = append(out, line)
@@ -165,18 +183,30 @@ func Mask(src string, opts Options) *Masked {
 				out = append(out, m.keepPrefix(t[1])+m.inline(t[2])+m.keep(t[3]))
 				continue
 			}
+			mark := len(m.tokens)
 			lead := leadingSpace.FindString(line)
 			rest, first := line[len(lead):], ""
 			if loc := htmlTag.FindStringIndex(rest); loc != nil && loc[0] == 0 {
-				first, rest = m.tag(rest[:loc[1]], true), rest[loc[1]:]
+				// 行首标签与其前的缩进合为一个行首占位符
+				first, rest, lead = m.tag(lead, rest[:loc[1]], true), rest[loc[1]:], ""
 			}
-			out = append(out, m.keepPrefix(lead)+first+m.inline(rest))
+			masked := m.keepPrefix(lead) + first + m.inline(rest)
+			if !HasText(masked) {
+				// 整行没有文字（如 HTML 表格的 <tr>、</td><td> 行）：撤销逐个占位，整行作为一个占位符
+				m.tokens, m.kinds = m.tokens[:mark], m.kinds[:mark]
+				masked = m.keepLine(line)
+			}
+			out = append(out, m.mergeAdjacent(masked))
 		}
 	}
 	if htmlComment != nil {
 		out = append(out, m.keepLine(strings.Join(htmlComment, "\n")))
 	}
-	return &Masked{Text: strings.Join(out, "\n"), tokens: m.tokens, kinds: m.kinds, front: front}
+	frontToken := -1
+	if front != nil {
+		frontToken = front.token
+	}
+	return &Masked{Text: strings.Join(m.mergeLines(out, frontToken), "\n"), tokens: m.tokens, kinds: m.kinds, front: front}
 }
 
 // isTableAlignLine 表格的对齐行（|---|:---:|）：含竖线，且只由竖线、冒号、连字符与空白组成。
@@ -305,7 +335,7 @@ func (m *masker) inline(s string) string {
 		return m.keep(v)
 	})
 	s = autoLink.ReplaceAllStringFunc(s, m.keep)
-	s = htmlTag.ReplaceAllStringFunc(s, func(v string) string { return m.tag(v, false) })
+	s = htmlTag.ReplaceAllStringFunc(s, func(v string) string { return m.tag("", v, false) })
 	s = linkDest.ReplaceAllStringFunc(s, m.keep)
 	s = alertMarker.ReplaceAllStringFunc(s, m.keep)
 	s = inlineMacro.ReplaceAllStringFunc(s, m.keep)
@@ -315,12 +345,61 @@ func (m *masker) inline(s string) string {
 	return s
 }
 
+var adjacentPlaceholders = regexp.MustCompile(`⟦(\d+)⟧([ \t]*)⟦(\d+)⟧`)
+
+// mergeAdjacent 把一行内只隔着空白的相邻占位符合并为一个（如 HTML 表格中连续的标签），
+// 占位符越少，模型越不容易漏掉或改动。行首前缀只与紧随的行内占位符合并，合并后仍按行首前缀处理。
+func (m *masker) mergeAdjacent(line string) string {
+	for {
+		loc := adjacentPlaceholders.FindStringSubmatchIndex(line)
+		if loc == nil {
+			return line
+		}
+		a, _ := strconv.Atoi(line[loc[2]:loc[3]])
+		b, _ := strconv.Atoi(line[loc[6]:loc[7]])
+		if m.kinds[b] != kindInline || m.kinds[a] == kindLine {
+			// 不能合并（后者须在行首或独占一行）：跳过这一对，继续处理其后的内容
+			return line[:loc[5]] + m.mergeAdjacent(line[loc[5]:])
+		}
+		m.tokens[a] += line[loc[4]:loc[5]] + m.tokens[b]
+		m.tokens[b] = ""
+		line = line[:loc[0]] + "⟦" + strconv.Itoa(a) + "⟧" + line[loc[1]:]
+	}
+}
+
+var singleLinePlaceholder = regexp.MustCompile(`^⟦(\d+)⟧$`)
+
+// mergeLines 把相邻的整行占位符（中间没有空行）合并为一个，如整段 HTML 表格结构只剩少数几个占位符。
+// keep 为不参与合并的占位符（front-matter，其内容会单独替换为译文）。
+func (m *masker) mergeLines(lines []string, keep int) []string {
+	out := make([]string, 0, len(lines))
+	prev := -1 // 上一行若为单独的整行占位符，记录其编号
+	for _, line := range lines {
+		if sub := singleLinePlaceholder.FindStringSubmatch(line); sub != nil {
+			n, _ := strconv.Atoi(sub[1])
+			if m.kinds[n] == kindLine && n != keep {
+				if prev >= 0 {
+					m.tokens[prev] += "\n" + m.tokens[n]
+					m.tokens[n] = ""
+					continue
+				}
+				prev = n
+				out = append(out, line)
+				continue
+			}
+		}
+		prev = -1
+		out = append(out, line)
+	}
+	return out
+}
+
 // tag 掩码一个 HTML/组件标签：title 属性的值参与翻译，其余保持原样。lineStart 为真时标签位于行首
 // （<Tabs>、<Card …> 等块级组件），其前缀占位符须留在行首。
-func (m *masker) tag(v string, lineStart bool) string {
-	head := m.keep
+func (m *masker) tag(lead, v string, lineStart bool) string {
+	head := func(s string) string { return m.keep(lead + s) }
 	if lineStart {
-		head = m.keepPrefix
+		head = func(s string) string { return m.keepPrefix(lead + s) }
 	}
 	loc := tagTitleAttr.FindStringSubmatchIndex(v)
 	if loc != nil {
@@ -401,14 +480,10 @@ func (m *Masked) Restore(translated string) (string, error) {
 			kind = m.kinds[n]
 		}
 		if kind != kindInline {
+			// 须在行首的占位符前面若有文字（模型把它挪到了行中），补换行放回行首
 			if cur := b.String(); cur != "" && !strings.HasSuffix(cur, "\n") {
 				if lineStart := strings.LastIndex(cur, "\n") + 1; strings.TrimSpace(cur[lineStart:]) != "" {
 					b.WriteString("\n")
-				} else if kind == kindLinePrefix || kind == kindLine {
-					// 行首只有模型加的空白：去掉，保证原有的缩进/结构
-					trimmed := cur[:lineStart]
-					b.Reset()
-					b.WriteString(trimmed)
 				}
 			}
 		}
