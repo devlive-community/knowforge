@@ -335,6 +335,8 @@ func (a *App) Router() *gin.Engine {
 			admin.PUT("/translation", a.RequirePermission(authz.SiteUpdate), a.AdminSaveTranslation)
 			admin.GET("/storage", a.RequirePermission(authz.SiteUpdate), a.AdminGetStorage)
 			admin.PUT("/storage", a.RequirePermission(authz.SiteUpdate), a.AdminSaveStorage)
+			admin.GET("/storage/migration", a.RequirePermission(authz.SiteUpdate), a.AdminStorageMigration)
+			admin.POST("/storage/migration", a.RequirePermission(authz.SiteUpdate), a.AdminStartStorageMigration)
 			admin.GET("/registration", a.RequirePermission(authz.SiteUpdate), a.GetRegistrationSettings)
 			admin.PUT("/registration", a.RequirePermission(authz.SiteUpdate), a.UpdateRegistrationSettings)
 			admin.GET("/captcha-settings", a.RequirePermission(authz.SiteUpdate), a.GetCaptchaSettings)

@@ -27,9 +27,10 @@ const (
 )
 
 var coreUserTaskKinds = map[string]string{
-	zipImportJobType:     userTaskZIPImport,
-	pdfImportJobType:     userTaskPDFImport,
-	imageLocalizeJobType: userTaskImageLocalize,
+	zipImportJobType:      userTaskZIPImport,
+	pdfImportJobType:      userTaskPDFImport,
+	imageLocalizeJobType:  userTaskImageLocalize,
+	storageMigrateJobType: userTaskStorageMigrate,
 }
 
 var coreJobStatusesByTab = map[string][]string{
@@ -99,6 +100,10 @@ func (a *App) coreUserTask(job *models.BackgroundJob) (plugincore.UserTask, bool
 		} else {
 			t.Link = "/book/settings/" + book.Slug + "/chapters"
 		}
+	}
+	if job.Type == storageMigrateJobType {
+		a.storageMigrationUserTask(&t, job.ID)
+		return t, true
 	}
 	if job.Status == jobqueue.StatusSucceeded && job.Type != imageLocalizeJobType && job.Result != "" {
 		var result struct {

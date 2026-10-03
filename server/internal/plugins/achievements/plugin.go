@@ -23,6 +23,8 @@ import (
 type behavior struct{ core plugincore.Core }
 
 func init() {
+	plugincore.RegisterURLColumns("achievement_definitions", "icon_value") // 存储迁移：成就图标（上传的图片/SVG 地址）
+	plugincore.RegisterURLColumns("achievement_assets", "url")
 	plugincore.RegisterBehavior(&behavior{})
 	i18ntext.Register("notify.achievement.unlocked", map[string]string{"zh-CN": "已解锁成就「{name}」", "en": "Achievement unlocked: {name}"})
 	i18ntext.Register("notify.achievement.granted", map[string]string{"zh-CN": "已获得成就「{name}」", "en": "You have been awarded the achievement: {name}"})

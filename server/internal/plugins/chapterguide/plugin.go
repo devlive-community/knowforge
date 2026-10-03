@@ -37,6 +37,7 @@ const (
 )
 
 func init() {
+	plugincore.RegisterURLColumns("book_guide_overviews", "content") // 存储迁移：全书概览中的图片
 	plugins.Register(plugins.Meta{
 		Order:       126,
 		Key:         pluginKey,

@@ -15,6 +15,7 @@ const KIND_ICONS: Record<string, string> = {
   zipImport: 'fa-file-zipper',
   pdfImport: 'fa-file-pdf',
   imageLocalize: 'fa-images',
+  storageMigrate: 'fa-cloud-arrow-up',
   translate: 'fa-language',
   siteCrawl: 'fa-globe',
   aiWriter: 'fa-wand-magic-sparkles',

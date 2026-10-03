@@ -29,7 +29,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'admin.collect.builtin.': ['layout_regions', 'page_toc', 'doc_decorations', 'permalinks', 'empty_headings', 'page_feedback'],
     'admin.collect.type.': ['remove_element', 'remove_line', 'replace'],
     'admin.collect.patternHint.': ['remove_element', 'remove_line', 'replace'],
-    'userTasks.kind.': ['zipImport', 'pdfImport', 'imageLocalize', 'translate', 'siteCrawl', 'aiWriter', 'chapterGuide'],
+    'userTasks.kind.': ['zipImport', 'pdfImport', 'imageLocalize', 'storageMigrate', 'translate', 'siteCrawl', 'aiWriter', 'chapterGuide'],
     'userTasks.status.': ['queued', 'running', 'paused', 'done', 'failed', 'canceled'],
     'userTasks.tab.': ['active', 'done', 'failed'],
     'userTasks.empty.': ['active', 'done', 'failed'],

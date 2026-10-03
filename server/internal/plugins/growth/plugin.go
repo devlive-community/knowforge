@@ -3,10 +3,12 @@ package growth
 import (
 	"knowforge/server/internal/authz"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
 )
 
 func init() {
+	plugincore.RegisterURLColumns("level_definitions", "icon_value") // 存储迁移：等级图标
 	plugins.Register(plugins.Meta{
 		Order:       60,
 		Key:         plugins.KeyGrowth,

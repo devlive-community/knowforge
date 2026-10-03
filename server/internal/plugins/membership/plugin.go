@@ -37,6 +37,7 @@ const (
 )
 
 func init() {
+	plugincore.RegisterURLColumns("membership_plans", "icon_value", "description") // 存储迁移：方案图标与说明
 	plugins.Register(plugins.Meta{
 		Order:       90,
 		Key:         plugins.KeyMembership,

@@ -255,6 +255,8 @@ Authorization: Bearer kf_pat_…
 | GET/PUT | `/oauth` | 管理员读取/保存各 provider 凭据：GET 返回 `{providers:[{provider,label,client_id,client_secret,enabled}]}`；PUT 保存单个 `{provider,client_id,client_secret,enabled}`（存 `oauth_<provider>_*` 键，不出现在公开 `/site`） | `site:update` |
 | GET/PUT | `/mail` | 管理员读取/保存邮件配置（driver log\|smtp、host/port/username/password/from）、`site_url`（邮件链接前缀）与 `notifications_enabled`（站内通知是否同时发邮件的总开关） | `site:update` |
 | GET/PUT | `/storage` | 管理员读取/保存存储驱动配置：`driver` local\|qiniu\|s3 + 七牛凭据（access_key/secret_key/bucket/domain/upload_host，域名须含协议）+ S3 兼容存储（`s3_endpoint`、`s3_region`、`s3_bucket`、`s3_access_key`、`s3_secret_key`（只写：GET 仅返回 `s3_secret_key_set`，PUT 传空串不修改）、`s3_public_url`、`s3_path_style`、`s3_prefix`；适用 AWS S3 / 阿里云 OSS / 腾讯云 COS / MinIO / R2，Signature V4） | `site:update` |
+| GET | `/storage/migration` | 存储迁移概况：`{target_driver, pending, by_driver{driver:n}, running, state}`；`pending` 为不在当前存储中的文件数（含本地上传目录中没有文件记录但仍被引用的早期文件），`state` 为最近一次迁移的进度 `{job_id,status,from_drivers,target_driver,total,done,failed,errors[]}` | 管理员 + `site:update` |
+| POST | `/storage/migration` | `{delete_old}` 把已有文件迁移到当前存储（后台任务，返回 `202` 与 `task`，进度在「我的任务」）：读回原文件 → 上传到当前存储 → 替换核心与插件登记的列中出现的旧地址 → 更新文件记录 →（`delete_old` 时）删除原文件；删除原文件需要二次认证（开启时）；已有迁移进行中返回 409 | 管理员 + `site:update` |
 
 > 凭据存于站点配置（`oauth_github_*` 键）；state 防 CSRF 为内存态（10 分钟 TTL），适配当前单实例部署架构。
 

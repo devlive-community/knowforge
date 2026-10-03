@@ -38,6 +38,8 @@ const (
 )
 
 func init() {
+	plugincore.RegisterURLColumns("qa_questions", "body") // 存储迁移：社区提问与回答中的图片
+	plugincore.RegisterURLColumns("qa_answers", "body")
 	plugins.Register(plugins.Meta{
 		Order:       120,
 		Key:         plugins.KeyQA,

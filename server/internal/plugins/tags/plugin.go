@@ -3,10 +3,12 @@ package tags
 import (
 	"knowforge/server/internal/authz"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
 )
 
 func init() {
+	plugincore.RegisterURLColumns("tags", "icon_value") // 存储迁移：标签图标
 	plugins.Register(plugins.Meta{
 		Order:       80,
 		Key:         plugins.KeyTags,
