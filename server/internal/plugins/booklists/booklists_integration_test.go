@@ -128,6 +128,25 @@ func TestBookLists(t *testing.T) {
 	// 私有书单他人不可见
 	_, pp := do(curator, http.MethodPost, "/api/v1/book-lists", `{"title":"私人收藏","is_public":false}`)
 	privList := uint(data(pp)["id"].(float64))
+	// 精选：管理员设为精选后出现在 featured=1 列表中（私有书单不能设为精选；普通用户无权操作）
+	featuredPath := fmt.Sprintf("/api/v1/admin/book-lists/%d/featured", listID)
+	if status, _ := do(curator, http.MethodPut, featuredPath, `{"featured":true}`); status != http.StatusForbidden {
+		t.Fatalf("普通用户不能设精选: %d", status)
+	}
+	if status, _ := do(adminToken, http.MethodPut, fmt.Sprintf("/api/v1/admin/book-lists/%d/featured", privList), `{"featured":true}`); status != http.StatusBadRequest {
+		t.Fatalf("私有书单不能设为精选: %d", status)
+	}
+	if status, p := do(adminToken, http.MethodPut, featuredPath, `{"featured":true}`); status != http.StatusOK {
+		t.Fatalf("设为精选失败: %d %v", status, p)
+	}
+	_, fp := do("", http.MethodGet, "/api/v1/book-lists?featured=1", "")
+	if got := items(fp); len(got) != 1 || got[0]["title"] != "入门必读" || got[0]["featured"] != true {
+		t.Fatalf("精选书单列表异常: %v", got)
+	}
+	do(adminToken, http.MethodPut, featuredPath, `{"featured":false}`)
+	if _, fp = do("", http.MethodGet, "/api/v1/book-lists?featured=1", ""); len(items(fp)) != 0 {
+		t.Fatalf("取消精选后不应出现: %v", items(fp))
+	}
 	if status, _ := do(reader, http.MethodGet, fmt.Sprintf("/api/v1/book-lists/%d", privList), ""); status != http.StatusNotFound {
 		t.Fatalf("私有书单他人不可见: %d", status)
 	}

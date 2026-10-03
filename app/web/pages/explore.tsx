@@ -10,6 +10,8 @@ import { Button, Input, Loading, Pagination, SegmentedTabs, Select } from '@/com
 import Seo from '@/components/Seo'
 import TagChips from '@/components/TagChips'
 import BookCard from '@/components/BookCard'
+import BookListCard from '@/components/booklists/BookListCard'
+import { bookListsEnabled, type BookList } from '@/lib/booklists'
 import VersionGroupToggle from '@/components/VersionGroupToggle'
 import { ArrowRightIcon, BookIcon, ClockIcon, EyeIcon, GlobeIcon, GridIcon, ListIcon, SearchIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
@@ -30,6 +32,7 @@ interface ExploreProps {
   page: number
   data: PageResult<Book>
   hotTags: Tag[]
+  featuredLists: BookList[]
 }
 
 export const getServerSideProps: GetServerSideProps<ExploreProps> = async ({ req, query }) => {
@@ -60,10 +63,18 @@ export const getServerSideProps: GetServerSideProps<ExploreProps> = async ({ req
     .flatMap((book) => book.tags || [])
     .find((item) => item.slug === tag)
   const tagName = tag ? selectedBookTag?.name || tags.find((item) => item.slug === tag)?.name || tag : ''
-  return { props: { installed: true, user, site, siteUrl: siteUrlFrom(req), keyword, tag, tagName, sort, visibility, grouped, page, data, hotTags: tags.slice(0, 6) } }
+  // 精选书单（书单插件启用时）：只在不带搜索/标签筛选的第一页展示；没有精选时用收藏最多的书单
+  let featuredLists: BookList[] = []
+  if (bookListsEnabled(site) && page === 1 && !keyword && !tag) {
+    const listsOf = (params: Record<string, string | number>) => serverApi<PageResult<BookList>>('/book-lists', { params: { ...params, page_size: 4 } })
+      .then((r) => r.items || []).catch(() => [] as BookList[])
+    featuredLists = await listsOf({ featured: 1 })
+    if (featuredLists.length === 0) featuredLists = await listsOf({ sort: 'popular' })
+  }
+  return { props: { installed: true, user, site, siteUrl: siteUrlFrom(req), keyword, tag, tagName, sort, visibility, grouped, page, data, hotTags: tags.slice(0, 6), featuredLists } }
 }
 
-export default function Explore({ user, site, siteUrl, keyword, tag, tagName, sort, visibility, grouped, page, data, hotTags }: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function Explore({ user, site, siteUrl, keyword, tag, tagName, sort, visibility, grouped, page, data, hotTags, featuredLists }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { t } = useTranslation()
   const siteName = site.site_name || 'KnowForge'
   // 标签插件禁用时，隐藏所有标签入口（热门搜索、标签侧栏、全部标签链接）
@@ -232,6 +243,19 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
         </aside>
 
         <section className="min-w-0">
+          {featuredLists.length > 0 && (
+            <div className="mb-8" data-testid="featured-lists">
+              <div className="mb-4 flex items-baseline justify-between gap-3">
+                <h2 className="text-xl font-bold text-ink sm:text-2xl">{t('explore.featuredLists.title')}</h2>
+                <Link href="/lists" className="flex shrink-0 items-center gap-1 text-sm font-medium text-primary-600 hover:underline">
+                  {t('explore.featuredLists.viewAll')} <ArrowRightIcon className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+              <div className="grid gap-5 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
+                {featuredLists.map((l) => <BookListCard key={l.id} list={l} />)}
+              </div>
+            </div>
+          )}
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-baseline gap-3">
               <h2 className="min-w-0 text-xl font-bold text-ink sm:text-2xl">{sectionTitle}</h2>

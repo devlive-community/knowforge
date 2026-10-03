@@ -27,6 +27,7 @@ export interface BookList {
   covers: { book_id: number; title: string; cover_image: string }[]
   following: boolean
   contains?: boolean
+  featured?: boolean // 管理员设为精选，展示在发现页
 }
 
 export interface BookListEntry { book: Book; note: string; sort_order: number; added_at: string }

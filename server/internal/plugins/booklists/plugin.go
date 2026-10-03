@@ -31,15 +31,18 @@ const (
 
 // List 一个书单。
 type List struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	UserID        uint      `gorm:"index;not null" json:"user_id"`
-	Title         string    `gorm:"size:100;not null" json:"title"`
-	Description   string    `gorm:"type:text" json:"description"`
-	IsPublic      bool      `gorm:"index" json:"is_public"`
-	ItemCount     int       `gorm:"default:0" json:"item_count"`
-	FollowerCount int       `gorm:"default:0;index" json:"follower_count"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `gorm:"index" json:"updated_at"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	UserID        uint   `gorm:"index;not null" json:"user_id"`
+	Title         string `gorm:"size:100;not null" json:"title"`
+	Description   string `gorm:"type:text" json:"description"`
+	IsPublic      bool   `gorm:"index" json:"is_public"`
+	ItemCount     int    `gorm:"default:0" json:"item_count"`
+	FollowerCount int    `gorm:"default:0;index" json:"follower_count"`
+	// Featured 由管理员设为「精选」，展示在发现页（FeaturedAt 为设置时间，越新越靠前）
+	Featured   bool       `gorm:"index;default:false" json:"featured"`
+	FeaturedAt *time.Time `json:"featured_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `gorm:"index" json:"updated_at"`
 }
 
 func (List) TableName() string { return "book_lists" }

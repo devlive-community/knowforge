@@ -55,6 +55,13 @@ export default function BookListPage({ site, siteUrl, initial }: InferGetServerS
     })
   }
 
+  // 管理员：设为 / 取消精选（展示在发现页）
+  const toggleFeatured = () => void run('featured', async () => {
+    const r = await api<{ featured: boolean }>(`/admin/book-lists/${list.id}/featured`, { method: 'PUT', body: { featured: !list.featured } })
+    setDetail((d) => ({ ...d, list: { ...d.list, featured: r.featured } }))
+    showToast({ message: t(r.featured ? 'booklists.detail.featuredOn' : 'booklists.detail.featuredOff'), tone: 'success' })
+  })
+
   const remove = async () => {
     if (!(await confirmAction({ title: t('booklists.detail.deleteTitle'), message: t('booklists.detail.deleteMessage', { title: list.title }), danger: true, confirmLabel: t('common.actions.delete') }))) return
     void run('delete', async () => {
@@ -102,6 +109,7 @@ export default function BookListPage({ site, siteUrl, initial }: InferGetServerS
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold text-ink [overflow-wrap:anywhere]">{list.title}</h1>
                 {!list.is_public && <Badge tone="slate">{t('booklists.card.private')}</Badge>}
+                {list.featured && <Badge tone="amber"><i className="fa-solid fa-star mr-1" aria-hidden="true" />{t('booklists.detail.featured')}</Badge>}
               </div>
               {list.description && <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{list.description}</p>}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -112,6 +120,12 @@ export default function BookListPage({ site, siteUrl, initial }: InferGetServerS
               </div>
             </div>
             <div className="flex shrink-0 gap-2">
+              {user?.role === 'admin' && list.is_public && (
+                <Button variant="outline" onClick={toggleFeatured} loading={busy === 'featured'} aria-pressed={Boolean(list.featured)}>
+                  <i className={`${list.featured ? 'fa-solid text-amber-500' : 'fa-regular'} fa-star`} aria-hidden="true" />
+                  {t(list.featured ? 'booklists.detail.unfeature' : 'booklists.detail.feature')}
+                </Button>
+              )}
               {mine ? (
                 <>
                   <Button variant="outline" onClick={() => setEditing(true)}><i className="fa-solid fa-pen" aria-hidden="true" />{t('booklists.detail.edit')}</Button>

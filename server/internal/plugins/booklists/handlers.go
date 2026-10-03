@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"knowforge/server/internal/authz"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 )
@@ -23,6 +25,8 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	}
 	read := func(h gin.HandlerFunc) []gin.HandlerFunc { return []gin.HandlerFunc{core.OptionalAuth(), feat, h} }
 	api.GET("/book-lists", read(b.Discover)...)
+	// 管理员把书单设为精选（展示在发现页）
+	api.PUT("/admin/book-lists/:id/featured", core.RequireAuth(), core.RequireAdmin(), feat, core.RequirePermissionMiddleware(authz.SiteUpdate), b.SetFeatured)
 	api.GET("/book-lists/mine", use(b.Mine)...)
 	api.GET("/book-lists/followed", use(b.Followed)...)
 	api.GET("/users/:username/book-lists", read(b.UserLists)...)
@@ -150,10 +154,44 @@ func (b *behavior) page(c *gin.Context, q *gorm.DB, u *models.User) {
 	b.core.OK(c, plugincore.PageResult{Items: b.views(u, lists), Total: total, Page: page, PageSize: size})
 }
 
-// Discover GET /book-lists?sort=popular|latest 书单广场：有书的公开书单。
+// SetFeatured PUT /admin/book-lists/:id/featured {featured} 设为/取消精选（只能是有书的公开书单）。
+func (b *behavior) SetFeatured(c *gin.Context) {
+	var req struct {
+		Featured bool `json:"featured"`
+	}
+	if c.ShouldBindJSON(&req) != nil {
+		b.core.Fail(c, http.StatusBadRequest, "参数错误")
+		return
+	}
+	var l List
+	if b.core.Gorm().First(&l, c.Param("id")).Error != nil {
+		b.core.Fail(c, http.StatusNotFound, "书单不存在")
+		return
+	}
+	if req.Featured && !l.IsPublic {
+		b.core.Fail(c, http.StatusBadRequest, "只有公开的书单可以设为精选")
+		return
+	}
+	updates := map[string]any{"featured": req.Featured, "featured_at": nil}
+	if req.Featured {
+		now := time.Now()
+		updates["featured_at"] = &now
+	}
+	b.core.Gorm().Model(&l).Updates(updates)
+	action := "booklist.unfeatured"
+	if req.Featured {
+		action = "booklist.featured"
+	}
+	b.core.RecordAudit(c, action, "book_list", strconv.FormatUint(uint64(l.ID), 10), l.Title, nil)
+	b.core.OK(c, gin.H{"featured": req.Featured})
+}
+
+// Discover GET /book-lists?sort=popular|latest&featured=1 书单广场：有书的公开书单；featured=1 只列精选书单（最新设为精选的在前）。
 func (b *behavior) Discover(c *gin.Context) {
 	q := b.core.Gorm().Where("is_public = ? AND item_count > 0", true)
-	if c.Query("sort") == "latest" {
+	if c.Query("featured") == "1" {
+		q = q.Where("featured = ?", true).Order("featured_at DESC, id DESC")
+	} else if c.Query("sort") == "latest" {
 		q = q.Order("updated_at DESC, id DESC")
 	} else {
 		q = q.Order("follower_count DESC, updated_at DESC, id DESC")

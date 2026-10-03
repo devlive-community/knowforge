@@ -475,6 +475,7 @@ Authorization: Bearer kf_pat_…
 | GET | `/book-lists/followed` | 我收藏的书单（分页；已改为私有的不显示） |
 | GET | `/users/:username/book-lists` | 某用户的公开书单（本人可见全部，分页） |
 | GET | `/books/:id/book-lists` | 收录该书的公开书单（最多 6 个）与总数 `total` |
+| PUT | `/admin/book-lists/:id/featured` | `{featured}` 管理员设为 / 取消精选（只能是公开书单）；`GET /book-lists?featured=1` 列出精选书单（最新设为精选的在前），发现页据此展示「精选书单」 | 管理员 + `site:update` |
 | POST | `/book-lists` | 新建 `{title, description?, is_public?（默认 true）, book_id?（同时收录）}` |
 | GET | `/book-lists/:id` | 详情 `{list, items:[{book,note,sort_order,added_at}], mine, hidden}`；`hidden` 为创建者当前不可读而未显示的书籍数 |
 | PUT / DELETE | `/book-lists/:id` | 修改 `{title?, description?, is_public?}` / 删除（连同收录与收藏记录） |
