@@ -5257,4 +5257,5 @@ export const zh: Record<string, string> = {
   'writer.meta.url': '原文',
   'writer.meta.icon': '图标',
   'reader.meta.source': '原文',
+  'entitlement.mine.empty': '当前没有可展示的权益',
 }

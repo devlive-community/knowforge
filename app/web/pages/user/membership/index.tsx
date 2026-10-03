@@ -3,7 +3,7 @@ import { useRouter } from 'next/router'
 import Container from '@/components/Container'
 import FeatureGate from '@/components/FeatureGate'
 import ResourceIcon from '@/components/ResourceIcon'
-import MyEntitlementsCard from '@/components/MyEntitlementsCard'
+import MyEntitlementsButton from '@/components/MyEntitlementsButton'
 import GiftsCard from '@/components/membership/GiftsCard'
 import ReferralCard from '@/components/membership/ReferralCard'
 import RenewalCard from '@/components/membership/RenewalCard'
@@ -126,7 +126,10 @@ function MyMembershipInner() {
       <Seo siteName={siteName} title={t('membership.seoTitle')} noindex />
       <Container>
         <div className="py-8">
-          <h1 className="text-2xl font-bold text-ink">{t('membership.heading')}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-ink">{t('membership.heading')}</h1>
+            <MyEntitlementsButton />
+          </div>
           <p className="mt-1 text-sm text-slate-500">{t('membership.subtitle')}</p>
 
           {/* 当前会员 */}
@@ -207,7 +210,6 @@ function MyMembershipInner() {
 
           <ReferralCard />
 
-          <MyEntitlementsCard />
 
           {/* 会员记录 */}
           {mine.records.length > 0 && (

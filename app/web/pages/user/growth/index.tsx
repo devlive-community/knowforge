@@ -3,7 +3,7 @@ import Container from '@/components/Container'
 import FeatureGate from '@/components/FeatureGate'
 import ResourceIcon from '@/components/ResourceIcon'
 import CheckinCard from '@/components/CheckinCard'
-import MyEntitlementsCard from '@/components/MyEntitlementsCard'
+import MyEntitlementsButton from '@/components/MyEntitlementsButton'
 import Seo from '@/components/Seo'
 import { api, formatNumber } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
@@ -77,7 +77,10 @@ function MyGrowthInner() {
         <div className="py-8">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-ink">{t('growth.heading')}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold text-ink">{t('growth.heading')}</h1>
+                <MyEntitlementsButton reloadKey={reloadKey} />
+              </div>
               <p className="mt-1 text-sm text-slate-500">{t('growth.subtitle')}</p>
             </div>
             {site.growth_leaderboard_enabled && <ButtonLink href="/growth/leaderboard" variant="outline"><i className="fa-solid fa-ranking-star" aria-hidden="true" /> {t('growth.leaderboard.link')}</ButtonLink>}
@@ -108,7 +111,6 @@ function MyGrowthInner() {
           </Card>
 
           <CheckinCard onCheckedIn={() => { setPage(1); setReloadKey((k) => k + 1) }} />
-          <MyEntitlementsCard reloadKey={reloadKey} />
 
           <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
             {/* 等级路线 */}

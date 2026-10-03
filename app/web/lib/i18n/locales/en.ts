@@ -5257,4 +5257,5 @@ export const en: Record<string, string> = {
   'writer.meta.url': 'Source',
   'writer.meta.icon': 'Icon',
   'reader.meta.source': 'Source',
+  'entitlement.mine.empty': 'No entitlements to show',
 }
