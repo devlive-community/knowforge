@@ -9,6 +9,7 @@ import BookCard from '@/components/BookCard'
 import MyLibraryTabs from '@/components/MyLibraryTabs'
 import Seo from '@/components/Seo'
 import type { Book } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface FavItem {
   book: Book
@@ -21,7 +22,7 @@ export default function Favorites() {
   const { t } = useTranslation()
   const siteName = site.site_name || 'KnowForge'
   const { ref: gridRef, pageSize, ready } = useGridPageSize({ minItemRem: 15, rows: 3, fallback: 9 })
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: FavItem[]; total: number; page: number; page_size: number } | null>(null)
   const [loading, setLoading] = useState(true)
 

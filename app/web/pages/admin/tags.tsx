@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Pagination, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import type { PageResult } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface Tag {
   id: number
@@ -24,7 +25,7 @@ export default function AdminTags() {
   const { t } = useTranslation()
   const { showToast, confirmAction } = useFeedback()
   const [data, setData] = useState<PageResult<Tag> | null>(null)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [q, setQ] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)

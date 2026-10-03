@@ -9,6 +9,7 @@ import MyLibraryTabs from '@/components/MyLibraryTabs'
 import Seo from '@/components/Seo'
 import { DownloadIcon } from '@/components/icons'
 import type { Book } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface ExportRecord {
   id: number
@@ -33,7 +34,7 @@ export default function MyExports() {
   const { site } = useApp()
   const { t } = useTranslation()
   const siteName = site.site_name || 'KnowForge'
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<ExportPage | null>(null)
   const [loading, setLoading] = useState(true)
 

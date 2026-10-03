@@ -7,6 +7,7 @@ import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import type { PageResult, TrashItem } from '@/lib/types'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, SegmentedTabs, useFeedback } from '@/components/ui'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type TrashType = 'book' | 'document'
 
@@ -20,7 +21,7 @@ export default function TrashPage() {
   const { showToast, confirmAction } = useFeedback()
   const { t } = useTranslation()
   const [type, setType] = useState<TrashType>('book')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<PageResult<TrashItem> | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)

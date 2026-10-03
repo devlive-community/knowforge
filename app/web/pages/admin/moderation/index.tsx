@@ -11,6 +11,7 @@ import { useTranslation } from '@/lib/i18n'
 import { AI_VERDICT_TONE, applyCaseEvent, caseLink, MODERATION_STATUS_TONE, type ModerationCaseItem, type ModerationHit } from '@/lib/moderation'
 import { openTicketedStream } from '@/lib/event-stream'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type Tab = 'pending' | 'ai' | 'auto' | 'handled' | 'words' | 'settings'
 const TABS: Tab[] = ['pending', 'ai', 'auto', 'handled', 'words', 'settings']
@@ -50,7 +51,7 @@ function CasesPanel({ status, ai, onCounts }: { status: string; ai: boolean; onC
   const { t } = useTranslation()
   const { showToast, confirmAction, requestInput } = useFeedback()
   const [q, setQ] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: ModerationCaseItem[]; total: number; page: number; page_size: number } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [preview, setPreview] = useState<ModerationCaseItem | null>(null)
@@ -214,7 +215,7 @@ function WordsPanel() {
   const { t } = useTranslation()
   const { showToast, confirmAction } = useFeedback()
   const [q, setQ] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: WordRow[]; total: number; page: number; page_size: number; categories: string[]; enabled_total: number } | null>(null)
   const [input, setInput] = useState('')
   const [category, setCategory] = useState('')

@@ -8,6 +8,7 @@ import AIUsageRefLink from '@/components/ai/AIUsageRefLink'
 import { dateStamp, downloadAuthed } from '@/lib/download'
 import { Badge, Button, Card, EmptyState, Input, Loading, Pagination, SegmentedTabs, Select, Tooltip, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
+import { useChangeEffect, useUrlPage } from '@/lib/use-url-page'
 
 interface Summary {
   days: number
@@ -199,8 +200,8 @@ function UsageLogs({ features, days }: { features: string[]; days: string }) {
   const [userInput, setUserInput] = useState(initialUser)
   const [user, setUser] = useState(initialUser)
   const [trace, setTrace] = useState(initialTrace)
-  useEffect(() => { setTrace(initialTrace); setUser(initialUser); setUserInput(initialUser); setPage(1) }, [initialTrace, initialUser])
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
+  useChangeEffect(() => { setTrace(initialTrace); setUser(initialUser); setUserInput(initialUser); setPage(1) }, [initialTrace, initialUser])
   const [data, setData] = useState<{ items: LogItem[]; total: number; page_size: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
@@ -303,7 +304,7 @@ function UsageLogs({ features, days }: { features: string[]; days: string }) {
           </table>
         </div>
       )}
-      {data && data.total > data.page_size && <div className="mt-4"><Pagination size="sm" page={page} pageSize={data.page_size} total={data.total} onChange={setPage} /></div>}
+      {data && data.total > data.page_size && <div className="mt-4"><Pagination size="sm" page={page} pageSize={data.page_size} total={data.total} onChange={setPage} loading={loading} /></div>}
     </Card>
   )
 }

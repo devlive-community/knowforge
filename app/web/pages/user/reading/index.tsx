@@ -10,6 +10,7 @@ import BookCard from '@/components/BookCard'
 import Seo from '@/components/Seo'
 import { BookIcon } from '@/components/icons'
 import type { Book } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface ReadingItem {
   book: Book
@@ -246,7 +247,7 @@ export default function MyReading() {
   const siteName = site.site_name || 'KnowForge'
   const { t } = useTranslation()
   const { ref: gridRef, pageSize, ready } = useGridPageSize({ minItemRem: 18, rows: 3, fallback: 9 })
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<ReadingPage | null>(null)
   const [stats, setStats] = useState<ReadingStats | null>(null)
   const [loading, setLoading] = useState(true)

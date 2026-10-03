@@ -8,6 +8,7 @@ import { useTranslation } from '@/lib/i18n'
 import { Badge, Button, Card, EmptyState, Field, Input, Loading, Pagination, Textarea, useFeedback } from '@/components/ui'
 import { formatPrice } from '@/lib/commerce'
 import { centsFromInput } from '@/lib/membership'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface Ledger { id: number; kind: 'sale' | 'withdrawal' | 'withdrawal_revert' | 'refund'; title: string; gross_cents: number; commission_cents: number; net_cents: number; currency: string; created_at: string }
 interface Withdrawal { id: number; amount_cents: number; currency: string; account: string; status: 'pending' | 'paid' | 'rejected'; admin_note: string; created_at: string; processed_at?: string | null }
@@ -30,7 +31,7 @@ function MyEarningsInner() {
   const { site } = useApp()
   const { t, locale } = useTranslation()
   const { showToast } = useFeedback()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<Earnings | null>(null)
   const [amount, setAmount] = useState('')
   const [account, setAccount] = useState('')

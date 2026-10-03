@@ -6,6 +6,7 @@ import { api, formatDate } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import type { PageResult } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 20
 
@@ -82,7 +83,7 @@ export default function AdminAuditLogs() {
   const resourceOptions = [{ value: '', label: t('admin.audit.resource.all') }, ...facets.resource_types.map((r) => ({ value: r, label: resourceText(t, r) }))]
   const [items, setItems] = useState<AuditLog[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [operatorInput, setOperatorInput] = useState('')
@@ -201,7 +202,7 @@ export default function AdminAuditLogs() {
               </table>
             </div>
           </div>
-          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
+          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} loading={loading} />
         </>
       )}
     </AdminLayout>

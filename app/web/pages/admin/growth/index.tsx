@@ -13,6 +13,7 @@ import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Paginati
 import { useTranslation } from '@/lib/i18n'
 import { growthReasonLabel, growthRuleLabel } from '@/lib/growth'
 import type { EntitlementDef } from '@/lib/entitlements'
+import { useChangeEffect, useUrlPage } from '@/lib/use-url-page'
 
 interface Level {
   id: number
@@ -209,11 +210,11 @@ function LedgerPanel({ rules }: { rules: Rule[] }) {
   const ruleLabel = useRuleLabel()
   const [user, setUser] = useState<UserLite | null>(null)
   const [ruleKey, setRuleKey] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: LedgerItem[]; total: number; page: number; page_size: number } | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => { setPage(1) }, [user, ruleKey])
+  useChangeEffect(() => setPage(1), [user, ruleKey])
   useEffect(() => {
     let alive = true
     setLoading(true)

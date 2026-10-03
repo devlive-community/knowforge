@@ -22,6 +22,7 @@ import { feedsEnabled, userFeedPath } from '@/lib/feeds'
 import UserBookLists from '@/components/booklists/UserBookLists'
 import { bookListsEnabled } from '@/lib/booklists'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface UserProfile {
   id: number
@@ -199,7 +200,7 @@ export default function UserHome({ site, siteUrl, profile, books, sort, achievem
   // 公开书籍列表：客户端按屏宽自适应每页数量（首屏用 SSR 数据，SEO 保持）
   const { ref: gridRef, pageSize } = useGridPageSize({ minItemRem: 15, rows: 3, fallback: books.page_size || 9 })
   const [data, setData] = useState<PageResult<Book>>(books)
-  const [page, setPage] = useState(books.page || 1)
+  const [page, setPage] = useUrlPage() // 与服务端渲染的 ?page= 一致
   const [sortState, setSortState] = useState(sort)
   const [loading, setLoading] = useState(false)
   const didMount = useRef(false)

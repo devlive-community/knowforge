@@ -6,6 +6,7 @@ import UserAvatar from '@/components/UserAvatar'
 import type { UserLite } from '@/components/UserSearchSelect'
 import { Badge, Button, Card, EmptyState, Field, Input, Loading, Pagination, Select, Switch, useFeedback } from '@/components/ui'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 export interface ReferralSettings {
   enabled: boolean
@@ -25,7 +26,7 @@ interface RewardItem {
 export default function ReferralPanel({ plans }: { plans: { plan: MembershipPlan }[] }) {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [form, setForm] = useState<ReferralSettings | null>(null)
   const [data, setData] = useState<{ items: RewardItem[]; total: number; page: number; page_size: number } | null>(null)
   const [saving, setSaving] = useState(false)

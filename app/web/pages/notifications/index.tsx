@@ -9,6 +9,7 @@ import Container from '@/components/Container'
 import { useTranslation } from '@/lib/i18n'
 import type { CollaborationInvitation } from '@/lib/types'
 import { notificationTitle, type NotificationPayload } from '@/lib/notification'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface NotificationItem {
   id: number
@@ -43,7 +44,7 @@ export default function NotificationsPage() {
   const user = useRequireAuth()
   const router = useRouter()
   const [tab, setTab] = useState<'all' | 'unread'>('all')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unread, setUnread] = useState(0)
   const [total, setTotal] = useState(0)
@@ -212,7 +213,7 @@ export default function NotificationsPage() {
 
         {!loading && !error && items.length > 0 && (
           <div className="mt-6">
-            <Pagination page={page} pageSize={PER_PAGE} total={total} onChange={setPage} />
+            <Pagination page={page} pageSize={PER_PAGE} total={total} onChange={setPage} loading={loading} />
           </div>
         )}
       </Container>

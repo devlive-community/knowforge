@@ -7,6 +7,7 @@ import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, Tooltip, useFeedback } from '@/components/ui'
 import { formatBytes, storagePercent } from '@/lib/files'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface UserFile { id: number; url: string; name: string; ext: string; size: number; source: string; created_at: string }
 interface FilesPage { items: { file: UserFile; references: number }[]; total: number; page: number; page_size: number; used_bytes: number; limit_mb: number }
@@ -19,7 +20,7 @@ export default function MyFilesPage() {
   const { user, site } = useApp()
   const { showToast, confirmAction } = useFeedback()
   useRequireAuth()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<FilesPage | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
 

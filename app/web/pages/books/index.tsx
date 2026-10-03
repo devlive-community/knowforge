@@ -20,6 +20,7 @@ import {
 } from '@/components/icons'
 import type { Book, Document, PageResult } from '@/lib/types'
 import { entitlementAllowed } from '@/lib/entitlements'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const statusTabs = [
   { key: '', labelKey: 'books.status.all' },
@@ -68,7 +69,7 @@ export default function MyBooks() {
   const [status, setStatus] = useState('')
   const scope: 'owned' | 'collaborating' = router.query.scope === 'collaborating' ? 'collaborating' : 'owned'
   const { ref: gridRef, pageSize, ready } = useGridPageSize({ minItemRem: 15, rows: 3, fallback: 9 })
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState<SortKey>('updated')
   const [view, setView] = useState<'grid' | 'list'>('grid')

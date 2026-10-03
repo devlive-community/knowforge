@@ -7,6 +7,7 @@ import UserAvatar from '@/components/UserAvatar'
 import type { UserLite } from '@/components/UserSearchSelect'
 import { Badge, Button, Card, Checkbox, DateTimePicker, EmptyState, Field, Input, Loading, Modal, Pagination, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface Coupon {
   id: number
@@ -36,7 +37,7 @@ const useTone = { reserved: 'amber', used: 'emerald', released: 'slate' } as con
 export default function CouponPanel({ plans }: { plans: { plan: MembershipPlan }[] }) {
   const { t, locale } = useTranslation()
   const { showToast } = useFeedback()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: Coupon[]; total: number; page: number; page_size: number; currency: string } | null>(null)
   const [creating, setCreating] = useState(false)
   const [viewing, setViewing] = useState<Coupon | null>(null)

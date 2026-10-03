@@ -8,6 +8,7 @@ import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, Card, EmptyState, Loading, Pagination } from '@/components/ui'
 import { formatPrice } from '@/lib/commerce'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface Item {
   purchase: { id: number; doc_id: number; amount_cents: number; currency: string; created_at: string }
@@ -24,7 +25,7 @@ function MyPurchasesInner() {
   const user = useRequireAuth()
   const { site } = useApp()
   const { t, locale } = useTranslation()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: Item[]; total: number; page: number; page_size: number } | null>(null)
   useEffect(() => {
     if (!user) return

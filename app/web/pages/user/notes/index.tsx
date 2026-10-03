@@ -7,6 +7,7 @@ import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, SegmentedTabs, useFeedback } from '@/components/ui'
 import type { ReadingAnnotation } from '@/lib/reading-annotations'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type Filter = 'all' | 'note' | 'highlight' | 'bookmark'
 
@@ -30,7 +31,7 @@ export default function MyNotesPage() {
   const { showToast, confirmAction } = useFeedback()
   const { t } = useTranslation()
   const [filter, setFilter] = useState<Filter>('all')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<AnnotationPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<number | null>(null)

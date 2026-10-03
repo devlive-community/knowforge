@@ -5,13 +5,14 @@ import { useTranslation } from '@/lib/i18n'
 import type { PageResult } from '@/lib/types'
 import { Pagination } from '@/components/ui'
 import BookListCard from './BookListCard'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 6
 
 // UserBookLists 个人主页「书单」：该用户的公开书单（本人可见全部；没有时不显示）。
 export default function UserBookLists({ username }: { username: string }) {
   const { t } = useTranslation()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage('listsPage')
   const [data, setData] = useState<PageResult<BookList> | null>(null)
   useEffect(() => {
     let active = true
@@ -30,7 +31,7 @@ export default function UserBookLists({ username }: { username: string }) {
       <div className="grid gap-5 grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]">
         {data.items.map((l) => <BookListCard key={l.id} list={l} showOwner={false} />)}
       </div>
-      <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onChange={setPage} />
+      <Pagination page={data.page} pageSize={PAGE_SIZE} total={data.total} onChange={setPage} />
     </section>
   )
 }

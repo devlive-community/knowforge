@@ -13,6 +13,7 @@ import { useTranslation } from '@/lib/i18n'
 import { renderAnswer, type QAAsk, type QAQuestion, type QAQuota } from '@/lib/qa'
 import { aiFeatureLabel, formatTokens, type MyAIUsage } from '@/lib/ai-usage'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, SegmentedTabs, Tooltip, useFeedback } from '@/components/ui'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type Tab = 'ai' | 'questions'
 interface BookBrief { id: number; slug: string; title: string }
@@ -90,7 +91,7 @@ function UsageCard({ label, value, hint, progress }: { label: string; value: str
 function AskHistory() {
   const { t } = useTranslation()
   const { showToast, confirmAction } = useFeedback()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<Page<AskItem> | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
 
@@ -122,7 +123,7 @@ function AskHistory() {
   return (
     <div className="space-y-3">
       {data.items.map((item) => <AskCard key={item.ask.id} item={item} deleting={deleting === item.ask.id} disabled={deleting !== null} onDelete={() => void remove(item.ask.id)} />)}
-      {data.total > data.page_size && <Pagination page={page} pageSize={data.page_size} total={data.total} onChange={setPage} />}
+      {data.total > data.page_size && <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} />}
     </div>
   )
 }
@@ -180,7 +181,7 @@ function AskCard({ item, deleting, disabled, onDelete }: { item: AskItem; deleti
 function MyQuestions() {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<Page<QuestionItem> | null>(null)
   useEffect(() => {
     api<Page<QuestionItem>>('/qa/me/questions', { params: { page, page_size: 15 } }).then(setData)
@@ -208,7 +209,7 @@ function MyQuestions() {
           </li>
         ))}
       </ul>
-      {data.total > data.page_size && <Pagination page={page} pageSize={data.page_size} total={data.total} onChange={setPage} />}
+      {data.total > data.page_size && <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} />}
     </div>
   )
 }

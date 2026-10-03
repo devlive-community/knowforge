@@ -5,6 +5,7 @@ import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import type { PageResult } from '@/lib/types'
 import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Pagination, SegmentedTabs, Select, Textarea, useFeedback } from '@/components/ui'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 20
 
@@ -33,7 +34,7 @@ export default function AdminReports() {
   const isAdmin = user?.role === 'admin'
   const [items, setItems] = useState<ContentReport[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [status, setStatus] = useState('pending')
   const [targetType, setTargetType] = useState('')
   const [targetTypes, setTargetTypes] = useState<string[]>(['book', 'document', 'comment'])
@@ -203,7 +204,7 @@ export default function AdminReports() {
               </Card>
             ))}
           </div>
-          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
+          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} loading={loading} />
         </>
       )}
 

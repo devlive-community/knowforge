@@ -4,6 +4,7 @@ import { useTranslation } from '@/lib/i18n'
 import { dateStamp, downloadAuthed } from '@/lib/download'
 import { Badge, Button, Card, DateTimePicker, EmptyState, Field, Input, Loading, Modal, Pagination, SegmentedTabs, Select, Switch, useFeedback } from '@/components/ui'
 import type { MembershipPlan } from '@/lib/membership'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface Batch {
   id: number
@@ -26,7 +27,7 @@ interface CodeRow { id: number; code: string; used_count: number; max_uses: numb
 export default function RedeemPanel({ plans }: { plans: { plan: MembershipPlan }[] }) {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: Batch[]; total: number; page: number; page_size: number } | null>(null)
   const [creating, setCreating] = useState(false)
   const [viewing, setViewing] = useState<Batch | null>(null)

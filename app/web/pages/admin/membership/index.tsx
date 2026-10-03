@@ -18,6 +18,7 @@ import type { EntitlementDef } from '@/lib/entitlements'
 import { centsFromInput, inputFromCents, type MembershipPlan, type MembershipRecord } from '@/lib/membership'
 import { durationLabel, formatPrice } from '@/lib/commerce'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type Tab = 'plans' | 'members' | 'redeem' | 'coupons' | 'referral' | 'records' | 'settings'
 const TABS: Tab[] = ['plans', 'members', 'redeem', 'coupons', 'referral', 'records', 'settings']
@@ -261,7 +262,7 @@ function MembersPanel({ plans, onChanged }: { plans: PlanItem[]; onChanged: () =
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
   const [planID, setPlanID] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: MemberItem[]; total: number; page: number; page_size: number } | null>(null)
   const [grantOpen, setGrantOpen] = useState(false)
   const [adjusting, setAdjusting] = useState<MemberItem | null>(null)
@@ -419,7 +420,7 @@ function RecordsPanel() {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
   const [user, setUser] = useState<UserLite | null>(null)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: RecordItem[]; total: number; page: number; page_size: number } | null>(null)
   useEffect(() => {
     const params = new URLSearchParams({ page: String(page), page_size: '20' })

@@ -6,6 +6,7 @@ import { Badge, Button, Input, Select, Pagination, Loading, useFeedback } from '
 import { SearchIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import type { PageResult, User } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 15
 
@@ -17,7 +18,7 @@ export default function AdminUsers() {
   const isAdmin = user?.role === 'admin'
   const [items, setItems] = useState<User[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [q, setQ] = useState('')
   const [role, setRole] = useState('')
   const [status, setStatus] = useState('')
@@ -197,7 +198,7 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} loading={loading} />
       </>
       )}
     </AdminLayout>

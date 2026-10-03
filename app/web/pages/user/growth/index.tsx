@@ -10,6 +10,7 @@ import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, ButtonLink, Card, EmptyState, Loading, Pagination, Switch, useFeedback } from '@/components/ui'
 import { growthReasonLabel, growthRuleLabel } from '@/lib/growth'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface Level { id: number; level: number; name: string; icon_type?: string; icon_value?: string; color?: string; min_xp: number }
 interface Growth {
@@ -37,7 +38,7 @@ function MyGrowthInner() {
   const [growth, setGrowth] = useState<Growth | null>(null)
   const [levels, setLevels] = useState<Level[]>([])
   const [events, setEvents] = useState<{ items: XPEvent[]; total: number; page: number; page_size: number } | null>(null)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [savingPublic, setSavingPublic] = useState(false)
   const [reloadKey, setReloadKey] = useState(0) // 签到后刷新经验与流水
 

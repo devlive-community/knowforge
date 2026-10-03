@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import { api, formatDate, formatNumber } from '@/lib/api'
 import { useApp } from '@/lib/auth'
@@ -8,6 +8,7 @@ import { Badge, Button, DropdownMenu, EmptyState, Input, Loading, Pagination, Se
 import { EyeIcon, PencilIcon, SearchIcon, TrashIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import type { DocumentStatus, Document, PageResult } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 15
 
@@ -42,7 +43,7 @@ export default function AdminDocuments() {
   const isAdmin = user?.role === 'admin'
   const [items, setItems] = useState<AdminDocumentItem[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [q, setQ] = useState('')
   const [bookId, setBookId] = useState('')
   const [status, setStatus] = useState('')
@@ -78,12 +79,15 @@ export default function AdminDocuments() {
     return status === 'published' ? t('book.status.published') : status === 'archived' ? t('book.status.archived') : t('book.status.draft')
   }
 
+  // 地址栏的 book_id 变化时按书筛选并回到第 1 页（首次就绪时只读取筛选，保留地址栏里的页码）
+  const lastBookId = useRef<string | null>(null)
   useEffect(() => {
     if (!router.isReady) return
-    const queryBookId = router.query.book_id
-    setBookId(typeof queryBookId === 'string' ? queryBookId : '')
-    setPage(1)
-  }, [router.isReady, router.query.book_id])
+    const queryBookId = typeof router.query.book_id === 'string' ? router.query.book_id : ''
+    setBookId(queryBookId)
+    if (lastBookId.current !== null && lastBookId.current !== queryBookId) setPage(1)
+    lastBookId.current = queryBookId
+  }, [router.isReady, router.query.book_id, setPage])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -264,7 +268,7 @@ export default function AdminDocuments() {
               </table>
             </div>
           </div>
-          <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} loading={loading} />
         </>
       )}
     </AdminLayout>

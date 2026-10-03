@@ -9,6 +9,7 @@ import { useTranslation } from '@/lib/i18n'
 import { Badge, Card, EmptyState, Loading, Pagination } from '@/components/ui'
 import { durationLabel, formatPrice } from '@/lib/commerce'
 import { CHANNEL_ICONS, STATUS_TONE, type PaymentOrder } from '@/lib/payment'
+import { useUrlPage } from '@/lib/use-url-page'
 
 export default function MyOrdersPage() {
   return <FeatureGate feature="payment"><MyOrdersInner /></FeatureGate>
@@ -18,7 +19,7 @@ function MyOrdersInner() {
   const user = useRequireAuth()
   const { site } = useApp()
   const { t, locale } = useTranslation()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: PaymentOrder[]; total: number; page: number; page_size: number } | null>(null)
 
   useEffect(() => {

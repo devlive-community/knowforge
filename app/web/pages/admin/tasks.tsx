@@ -6,6 +6,7 @@ import { api, formatDate } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import type { PageResult } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 20
 
@@ -32,7 +33,7 @@ export default function AdminTasks() {
   const isAdmin = user?.role === 'admin'
   const [items, setItems] = useState<BackgroundTask[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [status, setStatus] = useState('')
   const [jobType, setJobType] = useState('')
   const [loading, setLoading] = useState(true)
@@ -177,7 +178,7 @@ export default function AdminTasks() {
               </table>
             </div>
           </div>
-          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
+          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} loading={loading} />
         </>
       )}
     </AdminLayout>

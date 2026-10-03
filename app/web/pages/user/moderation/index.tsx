@@ -9,6 +9,7 @@ import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, Card, EmptyState, Loading, Pagination } from '@/components/ui'
 import { MODERATION_STATUS_TONE, type ModerationCaseItem } from '@/lib/moderation'
+import { useUrlPage } from '@/lib/use-url-page'
 
 export default function MyModerationPage() {
   return <FeatureGate feature="moderation"><MyModerationInner /></FeatureGate>
@@ -19,7 +20,7 @@ function MyModerationInner() {
   const user = useRequireAuth()
   const { site } = useApp()
   const { t } = useTranslation()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: ModerationCaseItem[]; total: number; page: number; page_size: number } | null>(null)
   useEffect(() => {
     if (!user) return

@@ -10,6 +10,7 @@ import { useTranslation } from '@/lib/i18n'
 import { durationLabel, formatPrice } from '@/lib/commerce'
 import { CHANNEL_ICONS, REFUND_STATUS_TONE, STATUS_TONE, toCents, type PaymentChannel, type PaymentOrder, type PaymentRefund } from '@/lib/payment'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type Tab = 'orders' | 'refunds' | 'settings'
 const TABS: Tab[] = ['orders', 'refunds', 'settings']
@@ -46,7 +47,7 @@ function OrdersPanel() {
   const [q, setQ] = useState('')
   const [view, setView] = useState('') // '' | awaiting | unfulfilled | <status>
   const [channel, setChannel] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: OrderItem[]; total: number; page: number; page_size: number } | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // 正在操作的「订单号:动作」
   const [refunding, setRefunding] = useState<OrderItem | null>(null)
@@ -218,7 +219,7 @@ function RefundsPanel() {
   const { showToast, requestInput } = useFeedback()
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: RefundItem[]; total: number; page: number; page_size: number; requested: number } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [approving, setApproving] = useState<RefundItem | null>(null)

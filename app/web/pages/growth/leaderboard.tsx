@@ -11,6 +11,7 @@ import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Card, EmptyState, Loading, Pagination, SegmentedTabs, useFeedback } from '@/components/ui'
 import { displayName } from '@/lib/users'
+import { useChangeEffect, useUrlPage } from '@/lib/use-url-page'
 
 type Period = 'all' | 'month' | 'week'
 interface Level { level: number; name: string; icon_type?: string; icon_value?: string; color?: string }
@@ -54,12 +55,12 @@ function LeaderboardInner() {
   const router = useRouter()
   const siteName = site.site_name || 'KnowForge'
   const period: Period = PERIODS.includes(router.query.period as Period) ? (router.query.period as Period) : 'all'
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [board, setBoard] = useState<Board | null>(null)
   const [loading, setLoading] = useState(false)
 
   const open = site.growth_leaderboard_enabled !== false // 管理员关闭排行榜时显示未开放
-  useEffect(() => { setPage(1) }, [period])
+  useChangeEffect(() => setPage(1), [period])
   useEffect(() => {
     if (!router.isReady || !open) return
     let alive = true

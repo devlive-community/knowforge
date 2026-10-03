@@ -4,6 +4,7 @@ import { useTranslation } from '@/lib/i18n'
 import { durationLabel } from '@/lib/commerce'
 import type { MembershipGift } from '@/lib/membership'
 import { Badge, Button, Card, Pagination, useFeedback } from '@/components/ui'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const statusTone = { unused: 'emerald', redeemed: 'slate', void: 'rose' } as const
 
@@ -11,7 +12,7 @@ const statusTone = { unused: 'emerald', redeemed: 'slate', void: 'rose' } as con
 export default function GiftsCard({ reloadKey }: { reloadKey?: number }) {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage('giftsPage')
   const [data, setData] = useState<{ items: MembershipGift[]; total: number; page: number; page_size: number } | null>(null)
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import { aiFeatureLabel, formatTokens, type AIUsageRef, type MyAIUsage } from '@
 import AIUsageRefLink from '@/components/ai/AIUsageRefLink'
 import { dateStamp, downloadAuthed } from '@/lib/download'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, Select, Tooltip, useFeedback } from '@/components/ui'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface CallView {
   id: number
@@ -129,8 +130,8 @@ function TraceList({ features }: { features: string[] }) {
   const { showToast } = useFeedback()
   const trace = typeof router.query.trace === 'string' ? router.query.trace : '' // 由问答等页面跳转定位到某条调用链
   const [feature, setFeature] = useState('')
-  const [page, setPage] = useState(1)
-  const [data, setData] = useState<{ items: TraceView[]; total: number; page_size: number } | null>(null)
+  const [page, setPage] = useUrlPage()
+  const [data, setData] = useState<{ items: TraceView[]; total: number; page: number; page_size: number } | null>(null)
   const [exporting, setExporting] = useState(false)
 
   async function exportCSV() {
@@ -173,7 +174,7 @@ function TraceList({ features }: { features: string[] }) {
           {data.items.map((tr) => <TraceItem key={tr.trace_id} trace={tr} defaultOpen={Boolean(trace)} />)}
         </ul>
       )}
-      {data && data.total > data.page_size && <div className="mt-4"><Pagination size="sm" page={page} pageSize={data.page_size} total={data.total} onChange={setPage} /></div>}
+      {data && data.total > data.page_size && <div className="mt-4"><Pagination size="sm" page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} /></div>}
     </Card>
   )
 }

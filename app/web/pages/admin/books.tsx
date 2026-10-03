@@ -9,6 +9,7 @@ import { Badge, DropdownMenu, EmptyState, Input, Loading, Pagination, Select, us
 import { EyeIcon, FileTextIcon, GearIcon, SearchIcon, TrashIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import type { Book, BookStatus, PageResult } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 15
 
@@ -19,7 +20,7 @@ export default function AdminBooks() {
   const isAdmin = user?.role === 'admin'
   const [items, setItems] = useState<Book[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
   const [visibility, setVisibility] = useState('')
@@ -254,7 +255,7 @@ export default function AdminBooks() {
               </table>
             </div>
           </div>
-          <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} loading={loading} />
         </>
       )}
     </AdminLayout>

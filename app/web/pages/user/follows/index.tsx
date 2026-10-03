@@ -10,6 +10,7 @@ import { EmptyState, Loading, Pagination } from '@/components/ui'
 import BookCard from '@/components/BookCard'
 import Seo from '@/components/Seo'
 import type { Book } from '@/lib/types'
+import { useUrlPage } from '@/lib/use-url-page'
 
 interface FollowItem {
   book: Book
@@ -26,7 +27,7 @@ function MyFollowsInner() {
   const { t } = useTranslation()
   const siteName = site.site_name || 'KnowForge'
   const { ref: gridRef, pageSize, ready } = useGridPageSize({ minItemRem: 15, rows: 3, fallback: 9 })
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: FollowItem[]; total: number; page: number; page_size: number } | null>(null)
   const [loading, setLoading] = useState(true)
 

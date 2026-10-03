@@ -10,6 +10,7 @@ import { useTranslation } from '@/lib/i18n'
 import { formatPrice } from '@/lib/commerce'
 import { centsFromInput, inputFromCents } from '@/lib/membership'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type Tab = 'sales' | 'withdrawals' | 'settings'
 const TABS: Tab[] = ['sales', 'withdrawals', 'settings']
@@ -43,7 +44,7 @@ interface SaleItem { entry: { id: number; title: string; gross_cents: number; co
 
 function SalesPanel() {
   const { t, locale } = useTranslation()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: SaleItem[]; total: number; page: number; page_size: number; gross_cents: number; commission_cents: number; currency: string } | null>(null)
   useEffect(() => {
     api<{ items: SaleItem[]; total: number; page: number; page_size: number; gross_cents: number; commission_cents: number; currency: string }>('/admin/paid/sales', { params: { page, page_size: 20 } }).then(setData).catch(() => {})
@@ -89,7 +90,7 @@ function WithdrawalsPanel() {
   const { t, locale } = useTranslation()
   const { showToast, requestInput, confirmAction } = useFeedback()
   const [status, setStatus] = useState('pending')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage()
   const [data, setData] = useState<{ items: WItem[]; total: number; page: number; page_size: number } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const load = useCallback(() => {

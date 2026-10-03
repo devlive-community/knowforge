@@ -9,6 +9,7 @@ import { CitationList } from '@/components/qa/QAAskPanel'
 import { Badge, Button, ButtonLink, Checkbox, EmptyState, Input, Loading, Modal, Pagination, Select, Textarea, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import { displayName } from '@/lib/users'
+import { useUrlPage } from '@/lib/use-url-page'
 
 type Filter = 'all' | 'open' | 'resolved'
 
@@ -45,7 +46,7 @@ function QuestionList({ user, book, onOpenQuestion, docId, selection, loginHref,
   const [filter, setFilter] = useState<Filter>('all')
   const [keyword, setKeyword] = useState('')
   const [query, setQuery] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useUrlPage('qaPage')
   const [data, setData] = useState<PageResult<QAQuestion> | null>(null)
   const [loading, setLoading] = useState(true)
   const [asking, setAsking] = useState(false)
@@ -127,7 +128,7 @@ function QuestionList({ user, book, onOpenQuestion, docId, selection, loginHref,
           ))}
         </ul>
       )}
-      {data && data.total > pageSize && <Pagination size="sm" page={page} pageSize={pageSize} total={data.total} onChange={setPage} />}
+      {data && data.total > pageSize && <Pagination size="sm" page={page} pageSize={pageSize} total={data.total} onChange={setPage} loading={loading} />}
 
       <Modal open={asking} onClose={() => setAsking(false)} title={t('qa.community.askTitle')}
         footer={<><Button variant="ghost" onClick={() => setAsking(false)}>{t('common.actions.cancel')}</Button><Button loading={saving} disabled={!form.title.trim()} onClick={() => void submit()}>{t('qa.community.submitQuestion')}</Button></>}>
