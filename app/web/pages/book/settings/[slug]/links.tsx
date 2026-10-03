@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { InferGetServerSidePropsType } from 'next'
 import Link from 'next/link'
+import { useRouter } from 'next/router'
 import BookSettingsLayout from '@/components/BookSettingsLayout'
 import { requireBookSettingsFeature } from '@/lib/book-settings'
 import { api } from '@/lib/api'
 import type { LinkGraph, LinkGraphNode } from '@/lib/backlinks'
 import { useTranslation } from '@/lib/i18n'
-import { Badge, EmptyState, Loading } from '@/components/ui'
+import { Badge, EmptyState, Loading, SegmentedTabs } from '@/components/ui'
+import LinkGraphView from '@/components/backlinks/LinkGraphView'
 
 export const getServerSideProps = requireBookSettingsFeature('backlinks')
 
-// 书籍设置 · 章节链接：本书章节之间的 [[双向链接]]（含草稿）、失效链接，以及没有任何链接的章节数。
+// 书籍设置 · 章节链接：本书章节之间的 [[双向链接]]（含草稿）、失效链接，以及没有任何链接的章节数；
+// 章节关系以「关系图」（默认）或「列表」查看（?view=list）。
 export default function BookLinksPage({ book }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { t } = useTranslation()
+  const router = useRouter()
+  const view = router.query.view === 'list' ? 'list' : 'graph'
+  const base = `/book/settings/${encodeURIComponent(book.slug)}/links`
   const [graph, setGraph] = useState<LinkGraph | null>(null)
   const [error, setError] = useState('')
 
@@ -71,8 +77,16 @@ export default function BookLinksPage({ book }: InferGetServerSidePropsType<type
             )}
 
             <section>
-              <h2 className="text-sm font-semibold text-slate-900">{t('backlinks.settings.chaptersTitle')}</h2>
-              {linked.length === 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-slate-900">{t('backlinks.settings.chaptersTitle')}</h2>
+                <SegmentedTabs size="sm" value={view} ariaLabel={t('backlinks.settings.chaptersTitle')} items={[
+                  { value: 'graph', label: t('backlinks.graph.tab'), href: base },
+                  { value: 'list', label: t('backlinks.graph.listTab'), href: `${base}?view=list` },
+                ]} />
+              </div>
+              {view === 'graph' ? (
+                <div className="mt-3"><LinkGraphView graph={graph} bookSlug={book.slug} /></div>
+              ) : linked.length === 0 ? (
                 <div className="mt-3">
                   <EmptyState>
                     <p>{t('backlinks.settings.empty')}</p>
