@@ -18,7 +18,6 @@ import (
 	"unicode/utf8"
 
 	"knowforge/server/internal/config"
-	"knowforge/server/internal/mdclean"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
@@ -235,6 +234,11 @@ func (cc *behavior) BrowserRenderAvailable(c *gin.Context) {
 }
 
 func (cc *behavior) collectWebArticle(ctx context.Context, req webImportPayload) (webArticle, webPage, string, error) {
+	return cc.collectWebArticleWithRules(ctx, req, nil)
+}
+
+// collectWebArticleWithRules 同 collectWebArticle，rules 为空时使用已保存的采集规则（预览规则时传入未保存的规则）。
+func (cc *behavior) collectWebArticleWithRules(ctx context.Context, req webImportPayload, rules *collectRules) (webArticle, webPage, string, error) {
 	mode := strings.ToLower(strings.TrimSpace(req.RenderMode))
 	if mode == "" {
 		mode = "auto"
@@ -246,6 +250,11 @@ func (cc *behavior) collectWebArticle(ctx context.Context, req webImportPayload)
 	if err != nil {
 		return webArticle{}, webPage{}, "", err
 	}
+	if rules == nil {
+		saved := cc.rules()
+		rules = &saved
+	}
+	rs := rules.compile(target)
 	fetcher := webFetcher
 	if fetcher == nil {
 		fetcher = fetchStaticWebPage
@@ -283,7 +292,7 @@ func (cc *behavior) collectWebArticle(ctx context.Context, req webImportPayload)
 				err = fmt.Errorf("静态抓取失败（%v），浏览器渲染也失败: %w", staticErr, err)
 			}
 		} else if mode == "auto" {
-			article, parseErr := extractWebArticle(page)
+			article, parseErr := extractWebArticleWith(page, rs)
 			switch {
 			case parseErr == nil && !shouldRenderSPA(page.HTML, article.Markdown):
 				usedMode = "static"
@@ -309,12 +318,10 @@ func (cc *behavior) collectWebArticle(ctx context.Context, req webImportPayload)
 	if err != nil {
 		return webArticle{}, webPage{}, "", err
 	}
-	article, err := extractWebArticle(page)
+	article, err := extractWebArticleWith(page, rs)
 	if err != nil {
 		return webArticle{}, webPage{}, "", fmt.Errorf("网页正文解析失败: %w", err)
 	}
-	// 去掉文档站常见的「永久链接」锚点（如标题后的 [🔗](… "Permanent link")），避免误跳外链。
-	article.Markdown = mdclean.StripPermalinkAnchors(article.Markdown)
 	return article, page, usedMode, nil
 }
 
@@ -571,7 +578,13 @@ func shouldRenderSPA(markup, markdown string) bool {
 	return contentLength < 300 || (rootShell && textLength < 1500)
 }
 
+// extractWebArticle 按默认采集规则（内置规则全部启用）提取正文。
 func extractWebArticle(page webPage) (webArticle, error) {
+	return extractWebArticleWith(page, defaultRules)
+}
+
+// extractWebArticleWith 按采集规则提取网页正文并转为 Markdown。
+func extractWebArticleWith(page webPage, rs *ruleSet) (webArticle, error) {
 	if page.FinalURL == nil {
 		return webArticle{}, errors.New("网页地址缺失")
 	}
@@ -590,11 +603,11 @@ func extractWebArticle(page webPage) (webArticle, error) {
 	if description == "" {
 		description = firstMetaContent(doc, "property", "og:description")
 	}
-	contentNode := largestContentNode(doc)
+	contentNode := largestContentNode(doc, rs)
 	if contentNode == nil {
 		return webArticle{}, errors.New("未识别到网页正文")
 	}
-	pruneIgnoredNodes(contentNode)
+	pruneIgnoredNodes(contentNode, rs)
 	var markup bytes.Buffer
 	if err := html.Render(&markup, contentNode); err != nil {
 		return webArticle{}, err
@@ -608,7 +621,7 @@ func extractWebArticle(page webPage) (webArticle, error) {
 	if err != nil {
 		return webArticle{}, err
 	}
-	markdown = trimPageFeedback(strings.TrimSpace(markdown)) // 页尾的「Was this page helpful?」反馈组件
+	markdown = rs.postProcess(strings.TrimSpace(markdown)) // 采集规则：页尾反馈、永久链接锚点、空标题、自定义删除/替换
 	if utf8.RuneCountInString(markdown) < 20 {
 		return webArticle{}, errors.New("网页正文内容过少")
 	}
@@ -623,7 +636,7 @@ func extractWebArticle(page webPage) (webArticle, error) {
 	return webArticle{Title: title, Description: description, Markdown: markdown}, nil
 }
 
-func largestContentNode(doc *html.Node) *html.Node {
+func largestContentNode(doc *html.Node, rs *ruleSet) *html.Node {
 	var semanticBest *html.Node
 	semanticLength := 0
 	var body *html.Node
@@ -631,7 +644,7 @@ func largestContentNode(doc *html.Node) *html.Node {
 	walk = func(node *html.Node) {
 		if node.Type == html.ElementNode {
 			tag := strings.ToLower(node.Data)
-			if shouldIgnoreWebNode(node) {
+			if ignoreWebNode(node, rs) {
 				return
 			}
 			if tag == "body" {
@@ -655,10 +668,10 @@ func largestContentNode(doc *html.Node) *html.Node {
 	return body
 }
 
-func pruneIgnoredNodes(root *html.Node) {
+func pruneIgnoredNodes(root *html.Node, rs *ruleSet) {
 	for child := root.FirstChild; child != nil; {
 		next := child.NextSibling
-		if child.Type == html.ElementNode && shouldIgnoreWebNode(child) {
+		if child.Type == html.ElementNode && (ignoreWebNode(child, rs) || rs.removesElement(child)) {
 			root.RemoveChild(child)
 			child = next
 			continue
@@ -669,7 +682,7 @@ func pruneIgnoredNodes(root *html.Node) {
 			child = next
 			continue
 		}
-		pruneIgnoredNodes(child)
+		pruneIgnoredNodes(child, rs)
 		child = next
 	}
 }
@@ -746,7 +759,8 @@ func flattenPreText(pre *html.Node) {
 	pre.AppendChild(text)
 }
 
-var ignoredWebRegionTokens = map[string]bool{
+// 按 class/id 关键词忽略的区域，分属三条内置采集规则（见 rules.go），可分别停用。
+var layoutRegionTokens = map[string]bool{
 	"ad": true, "ads": true, "advert": true, "advertisement": true,
 	"aside": true, "banner": true, "breadcrumb": true, "breadcrumbs": true,
 	"comment": true, "comments": true, "cookie": true, "dialog": true,
@@ -754,9 +768,13 @@ var ignoredWebRegionTokens = map[string]bool{
 	"nav": true, "navigation": true, "popup": true, "recommend": true,
 	"recommendation": true, "related": true, "share": true, "sharing": true,
 	"sidebar": true, "social": true, "subscribe": true, "toolbar": true,
-	// 页内目录（「On this page」）：toc / table-of-contents / tableOfContents_xxx 等
-	"toc": true, "tableofcontents": true,
-	// 文档站生成器的页面装饰：版本标记与旧版本提示、编辑链接、最后更新时间、上一页/下一页
+}
+
+// 页内目录（「On this page」）：toc / table-of-contents / tableOfContents_xxx 等
+var tocRegionTokens = map[string]bool{"toc": true, "tableofcontents": true}
+
+// 文档站生成器的页面装饰：版本标记与旧版本提示、编辑链接、最后更新时间、上一页/下一页
+var decorationRegionTokens = map[string]bool{
 	"theme-doc-version-badge": true, "theme-doc-version-banner": true, "theme-edit-this-page": true,
 	"theme-last-updated": true, "theme-doc-footer": true, // Docusaurus
 	"vpdocaside": true, "vpdocfooter": true, "edit-link": true, "prev-next": true, // VitePress
@@ -768,20 +786,34 @@ var webContentRegionTokens = map[string]bool{
 	"entry-content": true, "post-body": true, "post-content": true,
 }
 
-func shouldIgnoreWebNode(node *html.Node) bool {
+// shouldIgnoreWebNode 按默认采集规则判断是否忽略该元素（标题等文字提取用）。
+func shouldIgnoreWebNode(node *html.Node) bool { return ignoreWebNode(node, defaultRules) }
+
+// ignoreWebNode 按采集规则判断是否忽略该元素：脚本、样式、隐藏元素等总是忽略；
+// 页头/页脚/导航/侧栏等布局区域、页内目录、文档站装饰分别受对应的内置规则控制。
+func ignoreWebNode(node *html.Node, rs *ruleSet) bool {
 	if node == nil || node.Type != html.ElementNode {
 		return false
 	}
 	tag := strings.ToLower(node.Data)
-	if tag == "script" || tag == "style" || tag == "noscript" || tag == "svg" || tag == "nav" || tag == "footer" || tag == "header" || tag == "form" || tag == "aside" || tag == "dialog" || tag == "template" {
+	if tag == "script" || tag == "style" || tag == "noscript" || tag == "svg" || tag == "form" || tag == "dialog" || tag == "template" {
 		return true
 	}
 	if strings.EqualFold(attribute(node, "aria-hidden"), "true") || hasAttribute(node, "hidden") {
 		return true
 	}
-	role := strings.ToLower(attribute(node, "role"))
-	if role == "banner" || role == "complementary" || role == "contentinfo" || role == "dialog" || role == "navigation" {
+	// 文档站装饰：正文中的按钮（「Copy page」「复制」「展开」等）不是正文内容
+	if rs.decorations && tag == "button" {
 		return true
+	}
+	if rs.layout {
+		if tag == "nav" || tag == "footer" || tag == "header" || tag == "aside" {
+			return true
+		}
+		role := strings.ToLower(attribute(node, "role"))
+		if role == "banner" || role == "complementary" || role == "contentinfo" || role == "dialog" || role == "navigation" {
+			return true
+		}
 	}
 	// 结构性容器（html/body/main/article）不按 class/id 关键词忽略：
 	// 如 Docusaurus 的 <body class="navigation-with-keyboard"> 会分出 navigation，误把整页当导航丢弃。
@@ -789,7 +821,7 @@ func shouldIgnoreWebNode(node *html.Node) bool {
 		return false
 	}
 	for _, token := range webRegionTokens(node) {
-		if ignoredWebRegionTokens[token] {
+		if (rs.layout && layoutRegionTokens[token]) || (rs.toc && tocRegionTokens[token]) || (rs.decorations && decorationRegionTokens[token]) {
 			return true
 		}
 	}

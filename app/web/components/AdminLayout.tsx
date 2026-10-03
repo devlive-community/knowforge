@@ -14,7 +14,7 @@ import {
 } from '@/components/icons'
 import { displayName } from '@/lib/users'
 
-export type AdminNavKey = 'system' | 'users' | 'books' | 'documents' | 'tags' | 'achievements' | 'growth' | 'membership' | 'payment' | 'paid' | 'moderation' | 'qa' | 'chapter-guide' | 'book-translations' | 'reports' | 'audit' | 'ai-usage' | 'tasks' | 'languages' | 'settings' | 'plugins' | 'upgrade'
+export type AdminNavKey = 'system' | 'users' | 'books' | 'documents' | 'tags' | 'achievements' | 'growth' | 'membership' | 'payment' | 'paid' | 'moderation' | 'qa' | 'chapter-guide' | 'book-translations' | 'collect' | 'reports' | 'audit' | 'ai-usage' | 'tasks' | 'languages' | 'settings' | 'plugins' | 'upgrade'
 
 function ReportIcon({ className }: { className?: string }) {
   return <i className={`fa-solid fa-flag ${className || ''}`.trim()} aria-hidden="true" />
@@ -76,6 +76,7 @@ function SidebarNav({ current, onNavigate }: { current: AdminNavKey; onNavigate?
     { key: 'qa', labelKey: 'admin.nav.qa', href: '/admin/qa', icon: ({ className }) => <i className={`fa-solid fa-comments ${className || ''}`} aria-hidden="true" /> },
     { key: 'chapter-guide', labelKey: 'admin.nav.chapterGuide', href: '/admin/chapter-guides', icon: ({ className }) => <i className={`fa-solid fa-compass ${className || ''}`} aria-hidden="true" /> },
     { key: 'book-translations', labelKey: 'admin.nav.bookTranslations', href: '/admin/book-translations', icon: ({ className }) => <i className={`fa-solid fa-language ${className || ''}`} aria-hidden="true" /> },
+    { key: 'collect', labelKey: 'admin.nav.collect', href: '/admin/collect', icon: ({ className }) => <i className={`fa-solid fa-spider ${className || ''}`} aria-hidden="true" /> },
     { key: 'moderation', labelKey: 'admin.nav.moderation', href: '/admin/moderation', icon: ({ className }) => <i className={`fa-solid fa-shield-halved ${className || ''}`} aria-hidden="true" /> },
     { key: 'reports', labelKey: 'admin.nav.reports', href: '/admin/reports', icon: ReportIcon },
     { key: 'audit', labelKey: 'admin.nav.audit', href: '/admin/audit-logs', icon: ActivityIcon },
@@ -100,6 +101,7 @@ function SidebarNav({ current, onNavigate }: { current: AdminNavKey; onNavigate?
     if (item.key === 'qa') return features.includes('qa')
     if (item.key === 'chapter-guide') return features.includes('chapter-guide')
     if (item.key === 'book-translations') return features.includes('book-translations')
+    if (item.key === 'collect') return features.includes('content-collect')
     return true
   })
 

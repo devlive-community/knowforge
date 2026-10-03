@@ -25,6 +25,10 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     # 我的任务: t(`userTasks.kind|status|tab|empty.${x}`)（任务种类与状态见 lib/user-tasks.ts）
     # WriterWorkbench 预览的章节元数据卡片: t(`writer.meta.${key}`)
     'writer.meta.': ['title', 'description', 'url', 'icon'],
+    # 采集规则: t(`admin.collect.builtin.${key}.name|hint`) / type / patternHint（contentcollect/rules.go）
+    'admin.collect.builtin.': ['layout_regions', 'page_toc', 'doc_decorations', 'permalinks', 'empty_headings', 'page_feedback'],
+    'admin.collect.type.': ['remove_element', 'remove_line', 'replace'],
+    'admin.collect.patternHint.': ['remove_element', 'remove_line', 'replace'],
     'userTasks.kind.': ['zipImport', 'pdfImport', 'imageLocalize', 'translate', 'siteCrawl', 'aiWriter', 'chapterGuide'],
     'userTasks.status.': ['queued', 'running', 'paused', 'done', 'failed', 'canceled'],
     'userTasks.tab.': ['active', 'done', 'failed'],
@@ -154,6 +158,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
 
 # 动态键的字段后缀（如 tfa.op.${key}.label 与 .hint 两套）
 DYNAMIC_SUFFIXES: dict[str, list[str]] = {
+    'admin.collect.builtin.': ['.name', '.hint'],
     'tfa.op.': ['.label', '.hint'],
     'entitlement.': ['.label', '.hint'],
 }

@@ -71,6 +71,12 @@ func (cc *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	collect.POST("/pages/:id/retry", core.RequirePermission(authz.CollectManage), cc.RetryCrawlPage)
 	api.GET("/books/:id/collect/jobs", auth, feature, core.RequirePermission(authz.CollectRead), cc.ListBookCrawlJobs)
 
+	// 采集规则（管理员）：内置规则开关、自定义规则与试采预览
+	admin := []gin.HandlerFunc{auth, core.RequireAdmin(), feature, core.RequirePermissionMiddleware(authz.CollectManage)}
+	api.GET("/admin/collect/rules", append(admin, cc.AdminGetRules)...)
+	api.PUT("/admin/collect/rules", append(admin, cc.AdminUpdateRules)...)
+	api.POST("/admin/collect/rules/preview", append(admin, cc.AdminPreviewRules)...)
+
 	// 书籍清理：按采集记录把外链改写为站内链接
 	api.POST("/books/:id/cleanup/internal-links", auth, feature, core.RequirePermission(authz.BookUpdate), cc.CleanupBookInternalLinks)
 }
