@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -159,7 +160,7 @@ func (a *App) SiteStats(c *gin.Context) {
 // GetSiteConfig GET /site 公开站点配置
 func (a *App) GetSiteConfig(c *gin.Context) {
 	var rows []models.SiteConfig
-	a.DB.Where("config_key IN ?", []string{"site_name", "site_description", "site_logo", "site_favicon", "site_keywords", "site_footer_text", "site_footer_links", "site_beian", "help_doc_url", "terms_url", "privacy_url", "version", "installation_date", "comments_enabled", "announcement_enabled", "announcement_text", "announcement_tone", "book_versions_sort", cfgRegRequireActivation}).Find(&rows)
+	a.DB.Where("config_key IN ?", []string{"site_name", "site_description", "site_logo", "site_favicon", "site_keywords", "site_footer_text", "site_footer_links", "site_beian", "help_doc_url", "terms_url", "privacy_url", "version", "installation_date", "comments_enabled", "announcement_enabled", "announcement_text", "announcement_tone", "book_versions_sort", cfgRegRequireActivation, "custom_head_html", "custom_footer_html"}).Find(&rows)
 	cfg := gin.H{}
 	for _, r := range rows {
 		cfg[r.ConfigKey] = r.ConfigValue
@@ -195,9 +196,14 @@ type siteConfigUpdate struct {
 	PrivacyURL          *string `json:"privacy_url"`
 	AnnouncementEnabled *bool   `json:"announcement_enabled"`
 	AnnouncementText    *string `json:"announcement_text"`
-	AnnouncementTone    *string `json:"announcement_tone"`   // info | warning
+	AnnouncementTone    *string `json:"announcement_tone"`  // info | warning
 	BookVersionsSort    *string `json:"book_versions_sort"` // 多版本阅读页排序：desc(默认,最新在前) | asc
+	CustomHeadHTML      *string `json:"custom_head_html"`   // 每个页面 <head> 中追加的 HTML（统计脚本、站点验证 meta 等）
+	CustomFooterHTML    *string `json:"custom_footer_html"` // 每个页面 </body> 前追加的 HTML
 }
+
+// maxCustomHTML 自定义 Head / Footer HTML 的长度上限（字节）。
+const maxCustomHTML = 64 << 10
 
 // UpdateSiteConfig PUT /site 管理员更新站点配置
 func (a *App) UpdateSiteConfig(c *gin.Context) {
@@ -268,6 +274,17 @@ func (a *App) UpdateSiteConfig(c *gin.Context) {
 			sort = "asc"
 		}
 		updates["book_versions_sort"] = sort
+	}
+	for field, p := range map[string]*string{"custom_head_html": req.CustomHeadHTML, "custom_footer_html": req.CustomFooterHTML} {
+		if p == nil {
+			continue
+		}
+		v := strings.TrimSpace(*p)
+		if len(v) > maxCustomHTML {
+			fail(c, http.StatusBadRequest, fmt.Sprintf("自定义 HTML 不能超过 %d KB", maxCustomHTML>>10))
+			return
+		}
+		updates[field] = v
 	}
 	for key, value := range updates {
 		var cfg models.SiteConfig

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"knowforge/server/internal/config"
@@ -330,6 +331,17 @@ func TestFullLifecycle(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 403 {
 		t.Fatalf("普通用户更新站点配置应 403: %d", resp.StatusCode)
+	}
+
+	// 7.1 自定义 Head / Footer HTML：管理员保存后公开配置中可读，超长拒绝
+	if status, p := put("/api/v1/site", map[string]any{"custom_head_html": "<meta name=\"v\" content=\"1\">", "custom_footer_html": "<script>1</script>"}, adminToken); status != 200 {
+		t.Fatalf("保存自定义 HTML 失败: %d %v", status, p)
+	}
+	if _, p := get("/api/v1/site", ""); p["data"].(map[string]any)["custom_head_html"] != "<meta name=\"v\" content=\"1\">" || p["data"].(map[string]any)["custom_footer_html"] != "<script>1</script>" {
+		t.Fatalf("公开配置应包含自定义 HTML: %v", p)
+	}
+	if status, _ := put("/api/v1/site", map[string]any{"custom_footer_html": strings.Repeat("x", maxCustomHTML+1)}, adminToken); status != 400 {
+		t.Fatalf("超长自定义 HTML 应 400: %d", status)
 	}
 
 	// 7.2 管理员拥有 system:read

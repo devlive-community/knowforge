@@ -104,7 +104,11 @@ App.getInitialProps = async (context: AppContext) => {
       context.ctx.res.setHeader('Cache-Control', 'private, no-store')
       context.ctx.res.setHeader('Vary', 'Cookie, Accept-Language, Authorization')
     }
-    return { ...props, i18n }
+    // 站点设置的自定义 Head / Footer HTML：只在服务端渲染时注入文档（_document），客户端切换页面时文档不变
+    const { getSiteConfig } = await import('@/lib/server-api')
+    const site = await getSiteConfig()
+    const customHtml = { head: site.custom_head_html || '', footer: site.custom_footer_html || '' }
+    return { ...props, i18n, ...(customHtml.head || customHtml.footer ? { customHtml } : {}) }
   }
   return { ...props, i18n: await fetchI18nSnapshot().catch(() => undefined) }
 }

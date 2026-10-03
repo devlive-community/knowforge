@@ -5262,4 +5262,13 @@ export const en: Record<string, string> = {
   'aiUsage.mine.costHint': 'Estimated from the site\'s model prices, for reference only; your actual bill may differ',
   'admin.settings.ai.showUserCost': 'Show estimated cost to users',
   'admin.settings.ai.showUserCostHint': 'Users see estimated monthly and per-call cost in My AI usage, based on the prices above',
+  'admin.settings.customHtml': 'Custom HTML',
+  'admin.settings.customHtml.description': 'Add HTML to every page, such as analytics scripts, site ownership verification or a support widget. Applies to newly opened or refreshed pages.',
+  'admin.settings.customHtml.head': 'Extra HTML in head',
+  'admin.settings.customHtml.headHint': 'Appended to <head>. Supports meta, link, script, style, noscript, base and title tags; other tags are ignored.',
+  'admin.settings.customHtml.footer': 'Extra HTML in footer',
+  'admin.settings.customHtml.footerHint': 'Appended as-is before </body>; any HTML and scripts are allowed.',
+  'admin.settings.customHtml.warning': 'Scripts here run in every visitor\'s browser. Only add code from trusted sources; each field is limited to 64 KB.',
+  'admin.settings.customHtml.save': 'Save',
+  'admin.settings.customHtml.saved': 'Saved. Applies to newly opened or refreshed pages.',
 }

@@ -5262,4 +5262,13 @@ export const zh: Record<string, string> = {
   'aiUsage.mine.costHint': '按站点设置的模型单价估算，仅供参考，以实际账单为准',
   'admin.settings.ai.showUserCost': '向用户展示估算费用',
   'admin.settings.ai.showUserCostHint': '开启后，用户在「我的 AI 用量」中可看到本月与每次调用的估算费用（按上方单价估算）',
+  'admin.settings.customHtml': '自定义 HTML',
+  'admin.settings.customHtml.description': '在站点每个页面中追加 HTML，如统计脚本、站点所有权验证、客服组件。保存后对新打开或刷新的页面生效。',
+  'admin.settings.customHtml.head': 'HTML Head 额外内容',
+  'admin.settings.customHtml.headHint': '追加到 <head> 中，支持 meta、link、script、style、noscript、base、title 标签；其他标签会被忽略。',
+  'admin.settings.customHtml.footer': 'HTML Footer 额外内容',
+  'admin.settings.customHtml.footerHint': '原样追加到页面 </body> 之前，可以是任意 HTML 与脚本。',
+  'admin.settings.customHtml.warning': '这里的脚本会在所有访客的浏览器中运行，请只添加可信来源的代码；单项不超过 64 KB。',
+  'admin.settings.customHtml.save': '保存',
+  'admin.settings.customHtml.saved': '已保存，新打开或刷新的页面生效',
 }
