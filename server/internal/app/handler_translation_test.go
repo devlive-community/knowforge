@@ -207,7 +207,7 @@ func TestTranslationUsageRecorded(t *testing.T) {
 		t.Fatalf("我的用量异常: %v", d)
 	}
 
-	// 同一调用链的多次调用归为一组；用户视图不含费用与原始错误信息
+	// 同一调用链的多次调用归为一组；用户视图不含原始错误信息
 	ctx := ai.WithCaller(context.Background(), ai.Caller{UserID: writer.ID, Feature: "qa.agent", TraceID: "trace-1"})
 	chatCfg := ai.Config{Provider: ai.ProviderOpenAI, BaseURL: fake.URL + "/v1", APIKey: "sk", Model: "gpt-x"}
 	for i := 0; i < 2; i++ {
@@ -224,9 +224,22 @@ func TestTranslationUsageRecorded(t *testing.T) {
 	if first["trace_id"] != "trace-1" || first["calls"].(float64) != 2 || first["input_tokens"].(float64) != 100 || len(first["items"].([]any)) != 2 {
 		t.Fatalf("最新的调用链异常: %v", first)
 	}
-	if _, leaked := first["items"].([]any)[0].(map[string]any)["cost_micros"]; leaked {
-		t.Fatal("用户视图不应包含费用")
+	// 估算费用默认向用户展示（每次调用 50×1 + 12×2），管理员可关闭
+	if first["cost_micros"].(float64) != 2*(50*1+12*2) || first["items"].([]any)[0].(map[string]any)["cost_micros"].(float64) != 50*1+12*2 || logs["data"].(map[string]any)["currency"] != "USD" {
+		t.Fatalf("应展示估算费用: %v", first)
 	}
+	if _, mine := req(http.MethodGet, "/api/v1/users/me/ai-usage", nil, token); mine["data"].(map[string]any)["cost_micros"] == nil || mine["data"].(map[string]any)["show_cost"] != true {
+		t.Fatalf("本月用量应含估算费用: %v", mine)
+	}
+	req(http.MethodPut, "/api/v1/admin/ai", map[string]any{"show_user_cost": "false"}, admin)
+	_, hidden := req(http.MethodGet, "/api/v1/users/me/ai-usage/logs", nil, token)
+	if _, leaked := hidden["data"].(map[string]any)["items"].([]any)[0].(map[string]any)["items"].([]any)[0].(map[string]any)["cost_micros"]; leaked {
+		t.Fatal("关闭后用户视图不应包含费用")
+	}
+	if _, mine := req(http.MethodGet, "/api/v1/users/me/ai-usage", nil, token); mine["data"].(map[string]any)["cost_micros"] != nil {
+		t.Fatalf("关闭后本月用量不应含费用: %v", mine)
+	}
+	req(http.MethodPut, "/api/v1/admin/ai", map[string]any{"show_user_cost": "true"}, admin)
 	_, one := req(http.MethodGet, "/api/v1/users/me/ai-usage/logs?trace_id=trace-1", nil, token)
 	if one["data"].(map[string]any)["total"].(float64) != 1 {
 		t.Fatalf("按调用链筛选异常: %v", one)

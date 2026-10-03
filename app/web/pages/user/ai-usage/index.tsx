@@ -5,7 +5,7 @@ import Seo from '@/components/Seo'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { aiFeatureLabel, formatTokens, type AIUsageRef, type MyAIUsage } from '@/lib/ai-usage'
+import { aiFeatureLabel, formatCost, formatTokens, type AIUsageRef, type MyAIUsage } from '@/lib/ai-usage'
 import AIUsageRefLink from '@/components/ai/AIUsageRefLink'
 import { dateStamp, downloadAuthed } from '@/lib/download'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, Select, Tooltip, useFeedback } from '@/components/ui'
@@ -23,6 +23,7 @@ interface CallView {
   duration_ms: number
   status: 'ok' | 'error'
   created_at: string
+  cost_micros?: number // 站点允许展示估算费用时返回
 }
 
 interface TraceView {
@@ -38,6 +39,7 @@ interface TraceView {
   output_tokens: number
   characters: number
   duration_ms: number
+  cost_micros?: number
   items: CallView[]
   ref: AIUsageRef | null
 }
@@ -70,7 +72,7 @@ export default function MyAIUsagePage() {
 
           {!usage ? <Loading className="py-12" /> : (
             <>
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className={`mt-6 grid gap-4 ${usage.show_cost ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
                 <Quota label={t('aiUsage.mine.monthTokens')} used={usage.used_tokens} limit={usage.limit} unit="tokens" />
                 <Quota label={t('aiUsage.mine.monthChars')} used={usage.translate_chars} limit={usage.translate_limit} unit="chars" />
                 <Card className="p-4">
@@ -78,6 +80,20 @@ export default function MyAIUsagePage() {
                   <div className="mt-1.5 text-lg font-semibold tabular-nums text-slate-900">{usage.calls.toLocaleString()}</div>
                   {usage.by_feature.length > 0 && <div className="mt-1.5 truncate text-xs text-slate-400">{usage.by_feature.map((f) => `${aiFeatureLabel(t, f.feature)} ${formatTokens(f.tokens)}`).join(' · ')}</div>}
                 </Card>
+                {usage.show_cost && (
+                  <Card className="p-4" data-testid="ai-usage-cost">
+                    <div className="flex items-center gap-1 text-sm text-slate-500">
+                      {t('aiUsage.mine.monthCost')}
+                      <Tooltip content={t('aiUsage.mine.costHint')}><i className="fa-regular fa-circle-question text-xs text-slate-400" aria-hidden="true" /></Tooltip>
+                    </div>
+                    <div className="mt-1.5 text-lg font-semibold tabular-nums text-slate-900">≈ {formatCost(usage.cost_micros, usage.currency || 'USD')}</div>
+                    {usage.by_feature.some((f) => f.cost_micros) && (
+                      <div className="mt-1.5 truncate text-xs text-slate-400">
+                        {usage.by_feature.filter((f) => f.cost_micros).map((f) => `${aiFeatureLabel(t, f.feature)} ${formatCost(f.cost_micros, usage.currency || 'USD')}`).join(' · ')}
+                      </div>
+                    )}
+                  </Card>
+                )}
               </div>
               <p className="mt-2 text-xs text-slate-400">{t('aiUsage.mine.quotaSource')}</p>
 
@@ -131,7 +147,7 @@ function TraceList({ features }: { features: string[] }) {
   const trace = typeof router.query.trace === 'string' ? router.query.trace : '' // 由问答等页面跳转定位到某条调用链
   const [feature, setFeature] = useState('')
   const [page, setPage] = useUrlPage()
-  const [data, setData] = useState<{ items: TraceView[]; total: number; page: number; page_size: number } | null>(null)
+  const [data, setData] = useState<{ items: TraceView[]; total: number; page: number; page_size: number; currency?: string } | null>(null)
   const [exporting, setExporting] = useState(false)
 
   async function exportCSV() {
@@ -171,7 +187,7 @@ function TraceList({ features }: { features: string[] }) {
       <p className="mt-1 text-xs text-slate-400">{t('aiUsage.mine.logsHint')}</p>
       {!data ? <Loading className="py-8" /> : data.items.length === 0 ? <div className="mt-4"><EmptyState>{t('aiUsage.mine.empty')}</EmptyState></div> : (
         <ul className="mt-4 space-y-2">
-          {data.items.map((tr) => <TraceItem key={tr.trace_id} trace={tr} defaultOpen={Boolean(trace)} />)}
+          {data.items.map((tr) => <TraceItem key={tr.trace_id} trace={tr} currency={data.currency || 'USD'} defaultOpen={Boolean(trace)} />)}
         </ul>
       )}
       {data && data.total > data.page_size && <div className="mt-4"><Pagination size="sm" page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} /></div>}
@@ -179,7 +195,7 @@ function TraceList({ features }: { features: string[] }) {
   )
 }
 
-function TraceItem({ trace: tr, defaultOpen }: { trace: TraceView; defaultOpen: boolean }) {
+function TraceItem({ trace: tr, currency, defaultOpen }: { trace: TraceView; currency: string; defaultOpen: boolean }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(defaultOpen)
   const tokens = tr.input_tokens + tr.output_tokens
@@ -195,6 +211,7 @@ function TraceItem({ trace: tr, defaultOpen }: { trace: TraceView; defaultOpen: 
           {tokens > 0 && <span>{t('aiUsage.mine.tokensInOut', { input: formatTokens(tr.input_tokens), output: formatTokens(tr.output_tokens) })}</span>}
           {tr.characters > 0 && <span>{t('aiUsage.mine.chars', { n: tr.characters.toLocaleString() })}</span>}
           <span>{secs(tr.duration_ms)}</span>
+          {tr.cost_micros !== undefined && <span className="font-medium text-slate-700">≈ {formatCost(tr.cost_micros, currency)}</span>}
         </span>
       </button>
       {tr.ref && <div className="-mt-1.5 px-4 pb-2.5 pl-10"><AIUsageRefLink refInfo={tr.ref} /></div>}
@@ -211,6 +228,7 @@ function TraceItem({ trace: tr, defaultOpen }: { trace: TraceView; defaultOpen: 
                   ? <span>{t('aiUsage.mine.chars', { n: c.characters.toLocaleString() })}</span>
                   : <span>{c.estimated ? '≈' : ''}{t('aiUsage.mine.tokensInOut', { input: formatTokens(c.input_tokens), output: formatTokens(c.output_tokens) })}</span>}
                 <span>{secs(c.duration_ms)}</span>
+                {c.cost_micros !== undefined && <span>≈ {formatCost(c.cost_micros, currency)}</span>}
                 {c.status === 'ok' ? <Badge tone="emerald">{t('aiUsage.mine.ok')}</Badge> : <Badge tone="rose">{t('aiUsage.mine.failed')}</Badge>}
               </span>
             </li>

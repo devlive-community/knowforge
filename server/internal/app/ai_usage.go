@@ -194,15 +194,22 @@ func (a *App) MyAIUsage(c *gin.Context) {
 		Feature string
 		Calls   int64
 		Tokens  int64
+		Cost    int64
 	}
-	a.DB.Model(&models.AIUsageLog{}).Select("feature, COUNT(*) AS calls, COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens").
+	a.DB.Model(&models.AIUsageLog{}).Select("feature, COUNT(*) AS calls, COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens, COALESCE(SUM(cost_micros), 0) AS cost").
 		Where("user_id = ? AND status = ? AND created_at >= ?", u.ID, "ok", monthStart(time.Now())).Group("feature").Order("tokens DESC").Scan(&rows)
-	var used, calls int64
+	var used, calls, cost int64
+	showCost := a.showUserAICost()
 	items := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
 		used += r.Tokens
 		calls += r.Calls
-		items = append(items, gin.H{"feature": r.Feature, "calls": r.Calls, "tokens": r.Tokens})
+		cost += r.Cost
+		item := gin.H{"feature": r.Feature, "calls": r.Calls, "tokens": r.Tokens}
+		if showCost {
+			item["cost_micros"] = r.Cost
+		}
+		items = append(items, item)
 	}
 	// 本月每日用量（tokens 与翻译字数），按服务器本地日期
 	now := time.Now()
@@ -221,12 +228,24 @@ func (a *App) MyAIUsage(c *gin.Context) {
 		k := d.Format("2006-01-02")
 		series = append(series, gin.H{"date": k, "tokens": daily[k][0], "characters": daily[k][1]})
 	}
-	ok(c, gin.H{"month_start": monthStart(time.Now()), "used_tokens": used, "calls": calls, "daily": series,
+	out := gin.H{"month_start": monthStart(time.Now()), "used_tokens": used, "calls": calls, "daily": series,
 		"limit": a.entitlement(u, entAIMonthlyTokens), "by_feature": items,
-		"translate_chars": a.translateMonthUsed(u.ID), "translate_limit": a.entitlement(u, entTranslateMonthlyChars)})
+		"translate_chars": a.translateMonthUsed(u.ID), "translate_limit": a.entitlement(u, entTranslateMonthlyChars), "show_cost": showCost}
+	if showCost { // 估算费用：按站点设置的单价（含按模型的单价）估算，仅供参考
+		out["cost_micros"] = cost
+		out["currency"] = a.aiPricing().Currency
+	}
+	ok(c, out)
 }
 
-// userCallView 用户可见的单次调用（不含费用与服务端原始错误信息，避免泄露站点配置）。
+// cfgAIShowUserCost 是否在「我的 AI 用量」中向用户展示估算费用（默认展示，设为 false 关闭）。
+const cfgAIShowUserCost = "ai_show_user_cost"
+
+func (a *App) showUserAICost() bool {
+	return strings.TrimSpace(a.getSetting(cfgAIShowUserCost)) != "false"
+}
+
+// userCallView 用户可见的单次调用（不含服务端原始错误信息；估算费用仅在站点允许展示时返回）。
 type userCallView struct {
 	ID           uint      `json:"id"`
 	Feature      string    `json:"feature"`
@@ -239,6 +258,7 @@ type userCallView struct {
 	DurationMs   int64     `json:"duration_ms"`
 	Status       string    `json:"status"`
 	CreatedAt    time.Time `json:"created_at"`
+	CostMicros   *int64    `json:"cost_micros,omitempty"`
 }
 
 // userTraceView 一条调用链（同一次操作的全部调用，按时间顺序）及其合计。
@@ -255,6 +275,7 @@ type userTraceView struct {
 	OutputTokens int64          `json:"output_tokens"`
 	Characters   int64          `json:"characters"`
 	DurationMs   int64          `json:"duration_ms"` // 各次调用耗时之和
+	CostMicros   *int64         `json:"cost_micros,omitempty"`
 	Items        []userCallView `json:"items"`
 	// Ref 关联对象（如翻译任务、书籍问答），无法解析或不可见时为 null
 	Ref *plugincore.AIUsageRef `json:"ref"`
@@ -287,6 +308,7 @@ func (a *App) MyAIUsageLogs(c *gin.Context) {
 		ids = append(ids, g.TraceID)
 	}
 	byTrace := map[string]*userTraceView{}
+	showCost := a.showUserAICost()
 	if len(ids) > 0 {
 		var rows []models.AIUsageLog
 		a.DB.Where("user_id = ? AND trace_id IN ?", u.ID, ids).Order("id ASC").Find(&rows)
@@ -305,8 +327,17 @@ func (a *App) MyAIUsageLogs(c *gin.Context) {
 			t.OutputTokens += r.OutputTokens
 			t.Characters += r.Characters
 			t.DurationMs += r.DurationMs
-			t.Items = append(t.Items, userCallView{ID: r.ID, Feature: r.Feature, Kind: r.Kind, Model: r.Model, InputTokens: r.InputTokens,
-				OutputTokens: r.OutputTokens, Characters: r.Characters, Estimated: r.Estimated, DurationMs: r.DurationMs, Status: r.Status, CreatedAt: r.CreatedAt})
+			call := userCallView{ID: r.ID, Feature: r.Feature, Kind: r.Kind, Model: r.Model, InputTokens: r.InputTokens,
+				OutputTokens: r.OutputTokens, Characters: r.Characters, Estimated: r.Estimated, DurationMs: r.DurationMs, Status: r.Status, CreatedAt: r.CreatedAt}
+			if showCost {
+				cost := r.CostMicros
+				call.CostMicros = &cost
+				if t.CostMicros == nil {
+					t.CostMicros = new(int64)
+				}
+				*t.CostMicros += cost
+			}
+			t.Items = append(t.Items, call)
 		}
 	}
 	items := make([]*userTraceView, 0, len(groups))
@@ -317,7 +348,7 @@ func (a *App) MyAIUsageLogs(c *gin.Context) {
 			items = append(items, t)
 		}
 	}
-	ok(c, plugincore.PageResult{Items: items, Total: total, Page: page, PageSize: pageSize})
+	ok(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize, "show_cost": showCost, "currency": a.aiPricing().Currency})
 }
 
 // aiUsageRefCache 同一页内相同关联只解析一次。

@@ -39,6 +39,7 @@ var aiSettingKeys = []struct {
 	{"alert_user_daily_tokens", cfgAlertUserDailyTokens, "AI 用量预警：单个用户当日 tokens 阈值（0 为关闭）", false},
 	{"alert_trace_tokens", cfgAlertTraceTokens, "AI 用量预警：单条调用链 tokens 阈值（0 为关闭）", false},
 	{"usage_retention_days", cfgAIUsageRetentionDays, "AI 用量记录保留天数（0 为永久，否则不少于 90）", false},
+	{"show_user_cost", cfgAIShowUserCost, "AI 用量：在「我的 AI 用量」中向用户展示估算费用（false 为不展示）", false},
 }
 
 // aiConfig 当前生效的 AI 配置与来源（ai | translation | none）。
@@ -216,6 +217,10 @@ func (a *App) AdminUpdateAI(c *gin.Context) {
 				fail(c, http.StatusBadRequest, "tokens 预警阈值需为 0 到 1000000000 之间的整数（0 为关闭）")
 				return
 			}
+		}
+		if s.field == "show_user_cost" && v != "" && v != "true" && v != "false" {
+			fail(c, http.StatusBadRequest, "是否展示估算费用需为 true 或 false")
+			return
 		}
 		if s.field == "price_currency" {
 			v = strings.ToUpper(v)

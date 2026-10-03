@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import SettingsLayout from '@/components/SettingsLayout'
 import ModelPricesCard from '@/components/admin/ModelPricesCard'
-import { Badge, Button, Input, Field, Select, Loading } from '@/components/ui'
+import { Badge, Button, Input, Field, Select, Loading, Switch } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 
 interface AIConfig {
@@ -22,6 +22,7 @@ interface AIConfig {
   alert_user_daily_tokens: string
   alert_trace_tokens: string
   usage_retention_days: string
+  show_user_cost: string // 空或 true 为展示
   api_key_set: boolean
   embed_api_key_set: boolean
   source: 'ai' | 'translation' | 'none'
@@ -64,7 +65,7 @@ export default function SettingsAI() {
         embed_base_url: cfg.embed_base_url, embed_model: cfg.embed_model,
         price_currency: cfg.price_currency, price_input: cfg.price_input, price_output: cfg.price_output, price_embed: cfg.price_embed, price_translate: cfg.price_translate,
         alert_daily_cost: cfg.alert_daily_cost, alert_user_daily_tokens: cfg.alert_user_daily_tokens, alert_trace_tokens: cfg.alert_trace_tokens,
-        usage_retention_days: cfg.usage_retention_days,
+        usage_retention_days: cfg.usage_retention_days, show_user_cost: cfg.show_user_cost === 'false' ? 'false' : 'true',
         api_key: clear === 'api_key' ? '-' : apiKey, embed_api_key: clear === 'embed_api_key' ? '-' : embedKey,
       }
       setCfg(await api<AIConfig>('/admin/ai', { method: 'PUT', body }))
@@ -181,6 +182,13 @@ export default function SettingsAI() {
                 <Input type="number" min={0} max={3650} value={cfg.usage_retention_days} onChange={(e) => set({ usage_retention_days: e.target.value })} placeholder="0" />
               </Field>
             </div>
+            <label className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+              <span>
+                <span className="block text-sm font-medium text-slate-800">{t('admin.settings.ai.showUserCost')}</span>
+                <span className="mt-0.5 block text-xs text-slate-500">{t('admin.settings.ai.showUserCostHint')}</span>
+              </span>
+              <Switch checked={cfg.show_user_cost !== 'false'} onChange={(v) => set({ show_user_cost: v ? 'true' : 'false' })} ariaLabel={t('admin.settings.ai.showUserCost')} />
+            </label>
             <p className="mt-3 text-xs text-slate-400">{t('admin.settings.ai.quotaNote')}</p>
           </div>
 

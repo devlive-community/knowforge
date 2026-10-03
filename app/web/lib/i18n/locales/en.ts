@@ -5258,4 +5258,8 @@ export const en: Record<string, string> = {
   'writer.meta.icon': 'Icon',
   'reader.meta.source': 'Source',
   'entitlement.mine.empty': 'No entitlements to show',
+  'aiUsage.mine.monthCost': 'Estimated cost this month',
+  'aiUsage.mine.costHint': 'Estimated from the site\'s model prices, for reference only; your actual bill may differ',
+  'admin.settings.ai.showUserCost': 'Show estimated cost to users',
+  'admin.settings.ai.showUserCostHint': 'Users see estimated monthly and per-call cost in My AI usage, based on the prices above',
 }

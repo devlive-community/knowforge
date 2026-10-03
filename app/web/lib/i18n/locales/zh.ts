@@ -5258,4 +5258,8 @@ export const zh: Record<string, string> = {
   'writer.meta.icon': '图标',
   'reader.meta.source': '原文',
   'entitlement.mine.empty': '当前没有可展示的权益',
+  'aiUsage.mine.monthCost': '本月估算费用',
+  'aiUsage.mine.costHint': '按站点设置的模型单价估算，仅供参考，以实际账单为准',
+  'admin.settings.ai.showUserCost': '向用户展示估算费用',
+  'admin.settings.ai.showUserCostHint': '开启后，用户在「我的 AI 用量」中可看到本月与每次调用的估算费用（按上方单价估算）',
 }

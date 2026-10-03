@@ -27,10 +27,13 @@ export interface MyAIUsage {
   used_tokens: number
   calls: number
   limit: number // -1 不限
-  by_feature: { feature: string; calls: number; tokens: number }[]
+  by_feature: { feature: string; calls: number; tokens: number; cost_micros?: number }[]
   translate_chars: number // 本月已翻译字数
   translate_limit: number // -1 不限
   daily: { date: string; tokens: number; characters: number }[]
+  show_cost?: boolean // 站点是否向用户展示估算费用
+  cost_micros?: number // 本月估算费用（show_cost 时返回）
+  currency?: string
 }
 
 type TFn = (key: string, vars?: Record<string, string | number>) => string
