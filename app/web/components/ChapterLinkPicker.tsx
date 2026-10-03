@@ -20,13 +20,18 @@ function flattenDocs(nodes: DocNode[], depth = 0, out: Chapter[] = []): Chapter[
 
 const READER_LINK = /^\/book\/reader\/([^/?#]+)\/([^/?#]+)\/?$/
 
+// 已解析的「地址 → 书名 / 章节名」（null 为无法解析）；同一地址再次显示时不再请求、不闪烁
+const labelCache = new Map<string, string | null>()
+
 // ChapterLinkPicker 选择站内章节作为链接（如隐私政策、用户协议、帮助文档）：外观同下拉框，点击后弹出
 // 「书籍（可搜索）→ 章节（可筛选）」两级选择，选中章节即得到阅读页地址 /book/reader/{书}/{章}；
 // 底部仍可直接填写任意地址（含站外链接）。已选的站内章节显示为「书名 / 章节名」。
-export default function ChapterLinkPicker({ value, onChange, placeholder }: {
+export default function ChapterLinkPicker({ value, onChange, placeholder, loading = false }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  /** 外部的值尚未加载完成（如设置页读取配置中）：显示加载状态 */
+  loading?: boolean
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -37,25 +42,34 @@ export default function ChapterLinkPicker({ value, onChange, placeholder }: {
   const [chapters, setChapters] = useState<Chapter[] | null>(null)
   const [chapterQuery, setChapterQuery] = useState('')
   const [manual, setManual] = useState(value)
-  const [label, setLabel] = useState<string | null>(null) // 已选章节的「书名 / 章节名」
+  const [label, setLabel] = useState<string | null>(() => labelCache.get(value.trim()) ?? null) // 已选章节的「书名 / 章节名」
+  const [resolving, setResolving] = useState(() => READER_LINK.test(value.trim()) && !labelCache.has(value.trim()))
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
   const style = usePopoverPosition(open, triggerRef, popRef)
 
   // 已选的站内章节：解析书名与章节名用于显示
+  // 解析完成前显示加载状态，不先显示原始地址
   useEffect(() => {
     setManual(value)
-    const m = READER_LINK.exec(value.trim())
-    if (!m) { setLabel(null); return }
+    const key = value.trim()
+    const m = READER_LINK.exec(key)
+    if (!m) { setLabel(null); setResolving(false); return }
+    if (labelCache.has(key)) { setLabel(labelCache.get(key) ?? null); setResolving(false); return }
     const [bookSlug, docSlug] = [decodeURIComponent(m[1]), decodeURIComponent(m[2])]
     let alive = true
+    setResolving(true)
     api<{ id: number; title: string; slug: string }>(`/books/slug/${encodeURIComponent(bookSlug)}`)
       .then(async (book) => {
         const tree = await api<DocNode[]>(`/books/${book.id}/documents`)
         const doc = flattenDocs(tree || []).find((d) => d.slug === docSlug)
-        if (alive) setLabel(doc ? `${book.title} / ${doc.title}` : null)
+        return doc ? `${book.title} / ${doc.title}` : null
       })
-      .catch(() => { if (alive) setLabel(null) })
+      .catch(() => null)
+      .then((resolved) => {
+        labelCache.set(key, resolved)
+        if (alive) { setLabel(resolved); setResolving(false) }
+      })
     return () => { alive = false }
   }, [value])
 
@@ -102,22 +116,27 @@ export default function ChapterLinkPicker({ value, onChange, placeholder }: {
     return (chapters || []).filter((c) => !q || c.title.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q))
   }, [chapters, chapterQuery])
 
-  function pick(book: BookLite, docSlug: string) {
-    onChange(`/book/reader/${book.slug}/${docSlug}`)
+  function pick(book: BookLite, chapter: Chapter) {
+    const link = `/book/reader/${book.slug}/${chapter.slug}`
+    labelCache.set(link, `${book.title} / ${chapter.title}`) // 已知名称，选中后直接显示
+    onChange(link)
     setOpen(false)
   }
 
-  const display = label || value
+  const busy = loading || resolving
+  const display = busy ? '' : label || value
   return (
     <div className="relative">
-      <button ref={triggerRef} type="button" onClick={() => setOpen((v) => !v)} aria-haspopup="dialog" aria-expanded={open}
+      <button ref={triggerRef} type="button" disabled={loading} onClick={() => setOpen((v) => !v)} aria-haspopup="dialog" aria-expanded={open}
         className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-left text-sm transition-colors hover:border-slate-300 focus:border-primary-500 focus:outline-none"
         style={{ height: 'var(--control-height)' }}>
-        <i className={`fa-solid ${label ? 'fa-file-lines text-primary-500' : value ? 'fa-link text-slate-400' : 'fa-book text-slate-300'} text-xs`} aria-hidden="true" />
-        <span className={`min-w-0 flex-1 truncate ${display ? 'text-slate-900' : 'text-slate-400'}`}>{display || placeholder || t('chapterPicker.placeholder')}</span>
+        <i className={`fa-solid ${busy ? 'fa-spinner fa-spin text-slate-400' : label ? 'fa-file-lines text-primary-500' : value ? 'fa-link text-slate-400' : 'fa-book text-slate-300'} text-xs`} aria-hidden="true" />
+        <span className={`min-w-0 flex-1 truncate ${display ? 'text-slate-900' : 'text-slate-400'}`} aria-busy={busy}>
+          {busy ? t('chapterPicker.loading') : display || placeholder || t('chapterPicker.placeholder')}
+        </span>
         <i className="fa-solid fa-chevron-down text-[10px] text-slate-400" aria-hidden="true" />
       </button>
-      {value && (
+      {value && !busy && (
         <button type="button" onClick={() => onChange('')} aria-label={t('chapterPicker.clear')}
           className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-1 text-slate-300 hover:text-slate-500">
           <i className="fa-solid fa-xmark text-xs" aria-hidden="true" />
@@ -165,7 +184,7 @@ export default function ChapterLinkPicker({ value, onChange, placeholder }: {
                   <li className="px-3 py-6 text-center text-xs text-slate-400">{t('chapterPicker.noChapters')}</li>
                 ) : visibleChapters.map((c) => (
                   <li key={c.slug}>
-                    <button type="button" role="option" aria-selected={value === `/book/reader/${active.slug}/${c.slug}`} onClick={() => pick(active, c.slug)}
+                    <button type="button" role="option" aria-selected={value === `/book/reader/${active.slug}/${c.slug}`} onClick={() => pick(active, c)}
                       className="flex w-full items-center gap-2 py-2 pr-3 text-left text-sm text-slate-700 hover:bg-slate-50"
                       style={{ paddingLeft: `${0.75 + (chapterQuery ? 0 : c.depth) * 1}rem` }}>
                       <i className="fa-regular fa-file-lines text-xs text-slate-300" aria-hidden="true" />
