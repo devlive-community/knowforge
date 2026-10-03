@@ -224,6 +224,7 @@ func (a *App) Router() *gin.Engine {
 		api.GET("/search/semantic", a.OptionalAuth(), a.SemanticSearch)
 		api.GET("/users/me/files", a.RequireAuth(), a.MyFiles)
 		api.DELETE("/users/me/files/:id", a.RequireAuth(), a.DeleteMyFile)
+		api.POST("/users/me/files/:id/edit", a.RequireAuth(), a.RequirePermission(authz.UploadCreate), a.EditMyFile)
 
 		// ── 权益：定义（供等级/会员权益编辑器）与本人生效值 ──
 		api.GET("/entitlements/definitions", a.RequireAuth(), a.EntitlementDefinitions)

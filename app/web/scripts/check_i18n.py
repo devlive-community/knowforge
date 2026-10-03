@@ -109,7 +109,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'chapterGuide.state.': ['none', 'empty', 'queued', 'generating', 'ready', 'stale', 'edited', 'failed'],
     'chapterGuide.manage.bearer.': ['author', 'site'],
     # 我的文件：文件来源
-    'files.source.': ['upload', 'markdown_import', 'image_localize'],
+    'files.source.': ['upload', 'markdown_import', 'image_localize', 'edit'],
     'entitlement.source.': ['base', 'level', 'membership', 'admin', 'unavailable'],
     # 会员：tab / 状态 / 流水动作（Record.Action 取值域）/ 时长单位
     'admin.membership.tab.': ['plans', 'members', 'redeem', 'coupons', 'referral', 'records', 'settings'],

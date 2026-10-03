@@ -423,6 +423,7 @@ Authorization: Bearer kf_pat_…
 | POST | `/upload` | `multipart/form-data` 字段 `file`，仅图片（png/jpg/jpeg/gif/webp/svg/ico），≤ `upload.max_mb` 权益；超出个人存储空间 `storage.total_mb` 时 403；返回 `{ url }`（如 `/uploads/xxx.png`）并记入「我的文件」 | `upload:create` |
 | GET | `/users/me/files?page=&page_size=` | 我的文件（新→旧）：`{items[]{file{id, driver, name, url, ext, size, source: upload\|markdown_import\|image_localize, created_at}, references（被章节正文、书籍封面/简介、用户头像引用的次数）}, total, page, page_size, used_bytes, limit_mb(-1 不限)}` | 登录 |
 | DELETE | `/users/me/files/:id` | 删除自己的文件：按保存时的驱动（local / S3 DeleteObject / 七牛资源管理 delete）从存储中删除并释放空间 → `{deleted, used_bytes}`；该驱动的凭据已不可用时 409 | 登录 |
+| POST | `/users/me/files/:id/edit` | `{rotate(0\|90\|180\|270, 顺时针), flip_h, flip_v, crop?:{x,y,w,h}}` 编辑自己的图片（顺序：旋转 → 翻转 → 在结果上裁剪），另存为新文件（来源 `edit`），返回 `{file, references}`；支持 PNG、JPEG、GIF（GIF 取第一帧保存为 PNG），4000 万像素以内；新文件计入个人存储 | `upload:create` |
 
 ## 评论
 

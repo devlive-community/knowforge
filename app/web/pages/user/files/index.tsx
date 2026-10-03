@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Container from '@/components/Container'
 import Seo from '@/components/Seo'
 import { api, formatDate } from '@/lib/api'
@@ -8,11 +8,13 @@ import { useTranslation } from '@/lib/i18n'
 import { Badge, Button, Card, EmptyState, Loading, Pagination, Tooltip, useFeedback } from '@/components/ui'
 import { formatBytes, storagePercent } from '@/lib/files'
 import { useUrlPage } from '@/lib/use-url-page'
+import ImageViewer, { type ImageEdit, type ViewerItem } from '@/components/ImageViewer'
 
 interface UserFile { id: number; url: string; name: string; ext: string; size: number; source: string; created_at: string }
 interface FilesPage { items: { file: UserFile; references: number }[]; total: number; page: number; page_size: number; used_bytes: number; limit_mb: number }
 
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico']
+const EDITABLE_EXTS = ['png', 'jpg', 'jpeg', 'gif'] // 服务端支持旋转、翻转、裁剪的格式
 
 // 我的文件：上传到站点存储的文件（上传、Markdown 导入的图片、外链图片本地化）、个人存储用量与删除（同时从存储中删除）。
 export default function MyFilesPage() {
@@ -23,6 +25,8 @@ export default function MyFilesPage() {
   const [page, setPage] = useUrlPage()
   const [data, setData] = useState<FilesPage | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [viewing, setViewing] = useState<number | null>(null) // 图片查看器中当前图片的文件 ID
+  const [openAfterLoad, setOpenAfterLoad] = useState<number | null>(null) // 编辑另存后，列表刷新时打开新图片
 
   const load = useCallback(() => {
     api<FilesPage>('/users/me/files', { params: { page, page_size: 24 } })
@@ -31,6 +35,40 @@ export default function MyFilesPage() {
   }, [page, showToast, t])
   useEffect(() => { if (user) load() }, [user, load])
 
+  const images = useMemo(() => (data?.items || []).filter((it) => IMAGE_EXTS.includes(it.file.ext.toLowerCase())), [data])
+  useEffect(() => {
+    if (openAfterLoad !== null && images.some((it) => it.file.id === openAfterLoad)) {
+      setViewing(openAfterLoad)
+      setOpenAfterLoad(null)
+    }
+  }, [images, openAfterLoad])
+  const viewerItems: ViewerItem[] = images.map(({ file: f, references }) => ({
+    key: f.id, url: resolveMediaUrl(f.url), name: f.name, editable: EDITABLE_EXTS.includes(f.ext.toLowerCase()),
+    info: (
+      <dl className="space-y-2">
+        <div><dt className="text-slate-400">{t('files.viewer.size')}</dt><dd className="mt-0.5 tabular-nums">{formatBytes(f.size)}</dd></div>
+        <div><dt className="text-slate-400">{t('files.viewer.source')}</dt><dd className="mt-0.5">{t(`files.source.${f.source}`)}</dd></div>
+        <div><dt className="text-slate-400">{t('files.viewer.uploadedAt')}</dt><dd className="mt-0.5 tabular-nums">{formatDate(f.created_at)}</dd></div>
+        <div><dt className="text-slate-400">{t('files.viewer.references')}</dt><dd className="mt-0.5">{references > 0 ? t('files.mine.inUse', { n: references }) : t('files.mine.unused')}</dd></div>
+      </dl>
+    ),
+  }))
+  const viewIndex = images.findIndex((it) => it.file.id === viewing)
+
+  async function saveEdit(item: ViewerItem, edit: ImageEdit) {
+    try {
+      const r = await api<{ file: UserFile }>(`/users/me/files/${item.key}/edit`, { method: 'POST', body: edit })
+      showToast({ message: t('files.viewer.saved'), tone: 'success' })
+      setViewing(null)
+      setOpenAfterLoad(r.file.id)
+      if (page !== 1) setPage(1)
+      else load()
+    } catch (e) {
+      showToast({ title: t('files.viewer.saveFailed'), message: (e as Error).message, tone: 'error' })
+      throw e
+    }
+  }
+
   async function remove(item: FilesPage['items'][number]) {
     const message = item.references > 0 ? t('files.mine.deleteInUse', { n: item.references }) : t('files.mine.deleteMessage')
     if (!(await confirmAction({ title: t('files.mine.deleteTitle'), message, confirmLabel: t('files.mine.delete'), danger: true }))) return
@@ -38,6 +76,12 @@ export default function MyFilesPage() {
     try {
       await api(`/users/me/files/${item.file.id}`, { method: 'DELETE' })
       showToast({ message: t('files.mine.deleted'), tone: 'success' })
+      // 查看器中删除：切到同页的下一张（没有则上一张，都没有则关闭）
+      if (viewing === item.file.id) {
+        const i = images.findIndex((it) => it.file.id === item.file.id)
+        const next = images[i + 1] || images[i - 1]
+        setViewing(next ? next.file.id : null)
+      }
       load()
     } catch (e) {
       showToast({ title: t('files.mine.deleteFailed'), message: (e as Error).message, tone: 'error' })
@@ -76,11 +120,16 @@ export default function MyFilesPage() {
                     const f = item.file
                     return (
                       <Card key={f.id} className="overflow-hidden">
-                        <a href={resolveMediaUrl(f.url)} target="_blank" rel="noopener noreferrer" className="flex h-36 items-center justify-center bg-slate-50">
-                          {IMAGE_EXTS.includes(f.ext.toLowerCase())
-                            ? <img src={resolveMediaUrl(f.url)} alt={f.name} className="max-h-full max-w-full object-contain" loading="lazy" />
-                            : <i className="fa-solid fa-file text-3xl text-slate-300" aria-hidden="true" />}
-                        </a>
+                        {IMAGE_EXTS.includes(f.ext.toLowerCase()) ? (
+                          <button type="button" onClick={() => setViewing(f.id)} aria-label={t('files.viewer.open', { name: f.name })} data-testid="file-preview"
+                            className="flex h-36 w-full cursor-zoom-in items-center justify-center bg-slate-50 transition-colors hover:bg-slate-100">
+                            <img src={resolveMediaUrl(f.url)} alt={f.name} className="max-h-full max-w-full object-contain" loading="lazy" />
+                          </button>
+                        ) : (
+                          <a href={resolveMediaUrl(f.url)} target="_blank" rel="noopener noreferrer" className="flex h-36 items-center justify-center bg-slate-50">
+                            <i className="fa-solid fa-file text-3xl text-slate-300" aria-hidden="true" />
+                          </a>
+                        )}
                         <div className="space-y-2 p-3 text-xs">
                           <div className="flex items-center gap-2">
                             <Tooltip content={f.name} className="min-w-0 flex-1"><span className="block truncate font-medium text-slate-700">{f.name}</span></Tooltip>
@@ -106,6 +155,10 @@ export default function MyFilesPage() {
           )}
         </div>
       </Container>
+      {viewIndex >= 0 && (
+        <ImageViewer items={viewerItems} index={viewIndex} onIndexChange={(i) => setViewing(images[i].file.id)} onClose={() => setViewing(null)}
+          onDelete={() => void remove(images[viewIndex])} deleting={deleting === images[viewIndex].file.id} onEdit={saveEdit} />
+      )}
     </>
   )
 }
