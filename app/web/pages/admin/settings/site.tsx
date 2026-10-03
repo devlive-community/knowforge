@@ -179,13 +179,13 @@ export default function SettingsSite() {
             <p className="mb-3 text-xs text-slate-400">{t('admin.settings.site.legalDocsHint')}</p>
             <div className="space-y-4">
               <Field label={t('admin.settings.site.helpDoc')} hint={t('admin.settings.site.helpDocHint')}>
-                <ChapterLinkPicker value={helpDocUrl} onChange={setHelpDocUrl} placeholder={t('admin.settings.site.docUrlPlaceholder')} />
+                <ChapterLinkPicker value={helpDocUrl} onChange={setHelpDocUrl} />
               </Field>
               <Field label={t('admin.settings.site.terms')} hint={t('admin.settings.site.termsHint')}>
-                <ChapterLinkPicker value={termsUrl} onChange={setTermsUrl} placeholder={t('admin.settings.site.docUrlPlaceholder')} />
+                <ChapterLinkPicker value={termsUrl} onChange={setTermsUrl} />
               </Field>
               <Field label={t('admin.settings.site.privacy')} hint={t('admin.settings.site.privacyHint')}>
-                <ChapterLinkPicker value={privacyUrl} onChange={setPrivacyUrl} placeholder={t('admin.settings.site.docUrlPlaceholder')} />
+                <ChapterLinkPicker value={privacyUrl} onChange={setPrivacyUrl} />
               </Field>
             </div>
           </div>
