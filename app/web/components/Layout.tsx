@@ -70,37 +70,42 @@ function UserMenu() {
   ]
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 hover:bg-slate-50">
+      <button onClick={() => setOpen(!open)} aria-label={displayName(user)} aria-expanded={open} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-1 py-1 hover:bg-slate-50 sm:px-2">
         {user.avatar
           ? <img src={user.avatar.startsWith('/') ? API_BASE + user.avatar : user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
           : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-500 text-sm font-bold text-white">{displayName(user)[0]?.toUpperCase()}</span>}
-        <span className="max-w-[120px] truncate text-sm">{displayName(user)}</span>
+        <span className="hidden max-w-[120px] truncate text-sm sm:inline">{displayName(user)}</span>
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          {items.map((item) => {
-            const Icon = item.icon
-            return (
-              <Link key={item.href} href={item.href} onClick={() => setOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">
-                <Icon className="h-4 w-4 text-slate-400" />
-                {item.label}
-              </Link>
-            )
-          })}
-          {canInstall && (
-            <button onClick={() => { setOpen(false); void promptInstall() }} data-testid="install-app"
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">
-              <i className="fa-solid fa-mobile-screen-button h-4 w-4 text-slate-400" aria-hidden="true" />
-              {t('pwa.install.menu')}
+        // 菜单项随插件增多：宽屏两列；整体不超过可视高度，列表区域可滚动，安装与退出固定在底部
+        <div className="absolute right-0 z-20 mt-2 flex w-56 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg sm:w-[26rem]"
+          style={{ maxHeight: 'calc(100dvh - 5rem)' }} data-testid="user-menu">
+          <div className="grid min-h-0 grid-cols-1 overflow-y-auto overscroll-contain p-1.5 sm:grid-cols-2 sm:gap-x-1">
+            {items.map((item) => {
+              const Icon = item.icon
+              return (
+                <Link key={item.href} href={item.href} onClick={() => setOpen(false)}
+                  className="flex min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                  <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              )
+            })}
+          </div>
+          <div className="flex shrink-0 flex-col border-t border-slate-100 p-1.5 sm:flex-row">
+            {canInstall && (
+              <button onClick={() => { setOpen(false); void promptInstall() }} data-testid="install-app"
+                className="flex flex-1 items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                <i className="fa-solid fa-mobile-screen-button h-4 w-4 text-slate-400" aria-hidden="true" />
+                {t('pwa.install.menu')}
+              </button>
+            )}
+            <button onClick={() => { setOpen(false); logout() }}
+              className="flex flex-1 items-center gap-3 rounded-md px-3 py-2 text-sm text-rose-600 hover:bg-rose-50">
+              <LogOutIcon className="h-4 w-4" />
+              {t('nav.menu.logout')}
             </button>
-          )}
-          <div className="my-1 border-t border-slate-100" />
-          <button onClick={() => { setOpen(false); logout() }}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50">
-            <LogOutIcon className="h-4 w-4" />
-            {t('nav.menu.logout')}
-          </button>
+          </div>
         </div>
       )}
     </div>
