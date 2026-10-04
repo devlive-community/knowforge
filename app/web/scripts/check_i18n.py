@@ -29,7 +29,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'admin.collect.builtin.': ['layout_regions', 'page_toc', 'doc_decorations', 'permalinks', 'empty_headings', 'page_feedback'],
     'admin.collect.type.': ['remove_element', 'remove_line', 'replace'],
     'admin.collect.patternHint.': ['remove_element', 'remove_line', 'replace'],
-    'userTasks.kind.': ['zipImport', 'pdfImport', 'imageLocalize', 'storageMigrate', 'translate', 'siteCrawl', 'aiWriter', 'chapterGuide'],
+    'userTasks.kind.': ['zipImport', 'pdfImport', 'imageLocalize', 'storageMigrate', 'translate', 'siteCrawl', 'aiWriter', 'chapterGuide', 'backup'],
     'userTasks.status.': ['queued', 'running', 'paused', 'done', 'failed', 'canceled'],
     'userTasks.tab.': ['active', 'done', 'failed'],
     'userTasks.empty.': ['active', 'done', 'failed'],
@@ -85,6 +85,13 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks', 'templates'],
     'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks', 'templates'],
     'webhooks.event.': ['chapter.published', 'comment.received', 'reaction.received', 'sale.completed', 'question.received', 'membership.changed'],
+    # 备份：种类 / 状态 / 阶段 / 频率 / 星期；安装向导恢复阶段
+    'admin.settings.backup.kind.': ['manual', 'scheduled'],
+    'admin.settings.backup.status.': ['running', 'done', 'failed'],
+    'admin.settings.backup.stage.': ['database', 'files'],
+    'admin.settings.backup.schedule.': ['off', 'daily', 'weekly'],
+    'admin.settings.backup.weekday.': ['0', '1', '2', '3', '4', '5', '6'],
+    'install.restore.stage.': ['migrate', 'database', 'files'],
     # 模板：t(`templates.kind.${kind}`)、t(`templates.manage.empty.${scope}.${kind}`)
     'templates.kind.': ['chapter', 'book'],
     'templates.manage.empty.': ['mine.chapter', 'mine.book', 'official.chapter', 'official.book'],

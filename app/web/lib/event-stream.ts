@@ -40,9 +40,11 @@ export function openTicketedStream(path: string, setup: (source: EventSource, st
 }
 
 // postEventStream 以 POST 提交并读取服务端在同一请求中推送的事件流（text/event-stream），逐条回调 onEvent；
+// body 为 FormData 时按 multipart 上传（如备份文件），否则按 JSON 提交。
 // 服务端在开始推送前校验失败时返回 JSON 错误并抛出；需要二次认证时交给全局处理器验证后重试一次。
 export async function postEventStream(path: string, body: unknown, onEvent: (name: string, data: any) => void): Promise<void> {
-  const send = () => fetch(`${API_BASE}/api/v1${path}`, { method: 'POST', headers: requestHeaders(true), body: JSON.stringify(body) })
+  const form = typeof FormData !== 'undefined' && body instanceof FormData
+  const send = () => fetch(`${API_BASE}/api/v1${path}`, { method: 'POST', headers: requestHeaders(!form), body: form ? body : JSON.stringify(body) })
   let res = await send()
   const isStream = (r: Response) => (r.headers.get('Content-Type') || '').startsWith('text/event-stream')
   if (!isStream(res)) {

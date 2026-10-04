@@ -1,7 +1,9 @@
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, useRef, FormEvent } from 'react'
+import { useRouter } from 'next/router'
 import { api, storeSession } from '@/lib/api'
 import { useApp } from '@/lib/auth'
-import { Button, Input, Field, Loading, useFeedback } from '@/components/ui'
+import { postEventStream } from '@/lib/event-stream'
+import { Button, Input, Field, Loading, SegmentedTabs, useFeedback } from '@/components/ui'
 import { CheckCircleIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import type { DatabasePayload, SetupStatus, User } from '@/lib/types'
@@ -17,10 +19,23 @@ interface InstallResponse {
   user: User
 }
 
+interface RestoreInfo { app_version: string; created_at: string; site_name: string; db_type: string; tables: number; files: number }
+interface RestoreProgress { stage: 'migrate' | 'database' | 'files'; done: number; total: number }
+interface RestoreResult { tables: number; rows: number; files: number; skipped: string[] }
+
 export default function Install() {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
   const { installed } = useApp()
+  const router = useRouter()
+  // 安装方式（?mode=restore 为从备份恢复）：第一步都是选择数据库，第二步分别为填写站点与管理员 / 上传备份文件
+  const mode: 'install' | 'restore' = router.query.mode === 'restore' ? 'restore' : 'install'
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [backupFile, setBackupFile] = useState<File | null>(null)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreInfo, setRestoreInfo] = useState<RestoreInfo | null>(null)
+  const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null)
+  const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null)
   const [step, setStep] = useState<1 | 2>(1)
   const [error, setError] = useState('')
   const [testing, setTesting] = useState(false)
@@ -114,6 +129,50 @@ export default function Install() {
     }
   }
 
+  // 从备份恢复：上传备份文件，服务端以事件流推送进度（建表 → 写入数据 → 解压文件）
+  async function submitRestore() {
+    if (!backupFile) return setError(t('install.restore.needFile'))
+    setError('')
+    setRestoring(true)
+    setRestoreInfo(null)
+    setRestoreProgress(null)
+    const form = new FormData()
+    form.append('database', JSON.stringify(dbPayload()))
+    form.append('file', backupFile)
+    let failed = ''
+    try {
+      await postEventStream('/setup/restore', form, (name, data) => {
+        if (name === 'start') setRestoreInfo(data)
+        else if (name === 'progress') setRestoreProgress(data)
+        else if (name === 'done') setRestoreResult(data)
+        else if (name === 'error') failed = data?.message || t('install.restore.failed')
+      })
+    } catch (e) {
+      failed = (e as Error).message
+    }
+    if (failed) setError(failed)
+    setRestoring(false)
+  }
+
+  if (restoreResult) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-primary-50 to-slate-50 px-4">
+        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm" data-testid="restore-done">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <CheckCircleIcon className="h-8 w-8" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">{t('install.restore.doneTitle')}</h1>
+          <p className="mt-2 text-sm text-slate-500">{t('install.restore.doneDesc', { tables: restoreResult.tables, rows: restoreResult.rows, files: restoreResult.files })}</p>
+          {restoreResult.skipped?.length > 0 && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-left text-xs text-amber-700">{t('install.restore.skipped', { tables: restoreResult.skipped.join(', ') })}</p>
+          )}
+          {/* 刻意整页刷新，让 AppProvider 重新读取安装状态 */}
+          <Button type="button" className="mt-6 w-full" onClick={() => { window.location.href = '/login' }}>{t('install.restore.goLogin')}</Button>
+        </div>
+      </div>
+    )
+  }
+
   if (done) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-primary-50 to-slate-50 px-4">
@@ -138,6 +197,13 @@ export default function Install() {
           <img src="/logo.png" alt="KnowForge" className="mx-auto mb-3 h-16 w-16 object-contain" />
           <h1 className="text-2xl font-bold text-slate-900">{t('install.welcome')}</h1>
           <p className="mt-1 text-sm text-slate-500">{t('install.subtitle', { step })}</p>
+        </div>
+
+        <div className="mb-4 flex justify-center">
+          <SegmentedTabs value={mode} ariaLabel={t('install.mode.aria')} items={[
+            { value: 'install', label: t('install.mode.install'), href: '/install', disabled: restoring || installing },
+            { value: 'restore', label: t('install.mode.restore'), href: '/install?mode=restore', disabled: restoring || installing },
+          ]} />
         </div>
 
         {error && <div className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>}
@@ -210,7 +276,42 @@ export default function Install() {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 2 && mode === 'restore' && (
+            <div data-testid="restore-step">
+              <h2 className="font-semibold text-slate-900">{t('install.restore.title')}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t('install.restore.hint')}</p>
+              <input ref={fileRef} type="file" accept=".zip,application/zip" hidden data-testid="restore-file"
+                onChange={(e) => { setBackupFile(e.target.files?.[0] || null); setError(''); e.target.value = '' }} />
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-dashed border-slate-300 p-4">
+                <i className="fa-solid fa-file-zipper text-xl text-slate-400" aria-hidden="true" />
+                <div className="min-w-0 flex-1 text-sm">
+                  {backupFile
+                    ? <><div className="truncate font-medium text-slate-800">{backupFile.name}</div><div className="text-xs text-slate-400">{(backupFile.size / 1024 / 1024).toFixed(1)} MB</div></>
+                    : <span className="text-slate-400">{t('install.restore.noFile')}</span>}
+                </div>
+                <Button type="button" size="sm" variant="outline" disabled={restoring} onClick={() => fileRef.current?.click()}>{t('install.restore.chooseFile')}</Button>
+              </div>
+              {restoring && (
+                <div className="mt-4 rounded-xl bg-slate-50 p-4" data-testid="restore-progress">
+                  {restoreInfo && <p className="mb-2 text-xs text-slate-500">{t('install.restore.from', { site: restoreInfo.site_name || '-', version: restoreInfo.app_version, db: restoreInfo.db_type })}</p>}
+                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-full rounded-full bg-primary-500 transition-all"
+                      style={{ width: `${restoreProgress && restoreProgress.total > 0 ? Math.round((restoreProgress.done / restoreProgress.total) * 100) : 3}%` }} />
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-600">
+                    {restoreProgress ? t(`install.restore.stage.${restoreProgress.stage}`, { done: restoreProgress.done, total: restoreProgress.total }) : t('install.restore.uploading')}
+                  </p>
+                </div>
+              )}
+              <p className="mt-4 text-xs text-slate-400">{t('install.restore.note')}</p>
+              <div className="mt-6 flex items-center justify-between">
+                <Button type="button" variant="outline" disabled={restoring} onClick={() => setStep(1)}>{t('install.prev')}</Button>
+                <Button type="button" loading={restoring} disabled={restoring || !backupFile} onClick={() => void submitRestore()} data-testid="restore-start">{t('install.restore.start')}</Button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && mode === 'install' && (
             <form onSubmit={submitInstall}>
               <h2 className="mb-4 font-semibold text-slate-900">{t('install.siteAndAdmin')}</h2>
               <div className="space-y-3">

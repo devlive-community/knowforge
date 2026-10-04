@@ -70,6 +70,7 @@ func (a *App) configureJobQueue() error {
 	queue.RegisterResult(zipImportJobType, a.runZIPImportJob)
 	queue.RegisterResult(imageLocalizeJobType, a.runImageLocalizeJob)
 	queue.RegisterResult(storageMigrateJobType, a.runStorageMigration)
+	queue.RegisterResult(backupJobType, a.runBackupJob)
 	queue.Register(maintenanceJobType, a.runMaintenanceCleanup)
 	queue.Register(sitemapJobType, a.runSitemapGenerate)
 	queue.Register(notificationBackfillJobType, a.runNotificationBackfill)
@@ -267,6 +268,7 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 	var active *jobqueue.Queue
 	var cancel context.CancelFunc
 	nextMaintenanceCheck := time.Time{}
+	nextBackupCheck := time.Time{} // 自动备份按计划检查（每 10 分钟）
 	for {
 		queue := a.jobQueue()
 		if queue != nil && queue != active {
@@ -288,6 +290,10 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 			nextMaintenanceCheck = a.runMaintenance(ctx, queue)
 		} else if queue != nil && !currentTime().Before(nextMaintenanceCheck) {
 			nextMaintenanceCheck = a.runMaintenance(ctx, queue)
+		}
+		if queue != nil && !currentTime().Before(nextBackupCheck) {
+			a.enqueueBackupIfDue(ctx)
+			nextBackupCheck = currentTime().Add(backupCheckInterval)
 		}
 		select {
 		case <-ctx.Done():

@@ -129,6 +129,7 @@ const (
 	// 系统管理
 	SystemRead    Permission = "system:read"    // 查看系统版本信息（仅管理员）
 	SystemUpgrade Permission = "system:upgrade" // 触发在线升级（仅管理员）
+	SystemBackup  Permission = "system:backup"  // 备份站点数据、下载与删除备份（仅管理员）
 
 	// 插件
 	PluginManage Permission = "plugin:manage" // 管理后台插件安装/卸载（仅管理员）
@@ -162,7 +163,7 @@ var All = []Permission{
 	SiteRead, SiteUpdate, ConfigManage, AuditRead, TaskRead, TaskRetry,
 	StatsRead,
 	UploadCreate,
-	SystemRead, SystemUpgrade,
+	SystemRead, SystemUpgrade, SystemBackup,
 	PluginManage,
 	// 注意：成就权限（AchievementRead/Update/Manage/Grant）由「成就」插件在启用时动态注册，
 	// 不再静态列于此，禁用插件即随之移除（见 authz.SetPluginPermissions）。

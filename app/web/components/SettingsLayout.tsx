@@ -3,7 +3,7 @@ import AdminLayout from '@/components/AdminLayout'
 import { SegmentedTabs } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 
-export type SettingsTab = 'site' | 'footer' | 'registration' | 'captcha' | 'login-security' | 'rate-limits' | 'entitlements' | 'content' | 'storage' | 'mail' | 'oauth' | 'translation' | 'ai' | 'logs' | 'custom-html'
+export type SettingsTab = 'site' | 'footer' | 'registration' | 'captcha' | 'login-security' | 'rate-limits' | 'entitlements' | 'content' | 'storage' | 'mail' | 'oauth' | 'translation' | 'ai' | 'logs' | 'custom-html' | 'backup'
 
 interface SettingsLayoutProps {
   active: SettingsTab
@@ -26,6 +26,7 @@ export default function SettingsLayout({ active, description, children }: Settin
     { key: 'entitlements', labelKey: 'admin.settings.entitlementsTab', href: '/admin/settings/entitlements' },
     { key: 'content', labelKey: 'admin.settings.content', href: '/admin/settings/content' },
     { key: 'storage', labelKey: 'admin.settings.storage', href: '/admin/settings/storage' },
+    { key: 'backup', labelKey: 'admin.settings.backupTab', href: '/admin/settings/backup' },
     { key: 'mail', labelKey: 'admin.settings.mail', href: '/admin/settings/mail' },
     { key: 'translation', labelKey: 'admin.settings.translation', href: '/admin/settings/translation' },
     { key: 'ai', labelKey: 'admin.settings.ai', href: '/admin/settings/ai' },

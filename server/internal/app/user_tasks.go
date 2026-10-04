@@ -105,6 +105,10 @@ func (a *App) coreUserTask(job *models.BackgroundJob) (plugincore.UserTask, bool
 		a.storageMigrationUserTask(&t, job.ID)
 		return t, true
 	}
+	if job.Type == backupJobType {
+		a.backupUserTask(&t, job)
+		return t, true
+	}
 	if job.Status == jobqueue.StatusSucceeded && job.Type != imageLocalizeJobType && job.Result != "" {
 		var result struct {
 			Book *struct {

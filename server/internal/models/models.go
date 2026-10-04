@@ -46,13 +46,13 @@ type User struct {
 	// TwoFactorSecret TOTP 密钥（base32）；不随 JSON 返回
 	TwoFactorSecret string `gorm:"size:64" json:"-"`
 	// TwoFactorOps 需要二次认证的操作键，逗号分隔：login,credentials,delete,unbind_export
-	TwoFactorOps    string               `gorm:"size:100" json:"two_factor_ops,omitempty"`
-	LastLoginAt     *time.Time           `json:"last_login_at"`
-	CreatedAt       time.Time            `json:"created_at"`
-	UpdatedAt       time.Time            `json:"updated_at"`
-	Books           []Book               `gorm:"foreignKey:UserID" json:"books,omitempty"`
+	TwoFactorOps string     `gorm:"size:100" json:"two_factor_ops,omitempty"`
+	LastLoginAt  *time.Time `json:"last_login_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	Books        []Book     `gorm:"foreignKey:UserID" json:"books,omitempty"`
 	// Entitlements 非持久化：/auth/me 回填的当前权益生效值（权益键 → 值），供前端联动入口
-	Entitlements map[string]int64 `gorm:"-" json:"entitlements,omitempty"`
+	Entitlements    map[string]int64     `gorm:"-" json:"entitlements,omitempty"`
 	Authentications []UserAuthentication `gorm:"foreignKey:UserID" json:"authentications,omitempty"`
 }
 
@@ -242,6 +242,30 @@ type EmailVerificationToken struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// SystemBackup 站点备份记录：备份文件为 zip（manifest.json + 各表数据 + 可选的本地上传文件），保存在数据目录 backups/ 下。
+// 备份含站点密钥、密码哈希与各类接口密钥，不上传到用于公开访问的对象存储。
+type SystemBackup struct {
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	Name         string     `gorm:"size:200;not null;index" json:"name"`
+	Kind         string     `gorm:"size:16;not null;index" json:"kind"`   // manual | scheduled
+	Status       string     `gorm:"size:16;not null;index" json:"status"` // running | done | failed
+	IncludeFiles bool       `json:"include_files"`
+	Size         int64      `json:"size"`
+	Tables       int        `json:"tables"`
+	Rows         int64      `json:"rows"`
+	Files        int        `json:"files"`
+	Stage        string     `gorm:"size:16" json:"stage"` // database | files
+	Done         int        `json:"done"`
+	Total        int        `json:"total"`
+	Error        string     `gorm:"type:text" json:"error"`
+	AppVersion   string     `gorm:"size:32" json:"app_version"`
+	CreatedBy    uint       `gorm:"index" json:"created_by"`
+	CreatedAt    time.Time  `gorm:"index" json:"created_at"`
+	FinishedAt   *time.Time `json:"finished_at"`
+}
+
+func (SystemBackup) TableName() string { return "system_backups" }
+
 // BackgroundJob 持久化异步任务。Payload 以应用密钥加密保存，不通过 API 返回。
 type BackgroundJob struct {
 	ID          uint       `gorm:"primaryKey" json:"id"`
@@ -421,8 +445,8 @@ type Book struct {
 	// VersionGroup 版本分组标识：填相同非空标识的书籍互为不同版本，阅读页可切换版本
 	VersionGroup string `gorm:"size:64;default:'';index" json:"version_group"`
 	// VersionIsLatest 标记本书为版本组内的「最新版」，阅读页/详情页版本选择器旁展示「最新版」标记
-	VersionIsLatest  bool `gorm:"default:false" json:"version_is_latest"`
-	WatermarkEnabled bool `gorm:"default:false" json:"watermark_enabled"`
+	VersionIsLatest  bool   `gorm:"default:false" json:"version_is_latest"`
+	WatermarkEnabled bool   `gorm:"default:false" json:"watermark_enabled"`
 	WatermarkText    string `gorm:"size:255;default:''" json:"watermark_text"`
 	// ExportEnabled 作者是否允许他人导出本书（公开书籍生效；作者/协作者不受限）
 	ExportEnabled bool `gorm:"default:true" json:"export_enabled"`
@@ -431,19 +455,19 @@ type Book struct {
 	// ExportStyleShared 作者是否共享自己的导出样式：开启后他人导出本书可选用作者样式，否则只能用自己的
 	ExportStyleShared bool `gorm:"default:false" json:"export_style_shared"`
 	// ExportFormats 逗号分隔的允许导出格式（pdf,markdown）；空表示全部格式可用
-	ExportFormats string         `gorm:"size:100;default:''" json:"export_formats"`
+	ExportFormats string `gorm:"size:100;default:''" json:"export_formats"`
 	// ExtraInfo 「更多信息」附加属性（GitHub、原始文档地址、许可证等），书籍详情页展示
 	ExtraInfo BookInfo `gorm:"type:text" json:"extra_info"`
-	User          *User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	User      *User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	// Tags 由代码手动加载（attachBookTags），不走 GORM many2many——避免核心 Book 硬依赖标签插件表。
 	Tags []Tag `gorm:"-" json:"tags,omitempty"`
 	// Crawling 该书是否有进行中的整站采集任务（由 attachCrawlingFlags 按需填充，供列表/详情显示「采集中」）。
-	Crawling bool `gorm:"-" json:"crawling,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
-	DeletedBy     uint           `gorm:"index;default:0" json:"-"`
-	TrashGroup    string         `gorm:"size:64;index" json:"-"`
+	Crawling   bool           `gorm:"-" json:"crawling,omitempty"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
+	DeletedBy  uint           `gorm:"index;default:0" json:"-"`
+	TrashGroup string         `gorm:"size:64;index" json:"-"`
 	// ChapterCount 非持久化：列表接口按需回填的章节（文档）数量
 	ChapterCount int `gorm:"-" json:"chapter_count"`
 	// CollaboratorRole 非持久化：协作书籍列表按需回填当前用户的角色。
@@ -526,17 +550,17 @@ type Reaction struct {
 
 // LevelDefinition 等级定义：阈值严格递增，等级 1 的 min_xp=0。名称/说明 MVP 用固定字段。
 type LevelDefinition struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Level     int       `gorm:"uniqueIndex;not null" json:"level"` // 等级编号（1 起，唯一）
-	Key       string    `gorm:"size:50" json:"key"`
-	Name      string    `gorm:"size:120" json:"name"`
-	Description string  `gorm:"size:500" json:"description"`
-	IconType  string    `gorm:"size:10;default:'fa'" json:"icon_type"` // fa | image | svg
-	IconValue string    `gorm:"size:500;default:'fa-star'" json:"icon_value"`
-	Color     string    `gorm:"size:20;default:''" json:"color"`
-	MinXP     int       `gorm:"not null;default:0" json:"min_xp"`
-	SortOrder int       `gorm:"default:0" json:"sort_order"`
-	Status    string    `gorm:"size:20;default:'active'" json:"status"` // active | archived
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	Level       int    `gorm:"uniqueIndex;not null" json:"level"` // 等级编号（1 起，唯一）
+	Key         string `gorm:"size:50" json:"key"`
+	Name        string `gorm:"size:120" json:"name"`
+	Description string `gorm:"size:500" json:"description"`
+	IconType    string `gorm:"size:10;default:'fa'" json:"icon_type"` // fa | image | svg
+	IconValue   string `gorm:"size:500;default:'fa-star'" json:"icon_value"`
+	Color       string `gorm:"size:20;default:''" json:"color"`
+	MinXP       int    `gorm:"not null;default:0" json:"min_xp"`
+	SortOrder   int    `gorm:"default:0" json:"sort_order"`
+	Status      string `gorm:"size:20;default:'active'" json:"status"` // active | archived
 	// Entitlements 达到该等级后获得的权益（累计：当前等级及以下各等级的配置依次覆盖）；未设置的键不改变
 	Entitlements EntitlementMap `gorm:"type:text" json:"entitlements"`
 	CreatedAt    time.Time      `json:"created_at"`
@@ -545,12 +569,12 @@ type LevelDefinition struct {
 
 // UserGrowthProfile 用户成长资料：由 ExperienceEvent 汇总的权威快照（可从流水重建）。
 type UserGrowthProfile struct {
-	UserID         uint      `gorm:"primaryKey" json:"user_id"`
-	LifetimeXP     int64     `gorm:"default:0" json:"lifetime_xp"`
-	CurrentLevel   int       `gorm:"default:1" json:"current_level"`  // 当前等级编号
-	HighestLevel   int       `gorm:"default:1" json:"highest_level"`  // 达到过的最高等级
-	Public         bool      `gorm:"default:true" json:"public"`      // 是否公开展示等级
-	UpdatedAt      time.Time `json:"updated_at"`
+	UserID       uint      `gorm:"primaryKey" json:"user_id"`
+	LifetimeXP   int64     `gorm:"default:0" json:"lifetime_xp"`
+	CurrentLevel int       `gorm:"default:1" json:"current_level"` // 当前等级编号
+	HighestLevel int       `gorm:"default:1" json:"highest_level"` // 达到过的最高等级
+	Public       bool      `gorm:"default:true" json:"public"`     // 是否公开展示等级
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // ExperienceRule 经验规则：可配置各事件类型的基础经验与每日上限（管理员在成长后台维护）。
@@ -850,8 +874,9 @@ type PersonalAccessToken struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
-func All(db *gorm.DB) error {
-	if err := db.AutoMigrate(
+// CoreModels 核心数据表对应的模型（插件的表由各插件在启用时建表，见 plugins.Meta.Models）。
+func CoreModels() []any {
+	return []any{
 		&I18nConfig{}, &SiteLocale{}, &UIMessageBundle{}, &LocalizedResourceContent{},
 		&User{},
 		&UserAuthentication{},
@@ -893,8 +918,13 @@ func All(db *gorm.DB) error {
 		&BackgroundJob{},
 		&AIUsageLog{},
 		&AIAlert{},
+		&SystemBackup{},
 		// 成就相关表由「成就」插件在启用时建表（首次启用才创建），不在核心 AutoMigrate 里。
-	); err != nil {
+	}
+}
+
+func All(db *gorm.DB) error {
+	if err := db.AutoMigrate(CoreModels()...); err != nil {
 		return err
 	}
 	if err := backfillAITraceIDs(db); err != nil {

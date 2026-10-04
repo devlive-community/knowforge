@@ -66,6 +66,7 @@ func (a *App) Router() *gin.Engine {
 			setup.GET("/status", a.SetupStatus)
 			setup.POST("/test-connection", a.SetupTest)
 			setup.POST("/install", a.SetupInstall)
+			setup.POST("/restore", a.SetupRestore) // 从备份恢复（事件流推送进度）
 		}
 
 		// ── 认证与会话 ──
@@ -248,6 +249,8 @@ func (a *App) Router() *gin.Engine {
 		}
 		api.POST("/stream-tickets", a.RequireAuth(), a.IssueStreamTicket)
 		api.GET("/notifications/stream", a.SSENotifications)
+		// 备份下载：凭管理员换取的短时下载凭证（URL 中的 ticket）访问，不需要登录请求头
+		api.GET("/backups/:id/download", a.DownloadBackup)
 
 		// ── 当前用户的协作邀请（未接受前不授予书籍访问权限） ──
 		collaboration := api.Group("/collaboration", a.RequireAuth())
@@ -338,6 +341,11 @@ func (a *App) Router() *gin.Engine {
 			admin.PUT("/storage", a.RequirePermission(authz.SiteUpdate), a.AdminSaveStorage)
 			admin.GET("/storage/migration", a.RequirePermission(authz.SiteUpdate), a.AdminStorageMigration)
 			admin.POST("/storage/migration", a.RequirePermission(authz.SiteUpdate), a.AdminStartStorageMigration)
+			admin.GET("/backups", a.RequirePermission(authz.SystemBackup), a.AdminListBackups)
+			admin.POST("/backups", a.RequirePermission(authz.SystemBackup), a.AdminCreateBackup)
+			admin.PUT("/backups/settings", a.RequirePermission(authz.SystemBackup), a.AdminSaveBackupSettings)
+			admin.POST("/backups/:id/download-ticket", a.RequirePermission(authz.SystemBackup), a.AdminBackupDownloadTicket)
+			admin.DELETE("/backups/:id", a.RequirePermission(authz.SystemBackup), a.AdminDeleteBackup)
 			admin.GET("/registration", a.RequirePermission(authz.SiteUpdate), a.GetRegistrationSettings)
 			admin.PUT("/registration", a.RequirePermission(authz.SiteUpdate), a.UpdateRegistrationSettings)
 			admin.GET("/captcha-settings", a.RequirePermission(authz.SiteUpdate), a.GetCaptchaSettings)
