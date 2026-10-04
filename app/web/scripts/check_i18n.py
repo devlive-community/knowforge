@@ -81,17 +81,20 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'entitlement.': ['books.max', 'collaborators.max', 'upload.max_mb', 'collect.page', 'collect.site', 'collect.site_max_pages',
                      'content.access_tier', 'content.discount_percent', 'content.free_all',
                      'qa.ai_daily', 'qa.agent_daily', 'ai.monthly_tokens', 'translate.monthly_chars', 'aiwriter.monthly_uses', 'translate.ai_book', 'chapterguide.monthly', 'qa.insights',
-                     'export.pdf_monthly', 'export.custom_footer', 'books.private_max', 'versions.keep', 'qa.semantic_search', 'storage.total_mb', 'api.tokens_max', 'webhooks.max'],
-    'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks'],
-    'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks'],
+                     'export.pdf_monthly', 'export.custom_footer', 'books.private_max', 'versions.keep', 'qa.semantic_search', 'storage.total_mb', 'api.tokens_max', 'webhooks.max', 'templates.max'],
+    'entitlement.unit.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks', 'templates'],
+    'entitlement.unitShort.': ['books', 'people', 'mb', 'pages', 'tier', 'percent', 'questions', 'tokens', 'chars', 'uses', 'exports', 'versions', 'keys', 'hooks', 'templates'],
     'webhooks.event.': ['chapter.published', 'comment.received', 'reaction.received', 'sale.completed', 'question.received', 'membership.changed'],
+    # 模板：t(`templates.kind.${kind}`)、t(`templates.manage.empty.${scope}.${kind}`)
+    'templates.kind.': ['chapter', 'book'],
+    'templates.manage.empty.': ['mine.chapter', 'mine.book', 'official.chapter', 'official.book'],
     'webhooks.deliveryStatus.': ['pending', 'success', 'failed'],
     'account.tokens.scope.': ['all', 'custom', 'read'],
     'account.tokens.scopeHint.': ['all', 'custom'],
     # 访问令牌权限：t(`account.tokens.resource.${resource}`) / t(`account.tokens.action.${action}`)（Go 测试校验覆盖全部可选权限）
     # AIUsageRefLink: t(`aiUsage.ref.${kind}`)，服务端关联类型取值域（未知类型回退 other）
     'aiUsage.ref.': ['translation', 'qa', 'book', 'moderation_case', 'other'],
-    'account.tokens.resource.': ['book', 'bookAnalytics', 'document', 'documentRevision', 'trash', 'tag', 'search', 'notification', 'collaborator', 'comment', 'report', 'reaction', 'readingProgress', 'annotation', 'user', 'site', 'stats', 'upload', 'achievement', 'follow', 'growth', 'collect', 'aiwriter', 'booklists', 'booktrans', 'chapterguide', 'paid', 'payment', 'qa', 'webhooks', 'membership', 'moderation'],
+    'account.tokens.resource.': ['book', 'bookAnalytics', 'document', 'documentRevision', 'trash', 'tag', 'search', 'notification', 'collaborator', 'comment', 'report', 'reaction', 'readingProgress', 'annotation', 'user', 'site', 'stats', 'upload', 'achievement', 'follow', 'growth', 'collect', 'aiwriter', 'booklists', 'templates', 'booktrans', 'chapterguide', 'paid', 'payment', 'qa', 'webhooks', 'membership', 'moderation'],
     'account.tokens.action.': ['read', 'create', 'update', 'delete', 'export', 'import', 'restore', 'manage', 'use', 'order', 'ai'],
     'account.tokens.status.': ['revoked', 'expired'],
     # AI 写作助手：动作 / 动作说明 / 任务状态 / 采纳方式；调用功能名 ai.feature.aiwriter.<action>

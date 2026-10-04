@@ -37,11 +37,13 @@ export interface BookFormProps {
   showHeader?: boolean
   /** 是否渲染"多语言与版本"区块；设置页拆分为独立 tab 时置 false */
   showLocalization?: boolean
+  /** 页头与表单之间的额外内容（如创建页的「从模板开始」） */
+  beforeForm?: ReactNode
   onSubmit: (payload: Record<string, unknown>) => Promise<void>
 }
 
 // 书籍表单：创建与设置页共用，双栏（分区表单 + 实时预览）
-export default function BookForm({ initial, heading, subheading, breadcrumb, submitLabel, showSaveDraft, showHeader = true, showLocalization = true, onSubmit }: BookFormProps) {
+export default function BookForm({ initial, heading, subheading, breadcrumb, submitLabel, showSaveDraft, showHeader = true, showLocalization = true, beforeForm, onSubmit }: BookFormProps) {
   const router = useRouter()
   const { user, site } = useApp()
   const tagsEnabled = (site.feature_plugins || []).includes('tags')
@@ -175,6 +177,8 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
           <p className="mt-1 text-sm text-slate-500">{subheading}</p>
         </div>
       )}
+
+      {beforeForm}
 
       {error && <div className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>}
 

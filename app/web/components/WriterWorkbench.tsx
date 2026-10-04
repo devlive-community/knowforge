@@ -22,6 +22,8 @@ import { HEADING_LEVELS } from '@/lib/editor-blocks'
 import { entitlementAllowed } from '@/lib/entitlements'
 import AIWriterDrawer, { type AIWriterTab, type WriterEditorBridge } from '@/components/ai-writer/AIWriterDrawer'
 import { aiWriterEnabled } from '@/lib/ai-writer'
+import TemplatePicker from '@/components/templates/TemplatePicker'
+import { browserTimeZone, templatesEnabled, type TemplateSummary } from '@/lib/templates'
 import { displayName } from '@/lib/users'
 
 type SaveState = 'saved' | 'dirty' | 'saving'
@@ -113,6 +115,7 @@ const SLASH_COMMANDS: { key: string; labelKey: string; kw: string }[] = [
   { key: 'hr', labelKey: 'writer.slash.hr', kw: 'hr rule divider' },
   { key: 'image', labelKey: 'writer.slash.image', kw: 'image img upload photo' },
   { key: 'collect', labelKey: 'writer.slash.collect', kw: 'collect web fetch import scrape 采集 网页' },
+  { key: 'template', labelKey: 'writer.slash.template', kw: 'template 模板' },
   { key: 'ai', labelKey: 'writer.slash.aiWriter', kw: 'ai assistant continue rewrite polish 写作助手 续写 润色 改写' },
   { key: 'import-md', labelKey: 'writer.slash.importMarkdown', kw: 'import markdown md file upload 导入 文件' },
   { key: 'link', labelKey: 'writer.slash.link', kw: 'link url href' },
@@ -140,6 +143,11 @@ export default function Writer({ user }: WriterProps) {
   // AI 写作助手（插件）：抽屉状态由 URL 承载（?ai=assist|history）
   const aiOn = aiWriterEnabled(site)
   const aiTab: AIWriterTab | null = !aiOn ? null : router.query.ai === 'history' ? 'history' : router.query.ai === 'assist' ? 'assist' : null
+  // 模板（插件）：章节模板插入到光标处，也可把当前章节存为模板
+  const templatesOn = templatesEnabled(site)
+  const [templateOpen, setTemplateOpen] = useState(false)
+  const [templateReload, setTemplateReload] = useState(0)
+  const [savingTemplate, setSavingTemplate] = useState(false)
   const bookSlug = (router.query.slug as string) || ''
   // 路由为可选 catch-all（[[...doc]]）：doc 可能是数组或缺省
   const docSlug = Array.isArray(router.query.doc) ? (router.query.doc[0] || '') : ((router.query.doc as string) || '')
@@ -266,11 +274,11 @@ export default function Writer({ user }: WriterProps) {
   }, [fontSize])
 
   const filteredSlash = useMemo(() => {
-    const items = SLASH_COMMANDS.filter((c) => (c.key !== 'collect' || collectEnabled) && (c.key !== 'ai' || aiOn))
+    const items = SLASH_COMMANDS.filter((c) => (c.key !== 'collect' || collectEnabled) && (c.key !== 'ai' || aiOn) && (c.key !== 'template' || templatesOn))
     const q = slash.query.toLowerCase()
     if (!q) return items
     return items.filter((c) => t(c.labelKey).includes(slash.query) || c.kw.includes(q) || c.key.includes(q))
-  }, [slash.query, t, collectEnabled, aiOn])
+  }, [slash.query, t, collectEnabled, aiOn, templatesOn])
   // [[ 章节选择：按标题或 slug 过滤本书其他章节
   const filteredLinks = useMemo(() => {
     if (!slash.open || slash.mode !== 'link') return []
@@ -779,6 +787,50 @@ export default function Writer({ user }: WriterProps) {
     },
   }
 
+  // 插入章节模板（变量由服务端替换）：正文为空时直接作为正文，否则插入到光标处并与前后内容空一行
+  async function insertTemplate(tpl: TemplateSummary) {
+    if (!book) return
+    try {
+      const { content: text } = await api<{ content: string }>(`/templates/${tpl.id}/render`, {
+        method: 'POST', body: { book_id: book.id, chapter: title, tz: browserTimeZone() },
+      })
+      const { content: value, start, end } = aiEditor.read()
+      if (!value.trim()) {
+        aiEditor.write(text, text.length, text.length)
+      } else {
+        const before = value.slice(0, start)
+        const after = value.slice(end)
+        const lead = !before || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n'
+        const tail = !after || after.startsWith('\n') ? '' : '\n'
+        const insert = lead + text.replace(/\n+$/, '\n') + tail
+        aiEditor.write(before + insert + after, before.length + insert.length, before.length + insert.length)
+      }
+      setTemplateOpen(false)
+      showToast({ message: t('templates.writer.inserted', { title: tpl.title }), tone: 'success' })
+    } catch (e) {
+      showToast({ message: (e as Error).message, tone: 'error' })
+    }
+  }
+
+  async function saveChapterAsTemplate() {
+    const value = aiEditor.read().content
+    if (!value.trim()) {
+      showToast({ message: t('templates.writer.emptyChapter'), tone: 'error' })
+      return
+    }
+    const name = await requestInput({ title: t('templates.writer.saveTitle'), message: t('templates.writer.saveMessage'), label: t('templates.field.title'), defaultValue: title, confirmLabel: t('templates.writer.saveConfirm') })
+    if (!name?.trim()) return
+    setSavingTemplate(true)
+    try {
+      await api('/templates', { method: 'POST', body: { kind: 'chapter', title: name.trim(), content: value } })
+      setTemplateReload((n) => n + 1)
+      showToast({ message: t('templates.writer.saved', { title: name.trim() }), tone: 'success' })
+    } catch (e) {
+      showToast({ message: (e as Error).message, tone: 'error' })
+    }
+    setSavingTemplate(false)
+  }
+
   // Markdown 工具：选区包裹 / 行首插入
   function wrapSelection(before: string, after = before) {
     const el = textareaRef.current
@@ -1207,6 +1259,7 @@ export default function Writer({ user }: WriterProps) {
         case 'hr': insertText('---\n'); break
         case 'image': fileInputRef.current?.click(); break
         case 'collect': if (collectEnabled) void collectWebContent(); break
+        case 'template': if (templatesOn) setTemplateOpen(true); break
         case 'ai': if (aiOn) navigateAI('assist'); break
         case 'import-md': mdImportRef.current?.click(); break
         case 'link': void insertLink(); break
@@ -1388,6 +1441,15 @@ export default function Writer({ user }: WriterProps) {
   return (
     <div className={`flex h-screen flex-col bg-warm ${aiTab ? 'lg:pr-96 2xl:pr-[28rem]' : ''}`}>
       <Seo siteName={siteName} title={titleText} noindex />
+      {templatesOn && (
+        <TemplatePicker open={templateOpen} kind="chapter" onClose={() => setTemplateOpen(false)} onUse={insertTemplate} reloadKey={templateReload}
+          useLabel={t('templates.writer.insert')}
+          footerExtra={(
+            <Button size="sm" variant="ghost" onClick={() => void saveChapterAsTemplate()} loading={savingTemplate} data-testid="template-save-chapter">
+              <i className="fa-regular fa-floppy-disk" aria-hidden="true" /> {t('templates.writer.saveCurrent')}
+            </Button>
+          )} />
+      )}
       {aiTab && (
         <AIWriterDrawer bookId={book.id} docId={current?.id ?? null} tab={aiTab} onNavigate={navigateAI}
           selectionLength={aiSelectionLength} editor={aiEditor} />
@@ -1663,6 +1725,11 @@ export default function Writer({ user }: WriterProps) {
                   <ToolbarDivider />
                   <ToolbarButton title={t('writer.tb.uploadImage')} onClick={() => fileInputRef.current?.click()}><UploadIcon className="h-4 w-4" /></ToolbarButton>
                   <ToolbarButton title={t('writer.tb.imageLink')} onClick={insertImage}><ImageIcon className="h-4 w-4" /></ToolbarButton>
+                  {templatesOn && (
+                    <ToolbarButton title={t('writer.tb.template')} onClick={() => setTemplateOpen(true)}>
+                      <i className="fa-regular fa-clone text-[15px]" aria-hidden="true" />
+                    </ToolbarButton>
+                  )}
                   {aiOn && (
                     <ToolbarButton title={t('writer.tb.aiWriter')} onClick={() => navigateAI(aiTab ? null : 'assist')}>
                       <i className={`fa-solid fa-wand-magic-sparkles text-[15px] ${aiTab ? 'text-primary-600' : ''}`} aria-hidden="true" />

@@ -487,6 +487,25 @@ Authorization: Bearer kf_pat_…
 
 书单卡片字段：`id,user_id,title,description,is_public,item_count,follower_count,created_at,updated_at,owner{id,username,nickname,avatar},covers[{book_id,title,cover_image}]（前 4 本可读书籍）,following`。
 
+## 模板（「模板」插件，默认关闭）
+
+章节模板（Markdown 正文）与书籍模板（章节目录与正文）。站点模板 `official=true`（`user_id=0`）由管理员维护，所有作者可用，插件首次启用时按站点默认内容语言预置几份；个人模板只有本人可见，数量为权益 `templates.max`（章节与书籍模板合计，默认 50）。需要权限 `templates:use`，管理接口需要管理员与 `templates:manage`。
+
+模板正文与章节标题中的变量在使用时替换：`{{date}}` `{{time}}` `{{datetime}}` `{{year}}` `{{month}}` `{{day}}`（按请求中的 `tz` 时区计算，缺省为服务器时区）、`{{book}}` 书名、`{{chapter}}` 章节名、`{{author}}` 使用者的显示名；未知变量原样保留。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/templates?kind=chapter\|book` | 可用模板 `{official[], mine[], used, limit}`（`limit=-1` 表示不限）；列表项不含正文，章节模板带 `preview`（正文开头），书籍模板带 `outline`（第一级章节标题，最多 8 个） |
+| GET | `/templates/:id` | 详情（站点模板或本人模板）：章节模板含 `content`，书籍模板含 `chapters:[{title, content, children}]` |
+| POST | `/templates` | 新建个人模板 `{kind, title, description?, content?（章节）, chapters?（书籍，最多 300 章、5 级）}` |
+| POST | `/templates/from-book` | 把自己可编辑的书保存为书籍模板 `{book_id, title?（默认书名）, description?, with_content}`（跳过外链章节） |
+| PUT / DELETE | `/templates/:id` | 修改 `{title?, description?, content?, chapters?}` / 删除本人的个人模板 |
+| POST | `/templates/:id/render` | 章节模板替换变量后的正文 `{book_id?, chapter?, tz?}` → `{content}`（`book_id` 须为可编辑的书），使用次数 +1 |
+| POST | `/templates/:id/apply` | 按书籍模板在书中生成章节 `{book_id, tz?}` → `{created, first_slug}`：追加到目录末尾，均为草稿并各有首个历史版本 |
+| GET | `/admin/templates?kind=` | 站点模板 `{items}` |
+| POST | `/admin/templates`、`/admin/templates/from-book` | 新建站点模板（参数同上，另可传 `sort_order`），记入审计日志 |
+| PUT / DELETE | `/admin/templates/:id` | 修改 / 删除站点模板（记入审计日志） |
+
 ## 新建译本预设（「书籍多语言」插件）
 
 | 方法 | 路径 | 说明 | 权限 |
