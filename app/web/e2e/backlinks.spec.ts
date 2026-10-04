@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { api, registerUser, signIn, unique } from './helpers'
 
-// 双向链接：写作台输入 [[ 选择章节插入链接；阅读页渲染链接并在目标章节显示「被引用」；书籍设置查看章节链接与失效链接。
+// 双向链接：写作台输入 [[ 选择章节插入链接；阅读页渲染链接并在目标章节显示「被引用」；书籍设置以关系图或列表查看章节链接与失效链接。
 
 test('双向链接与被引用', async ({ page }) => {
   const author = await registerUser('links')
@@ -34,8 +34,15 @@ test('双向链接与被引用', async ({ page }) => {
   await expect(backlinks.getByRole('heading', { name: '被引用（1）' })).toBeVisible()
   await expect(backlinks.getByRole('link', { name: /进阶用法/ })).toContainText('先读 安装指南，另见 未写的章节。')
 
-  // 书籍设置：章节链接与失效链接
+  // 书籍设置：章节链接与失效链接；关系图（默认）点击章节查看它的链接，列表视图（?view=list）
   await page.goto(`/book/settings/${book.slug}/links`)
   await expect(page.getByText('[[未写的章节]]')).toBeVisible()
+  await expect(page.getByTestId('graph-node')).toHaveCount(2)
+  await page.getByTestId('graph-node').filter({ hasText: '进阶用法' }).locator('circle').first().click()
+  const detail = page.getByTestId('graph-detail')
+  await expect(detail.getByRole('heading', { name: '进阶用法' })).toBeVisible()
+  await expect(detail.getByText('链接到 · 1').locator('..')).toContainText('安装指南')
+  await page.getByRole('tab', { name: '列表' }).click()
+  await expect(page).toHaveURL(/view=list/)
   await expect(page.getByText('链接到').locator('..')).toContainText('安装指南')
 })
