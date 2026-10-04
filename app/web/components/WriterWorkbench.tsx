@@ -28,6 +28,7 @@ import { merge3, mergeTitle, resolveMerge, type ConflictChoice } from '@/lib/mer
 import CommentsDrawer, { type CommentsTab } from '@/components/writer/CommentsDrawer'
 import SuggestionReview, { type AcceptedSuggestion, type WriterSuggestion } from '@/components/writer/SuggestionReview'
 import { TaskBadge, TaskPanel, type WriterMember, type WriterTask } from '@/components/writer/tasks'
+import TeamDrawer, { type TeamTab } from '@/components/writer/TeamDrawer'
 import { buildAnchor, type TextAnchor } from '@/lib/anchor'
 import { browserTimeZone, templatesEnabled, type TemplateSummary } from '@/lib/templates'
 import { displayName } from '@/lib/users'
@@ -155,6 +156,9 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
   const aiTab: AIWriterTab | null = !aiOn ? null : router.query.ai === 'history' ? 'history' : router.query.ai === 'assist' ? 'assist' : null
   // 写作批注抽屉（?comments=open|resolved），与 AI 写作助手抽屉互斥
   const commentsTab: CommentsTab | null = (['open', 'resolved', 'suggestions'] as const).find((v) => v === router.query.comments) ?? null
+  // 协作侧栏（?team=activity|tasks）：协作动态与分工总览
+  const teamTab: TeamTab | null = (['activity', 'tasks'] as const).find((v) => v === router.query.team) ?? null
+  const [activityReload, setActivityReload] = useState(0)
   const [pendingComment, setPendingComment] = useState<TextAnchor | null>(null)
   const [commentsReload, setCommentsReload] = useState(0)
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
@@ -564,6 +568,7 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
       if (docId === current?.id) setSuggestionsReload((n) => n + 1)
     },
     onTasks: () => { void loadTasks() },
+    onActivity: () => setActivityReload((n) => n + 1),
   })
   const sameChapterOthers = collab.others.filter((p) => current && p.doc_id === current.id)
   const presenceByDoc = useMemo(() => {
@@ -986,7 +991,7 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
   // navigateAI 打开/切换/关闭 AI 写作助手抽屉（写入 URL，保留其余参数）。
   function navigateAI(tab: AIWriterTab | null) {
     const query = { ...router.query }
-    if (tab) { query.ai = tab; delete query.comments }
+    if (tab) { query.ai = tab; delete query.comments; delete query.team }
     else delete query.ai
     const el = textareaRef.current
     if (el) setAISelectionLength(el.selectionEnd - el.selectionStart)
@@ -994,8 +999,14 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
   }
   function navigateComments(tab: CommentsTab | null) {
     const query = { ...router.query }
-    if (tab) { query.comments = tab; delete query.ai }
+    if (tab) { query.comments = tab; delete query.ai; delete query.team }
     else { delete query.comments; setPendingComment(null) }
+    void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
+  }
+  function navigateTeam(tab: TeamTab | null) {
+    const query = { ...router.query }
+    if (tab) { query.team = tab; delete query.ai; delete query.comments }
+    else delete query.team
     void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
   }
   // addComment 以选中的正文为锚点新建批注（没有选中时打开批注抽屉并提示）
@@ -1719,7 +1730,7 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
   })
 
   return (
-    <div className={`flex h-screen flex-col bg-warm ${aiTab || commentsTab ? 'lg:pr-96 2xl:pr-[28rem]' : ''}`}>
+    <div className={`flex h-screen flex-col bg-warm ${aiTab || commentsTab || teamTab ? 'lg:pr-96 2xl:pr-[28rem]' : ''}`}>
       <Seo siteName={siteName} title={titleText} noindex />
       {conflict && (
         <ConflictDialog state={conflict} onResolve={resolveConflict}
@@ -1734,6 +1745,10 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
               <i className="fa-regular fa-floppy-disk" aria-hidden="true" /> {t('templates.writer.saveCurrent')}
             </Button>
           )} />
+      )}
+      {teamTab && (
+        <TeamDrawer bookId={book.id} tab={teamTab} onNavigate={navigateTeam} docs={flatDocs} tasks={tasks}
+          onOpenDoc={(doc) => void selectDoc(doc.slug)} reloadKey={activityReload} />
       )}
       {commentsTab && (
         <CommentsDrawer bookId={book.id} docId={current?.id ?? null} tab={commentsTab} onNavigate={navigateComments}
@@ -1783,6 +1798,9 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <CollabAvatars others={collab.others} docTitle={(id) => flatDocs.find((d) => d.id === id)?.title || ''} />
+          <Button variant="ghost" onClick={() => navigateTeam(teamTab ? null : 'activity')} data-testid="team-open">
+            <i className={`fa-solid fa-users ${teamTab ? 'text-primary-600' : ''}`} aria-hidden="true" /> <span className="hidden xl:inline">{t('writer.team.title')}</span>
+          </Button>
           {site.help_doc_url && (
             <Button variant="ghost" title={t('writer.mdHelp')} onClick={() => window.open(site.help_doc_url, '_blank', 'noopener,noreferrer')}>
               <InfoCircleIcon className="h-4 w-4" /> <span className="hidden md:inline">{t('writer.help')}</span>

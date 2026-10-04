@@ -120,6 +120,7 @@ func (a *App) CreateWriterSuggestion(c *gin.Context) {
 			map[string]any{"link": "/book/writer/" + book.Slug + "/" + doc.Slug + "?comments=suggestions", "book_id": book.ID, "document_id": doc.ID, "suggestion_id": s.ID})
 	}
 	a.publishSuggestions(c, book.ID, doc.ID)
+	a.recordActivity(book.ID, doc.ID, u.ID, "suggestion.created", map[string]any{"title": doc.Title, "note": s.Note})
 	ok(c, a.suggestionViews([]models.WriterSuggestion{s})[0])
 }
 
@@ -209,9 +210,12 @@ func (a *App) DecideWriterSuggestion(c *gin.Context) {
 		return
 	}
 	s.Status, s.DecidedBy, s.DecidedAt = req.Status, u.ID, &now
+	var doc models.Document
+	a.DB.Select("id", "title", "slug").First(&doc, s.DocumentID)
+	var suggester models.User
+	a.DB.First(&suggester, s.UserID)
+	a.recordActivity(book.ID, s.DocumentID, u.ID, "suggestion.decided", map[string]any{"title": doc.Title, "status": req.Status, "suggester": suggester.PublicName()})
 	if s.UserID != u.ID {
-		var doc models.Document
-		a.DB.Select("id", "title", "slug").First(&doc, s.DocumentID)
 		a.NotifyI18n(s.UserID, "collaboration", "notify.writerSuggestion."+req.Status,
 			map[string]string{"user": u.PublicName(), "book": book.Title, "chapter": doc.Title},
 			map[string]any{"link": "/book/writer/" + book.Slug + "/" + doc.Slug + "?comments=suggestions", "book_id": book.ID, "document_id": doc.ID, "suggestion_id": s.ID})

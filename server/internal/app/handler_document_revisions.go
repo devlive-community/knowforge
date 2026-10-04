@@ -262,6 +262,7 @@ func (a *App) RestoreDocumentRevision(c *gin.Context) {
 	}
 	a.publishDocSaved(c, book.ID, &restored)
 	a.publishTreeChanged(c, book.ID)
+	a.recordActivity(book.ID, restored.ID, currentUser(c).ID, "doc.restored", map[string]any{"title": restored.Title})
 	ok(c, withContentHash(&restored))
 }
 

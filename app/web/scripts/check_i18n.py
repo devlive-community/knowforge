@@ -100,6 +100,9 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'writer.suggest.status.': ['pending', 'accepted', 'partial', 'rejected'],
     'writer.task.stage.': ['todo', 'writing', 'review', 'done'],
     'writer.task.filter.': ['all', 'mine', 'review', 'unfinished'],
+    # 协作动态：t(`writer.team.kind.${kind}`)，服务端 recordActivity 的种类
+    'writer.team.kind.': ['doc.saved', 'doc.created', 'doc.deleted', 'doc.restored', 'comment.created', 'comment.replied', 'comment.resolved',
+                          'comment.reopened', 'suggestion.created', 'suggestion.decided', 'task.updated'],
     # 模板：t(`templates.kind.${kind}`)、t(`templates.manage.empty.${scope}.${kind}`)
     'templates.kind.': ['chapter', 'book'],
     'templates.manage.empty.': ['mine.chapter', 'mine.book', 'official.chapter', 'official.book'],

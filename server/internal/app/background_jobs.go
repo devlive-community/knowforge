@@ -105,6 +105,9 @@ func (a *App) runMaintenanceCleanup(ctx context.Context, _ json.RawMessage) erro
 	if err := a.purgeExpiredAIUsage(ctx, now); err != nil {
 		return fmt.Errorf("清理过期 AI 用量记录失败: %w", err)
 	}
+	if err := a.purgeOldWriterActivity(ctx, now); err != nil {
+		return fmt.Errorf("清理过期协作动态失败: %w", err)
+	}
 	a.purgeOldLogs() // 清理超过留存天数的运行日志文件（失败静默，不阻断维护）
 	return nil
 }

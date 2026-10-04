@@ -165,7 +165,7 @@ func (a *App) AdminDeleteUser(c *gin.Context) {
 			&models.UserNotificationPref{}, &models.TwoFactorBackupCode{}, &models.EmailVerificationToken{},
 			&models.Comment{}, &models.Reaction{}, &models.ReadingProgress{}, &models.ReadChapter{},
 			&models.ReadingAnnotation{}, &models.UserExportSetting{}, &models.UserReadingGoal{},
-			&models.ReadingDailyTime{}, &models.UserThemeSetting{}, &models.WriterComment{}, &models.WriterSuggestion{},
+			&models.ReadingDailyTime{}, &models.UserThemeSetting{}, &models.WriterComment{}, &models.WriterSuggestion{}, &models.WriterActivity{},
 		}
 		related = append(related, plugincore.UserDataModels()...) // 插件登记的用户归属表（如成就）
 		for _, m := range related {

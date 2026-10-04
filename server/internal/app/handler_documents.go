@@ -308,6 +308,7 @@ func (a *App) CreateDocument(c *gin.Context) {
 	}
 	a.emitActivity(u.ID, "document.created", "document", strconv.FormatUint(uint64(doc.ID), 10), fmt.Sprintf("document.created:%d", doc.ID))
 	a.publishTreeChanged(c, book.ID)
+	a.recordActivity(book.ID, doc.ID, u.ID, "doc.created", map[string]any{"title": doc.Title})
 	ok(c, withContentHash(&doc))
 }
 
@@ -597,6 +598,12 @@ func (a *App) UpdateDocument(c *gin.Context) {
 	if doc.Title != oldTitle || doc.Content != oldContent {
 		plugincore.FireChapterContentChanged(a, book, doc)
 		a.publishDocSaved(c, book.ID, doc)
+		added, removed := lineChanges(oldContent, doc.Content)
+		detail := map[string]any{"title": doc.Title, "added": added, "removed": removed}
+		if doc.Title != oldTitle {
+			detail["old_title"] = oldTitle
+		}
+		a.recordActivity(book.ID, doc.ID, currentUser(c).ID, "doc.saved", detail)
 	}
 	if doc.Title != oldTitle || parentKey(doc.ParentID) != oldParent || doc.SortOrder != oldSort || doc.Slug != oldSlug || doc.Status != oldStatus {
 		a.publishTreeChanged(c, book.ID)
@@ -661,5 +668,6 @@ func (a *App) DeleteDocument(c *gin.Context) {
 		return
 	}
 	a.publishTreeChanged(c, doc.BookID)
+	a.recordActivity(doc.BookID, doc.ID, currentUser(c).ID, "doc.deleted", map[string]any{"title": doc.Title, "count": count})
 	ok(c, gin.H{"message": "已移入回收站", "count": count, "expires_at": expires})
 }

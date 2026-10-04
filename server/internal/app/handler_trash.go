@@ -343,6 +343,7 @@ func hardDeleteDocuments(tx *gorm.DB, ids []uint) error {
 		{&models.WriterComment{}, "document_id IN ?"},
 		{&models.WriterSuggestion{}, "document_id IN ?"},
 		{&models.WriterChapterTask{}, "document_id IN ?"},
+		{&models.WriterActivity{}, "document_id IN ?"},
 	} {
 		if err := tx.Unscoped().Where(deletion.where, ids).Delete(deletion.model).Error; err != nil {
 			return err
@@ -369,6 +370,7 @@ func hardDeleteBook(tx *gorm.DB, bookID uint) error {
 		{&models.BookCollaborator{}, "book_id = ?"},
 		{&models.BookAnalyticsDaily{}, "book_id = ?"},
 		{&models.ReadingAnnotation{}, "book_id = ?"},
+		{&models.WriterActivity{}, "book_id = ?"},
 	} {
 		if err := tx.Unscoped().Where(deletion.where, bookID).Delete(deletion.model).Error; err != nil {
 			return err

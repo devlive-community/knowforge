@@ -196,9 +196,11 @@ func (a *App) BatchDeleteDocuments(c *gin.Context) {
 		if doc.DeletedAt.Valid {
 			return batchItemResult{ID: id, OK: true, Skipped: true}
 		}
-		if _, _, err := a.trashDocumentSubtree(u, &doc); err != nil {
+		count, _, err := a.trashDocumentSubtree(u, &doc)
+		if err != nil {
 			return batchItemResult{ID: id, Error: "删除失败"}
 		}
+		a.recordActivity(book.ID, doc.ID, u.ID, "doc.deleted", map[string]any{"title": doc.Title, "count": count})
 		return batchItemResult{ID: id, OK: true}
 	})
 }

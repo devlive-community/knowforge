@@ -170,5 +170,25 @@ func (a *App) UpdateWriterTask(c *gin.Context) {
 		}
 	}
 	writerHub.Publish(book.ID, "tasks", gin.H{"doc_id": doc.ID, "origin": c.GetHeader(collabConnHeader)})
+	detail := map[string]any{"title": doc.Title}
+	if task.AssigneeID != oldAssignee {
+		detail["assignee"] = ""
+		var assignee models.User
+		if task.AssigneeID != 0 && a.DB.First(&assignee, task.AssigneeID).Error == nil {
+			detail["assignee"] = assignee.PublicName()
+		}
+	}
+	if task.Stage != oldStage {
+		detail["stage"] = task.Stage
+	}
+	if _, has := req["due_at"]; has {
+		detail["due_at"] = ""
+		if task.DueAt != nil {
+			detail["due_at"] = task.DueAt.Format("2006-01-02")
+		}
+	}
+	if len(detail) > 1 {
+		a.recordActivity(book.ID, doc.ID, u.ID, "task.updated", detail)
+	}
 	ok(c, a.taskViews([]models.WriterChapterTask{task})[0])
 }

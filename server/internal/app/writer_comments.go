@@ -204,6 +204,11 @@ func (a *App) CreateWriterComment(c *gin.Context) {
 		return
 	}
 	a.notifyWriterComment(c, book, doc, &cm, root)
+	kind := "comment.created"
+	if root != nil {
+		kind = "comment.replied"
+	}
+	a.recordActivity(book.ID, doc.ID, u.ID, kind, map[string]any{"title": doc.Title, "excerpt": clipRunes(content, 80)})
 	writerHub.Publish(book.ID, "comments", gin.H{"doc_id": doc.ID, "origin": c.GetHeader(collabConnHeader)})
 	ok(c, a.commentViews([]models.WriterComment{cm})[0])
 }
@@ -349,5 +354,12 @@ func (a *App) ResolveWriterComment(c *gin.Context) {
 	}
 	a.DB.First(cm, cm.ID)
 	a.publishComments(c, cm)
+	var doc models.Document
+	a.DB.Select("id", "title").First(&doc, cm.DocumentID)
+	kind := "comment.reopened"
+	if req.Resolved {
+		kind = "comment.resolved"
+	}
+	a.recordActivity(cm.BookID, cm.DocumentID, currentUser(c).ID, kind, map[string]any{"title": doc.Title, "excerpt": clipRunes(cm.Content, 80)})
 	ok(c, a.commentViews([]models.WriterComment{*cm})[0])
 }

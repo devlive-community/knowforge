@@ -294,6 +294,19 @@ type WriterChapterTask struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
+// WriterActivity 协作动态：写作相关的操作记录（保存、新建、删除章节，批注、修改建议、分工变化等），
+// 同一人连续保存同一章时合并为一条（Detail 中累加改动行数）。保留 180 天。
+type WriterActivity struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	BookID     uint      `gorm:"index:idx_writer_activity_book,priority:1;not null" json:"book_id"`
+	DocumentID uint      `gorm:"index;default:0" json:"document_id"`
+	UserID     uint      `gorm:"index;not null" json:"user_id"`
+	Kind       string    `gorm:"size:32;not null" json:"kind"`
+	Detail     string    `gorm:"type:text" json:"-"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `gorm:"index:idx_writer_activity_book,priority:2" json:"updated_at"`
+}
+
 // WriterPresence 写作台在线状态：每个打开的写作台事件流一条（连接断开时删除，SeenAt 由服务端心跳刷新，过期即视为离开）。
 type WriterPresence struct {
 	ConnID    string    `gorm:"primaryKey;size:32" json:"conn_id"`
@@ -990,6 +1003,7 @@ func CoreModels() []any {
 		&WriterComment{},
 		&WriterSuggestion{},
 		&WriterChapterTask{},
+		&WriterActivity{},
 		// 成就相关表由「成就」插件在启用时建表（首次启用才创建），不在核心 AutoMigrate 里。
 	}
 }
