@@ -45,7 +45,55 @@ export function saveReadingProgress(username: string, bookId: number, entry: Pro
   const body: Record<string, unknown> = { doc_id: entry.docId, doc_slug: entry.docSlug, doc_title: entry.docTitle }
   if (entry.scrollPercent != null) body.scroll_percent = Math.round(entry.scrollPercent)
   if (entry.secondsDelta != null && entry.secondsDelta > 0) body.read_seconds_delta = Math.round(entry.secondsDelta)
-  api(`/reading-progress/${bookId}`, { method: 'PUT', body }).catch(() => {})
+  api(`/reading-progress/${bookId}`, { method: 'PUT', body }).catch((e) => {
+    if (!(e as { status?: number })?.status) enqueueProgress(bookId, body) // 离线等网络错误：联网后补传
+  })
+}
+
+// —— 离线时的进度：按书保存最后一次进度（阅读秒数累加），联网后（online 事件或下次打开页面）补传 ——
+
+const QUEUE_KEY = 'knowforge_progress_queue'
+
+function readQueue(): Record<string, Record<string, unknown>> {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function enqueueProgress(bookId: number, body: Record<string, unknown>) {
+  try {
+    const queue = readQueue()
+    const prev = queue[String(bookId)]
+    const seconds = Number(prev?.read_seconds_delta || 0) + Number(body.read_seconds_delta || 0)
+    queue[String(bookId)] = { ...prev, ...body, ...(seconds > 0 ? { read_seconds_delta: seconds } : {}) }
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+  } catch {
+    // 存储不可用时放弃
+  }
+}
+
+let flushing = false
+
+// flushProgressQueue 补传离线期间的阅读进度（成功或被服务端拒绝的条目移出队列，网络仍不可用时保留）。
+export async function flushProgressQueue(): Promise<void> {
+  if (typeof window === 'undefined' || flushing || !navigator.onLine) return
+  flushing = true
+  try {
+    for (const [bookId, body] of Object.entries(readQueue())) {
+      try {
+        await api(`/reading-progress/${bookId}`, { method: 'PUT', body })
+      } catch (e) {
+        if (!(e as { status?: number })?.status) break // 仍然离线
+      }
+      const queue = readQueue()
+      delete queue[bookId]
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+    }
+  } finally {
+    flushing = false
+  }
 }
 
 // get 读取进度：登录走服务端（null 视为无），未登录读本地

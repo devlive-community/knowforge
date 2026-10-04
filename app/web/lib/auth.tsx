@@ -3,6 +3,11 @@ import { useRouter } from 'next/router'
 import { api, getToken, storeSession, clearSession } from './api'
 import type { SiteConfig, User } from './types'
 
+// isAuthFailure 令牌无效（401）时才清除登录状态；离线等网络错误时保留，避免断网时被登出并清空离线内容
+function isAuthFailure(e: unknown): boolean {
+  return (e as { status?: number })?.status === 401
+}
+
 export interface ThemeSetting {
   primary_hue: string
   custom_color: string
@@ -183,7 +188,7 @@ export function AppProvider({ children, initialSite, initialInstalled, initialUs
       if (!initialUser && getToken()) {
         api<User>('/auth/me')
           .then((me) => { setUser(me); ensureAuthCookie(); loadAndApplyTheme() })
-          .catch(() => clearSession())
+          .catch((e) => { if (isAuthFailure(e)) clearSession() })
           .finally(() => setAuthReady(true))
       } else {
         setAuthReady(true)
@@ -208,8 +213,8 @@ export function AppProvider({ children, initialSite, initialInstalled, initialUs
           try {
             const me = await api<User>('/auth/me')
             if (!cancelled) { setUser(me); ensureAuthCookie(); loadAndApplyTheme() }
-          } catch {
-            clearSession()
+          } catch (e) {
+            if (isAuthFailure(e)) clearSession()
           }
         }
       } catch {

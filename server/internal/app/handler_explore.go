@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"knowforge/server/internal/models"
@@ -178,6 +179,8 @@ func (a *App) GetSiteConfig(c *gin.Context) {
 		}
 	}
 	cfg["feature_plugins"] = featurePlugins
+	// 安装为应用（PWA）与离线阅读：默认开启
+	cfg["pwa_enabled"] = a.getSetting("pwa_enabled") != "false"
 	plugincore.CollectPublicSiteConfig(a, cfg) // 插件补充的公开配置（如成就开关、经验排行榜是否开放、采集入口）
 	ok(c, cfg)
 }
@@ -200,6 +203,7 @@ type siteConfigUpdate struct {
 	BookVersionsSort    *string `json:"book_versions_sort"` // 多版本阅读页排序：desc(默认,最新在前) | asc
 	CustomHeadHTML      *string `json:"custom_head_html"`   // 每个页面 <head> 中追加的 HTML（统计脚本、站点验证 meta 等）
 	CustomFooterHTML    *string `json:"custom_footer_html"` // 每个页面 </body> 前追加的 HTML
+	PWAEnabled          *bool   `json:"pwa_enabled"`        // 允许安装为应用并离线阅读（默认开启）
 }
 
 // maxCustomHTML 自定义 Head / Footer HTML 的长度上限（字节）。
@@ -257,6 +261,9 @@ func (a *App) UpdateSiteConfig(c *gin.Context) {
 			v = "true"
 		}
 		updates["announcement_enabled"] = v
+	}
+	if req.PWAEnabled != nil {
+		updates["pwa_enabled"] = strconv.FormatBool(*req.PWAEnabled)
 	}
 	if req.AnnouncementText != nil {
 		updates["announcement_text"] = strings.TrimSpace(*req.AnnouncementText)

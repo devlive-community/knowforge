@@ -16,11 +16,14 @@ import UserTasksIndicator from '@/components/UserTasksIndicator'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { SearchIcon } from '@/components/icons'
 import { displayName } from '@/lib/users'
+import { promptInstall, subscribeInstallAvailable } from '@/lib/pwa'
 
 function UserMenu() {
   const { user, logout, site } = useApp()
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [canInstall, setCanInstall] = useState(false) // 浏览器支持「安装应用」时显示入口
+  useEffect(() => subscribeInstallAvailable(setCanInstall), [])
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -84,6 +87,13 @@ function UserMenu() {
               </Link>
             )
           })}
+          {canInstall && (
+            <button onClick={() => { setOpen(false); void promptInstall() }} data-testid="install-app"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+              <i className="fa-solid fa-mobile-screen-button h-4 w-4 text-slate-400" aria-hidden="true" />
+              {t('pwa.install.menu')}
+            </button>
+          )}
           <div className="my-1 border-t border-slate-100" />
           <button onClick={() => { setOpen(false); logout() }}
             className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50">

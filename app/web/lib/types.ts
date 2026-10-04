@@ -172,6 +172,7 @@ export interface SiteConfig {
   ai_usage_enabled?: boolean // 站点配置了 AI 服务或翻译服务（显示「我的 AI 用量」入口）
   achievements_enabled?: string
   feature_plugins?: string[]
+  pwa_enabled?: boolean
   collect_page_enabled?: boolean
   collect_site_enabled?: boolean
   book_versions_sort?: string

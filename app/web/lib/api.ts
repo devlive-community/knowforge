@@ -1,3 +1,4 @@
+import { clearOfflinePages } from './pwa'
 // API 客户端：默认同源访问（单二进制部署），开发模式可通过
 // NEXT_PUBLIC_API_BASE 指向独立的 Go 服务，例如 http://localhost:6969
 export const API_BASE: string = process.env.NEXT_PUBLIC_API_BASE || ''
@@ -23,11 +24,13 @@ export function getStoredUser<T = unknown>(): T | null {
 export function storeSession(token: string, user: unknown): void {
   localStorage.setItem(TOKEN_KEY, token)
   localStorage.setItem(USER_KEY, JSON.stringify(user))
+  void clearOfflinePages() // 离线缓存的页面属于上一位登录者
 }
 
 export function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  void clearOfflinePages()
 }
 
 export type QueryParams = Record<string, string | number | boolean | undefined | null>

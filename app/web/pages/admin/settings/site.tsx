@@ -28,6 +28,7 @@ export default function SettingsSite() {
   const [annEnabled, setAnnEnabled] = useState(site.announcement_enabled === 'true')
   const [annText, setAnnText] = useState(site.announcement_text || '')
   const [annTone, setAnnTone] = useState(site.announcement_tone === 'warning' ? 'warning' : 'info')
+  const [pwaEnabled, setPwaEnabled] = useState(site.pwa_enabled !== false)
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -55,6 +56,7 @@ export default function SettingsSite() {
         setAnnEnabled(str('announcement_enabled') === 'true')
         setAnnText(str('announcement_text'))
         setAnnTone(str('announcement_tone') === 'warning' ? 'warning' : 'info')
+        setPwaEnabled(cfg.pwa_enabled !== false)
         setLoaded(true)
       })
       .catch(() => setLoaded(true))
@@ -114,6 +116,7 @@ export default function SettingsSite() {
         site_favicon: siteFavicon, site_keywords: siteKeywords, site_footer_text: siteFooterText, site_beian: siteBeian,
         help_doc_url: helpDocUrl, terms_url: termsUrl, privacy_url: privacyUrl,
         announcement_enabled: annEnabled, announcement_text: annText, announcement_tone: annTone,
+        pwa_enabled: pwaEnabled,
       } })
       setMessage(t('admin.settings.site.saved'))
     } catch (e) {
@@ -188,6 +191,13 @@ export default function SettingsSite() {
                 <ChapterLinkPicker value={privacyUrl} onChange={setPrivacyUrl} loading={!loaded} />
               </Field>
             </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">{t('admin.settings.site.pwa')}</h3>
+            <Field label={t('admin.settings.site.pwaEnabled')} hint={t('admin.settings.site.pwaHint')}>
+              <Switch ariaLabel={t('admin.settings.site.pwaEnabled')} checked={pwaEnabled} onChange={setPwaEnabled} />
+            </Field>
           </div>
 
           <div className="border-t border-slate-100 pt-4">

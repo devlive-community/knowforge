@@ -39,6 +39,7 @@ import { bookFeedPath, feedsEnabled } from '@/lib/feeds'
 import EmbedModal from '@/components/EmbedModal'
 import { embedEnabled } from '@/lib/embed'
 import AddToListModal from '@/components/booklists/AddToListModal'
+import OfflineBookButton from '@/components/OfflineBookButton'
 import BookListsOnBook from '@/components/booklists/BookListsOnBook'
 import { bookListsEnabled } from '@/lib/booklists'
 import { displayName } from '@/lib/users'
@@ -549,6 +550,7 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
                     <i className="fa-solid fa-code" aria-hidden="true" />
                   </Button></Tooltip>
                 )}
+                <OfflineBookButton bookSlug={book.slug} tree={tree} className="w-full sm:w-auto" />
                 <BookExportButton book={book} className="w-full sm:w-auto" />
               </div>
               {user && (

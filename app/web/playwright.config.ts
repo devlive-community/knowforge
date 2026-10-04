@@ -40,7 +40,7 @@ export default defineConfig({
       url: WEB,
       timeout: 240_000,
       reuseExistingServer: false,
-      env: { NEXT_DIST_DIR: '.next-e2e', NEXT_PUBLIC_API_BASE: API, KNOWFORGE_API_URL: API, NEXT_TELEMETRY_DISABLED: '1' },
+      env: { NEXT_DIST_DIR: '.next-e2e', NEXT_PUBLIC_API_BASE: API, KNOWFORGE_API_URL: API, NEXT_TELEMETRY_DISABLED: '1', NEXT_PUBLIC_ENABLE_SW: '1' },
     },
   ],
 })

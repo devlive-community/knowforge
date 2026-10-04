@@ -12,10 +12,11 @@ import Seo from '@/components/Seo'
 import { FeedbackProvider, Loading } from '@/components/ui'
 import StepUpModal from '@/components/StepUpModal'
 import SiteHead from '@/components/SiteHead'
+import PwaManager from '@/components/PwaManager'
 import type { ReactNode } from 'react'
 import type { SiteConfig } from '@/lib/types'
 
-const bareRoutes = ['/install', '/login', '/register', '/book/writer', '/book/reader', '/book/print', '/admin', '/embed']
+const bareRoutes = ['/offline', '/install', '/login', '/register', '/book/writer', '/book/reader', '/book/print', '/admin', '/embed']
 
 const noindexRoutes = ['/books', '/book/writer', '/user/profile', '/user/security', '/user/achievements', '/admin']
 
@@ -87,6 +88,7 @@ export default function App({ Component, pageProps, i18n }: AppProps & { i18n?: 
           <Component {...pageProps} />
         </Shell>
         <StepUpModal />
+        <PwaManager />
       </FeedbackProvider>
       </I18nProvider>
     </AppProvider>
