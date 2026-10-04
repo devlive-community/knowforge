@@ -262,6 +262,25 @@ type WriterComment struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+// WriterSuggestion 修改建议：「建议者」协作者对章节提交的修改（保存其依据的原文与建议后的标题、正文），
+// 由能编辑的人逐处审阅、部分或全部采纳（合并到当前版本）或拒绝。
+type WriterSuggestion struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	BookID      uint       `gorm:"index;not null" json:"book_id"`
+	DocumentID  uint       `gorm:"index;not null" json:"document_id"`
+	UserID      uint       `gorm:"index;not null" json:"user_id"`
+	BaseTitle   string     `gorm:"size:255" json:"base_title"`
+	BaseContent string     `gorm:"type:text" json:"base_content"`
+	Title       string     `gorm:"size:255" json:"title"`
+	Content     string     `gorm:"type:text" json:"content"`
+	Note        string     `gorm:"size:1024" json:"note"`
+	Status      string     `gorm:"size:16;index;not null;default:pending" json:"status"` // pending | accepted | partial | rejected
+	DecidedBy   uint       `gorm:"default:0" json:"decided_by"`
+	DecidedAt   *time.Time `json:"decided_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
 // WriterPresence 写作台在线状态：每个打开的写作台事件流一条（连接断开时删除，SeenAt 由服务端心跳刷新，过期即视为离开）。
 type WriterPresence struct {
 	ConnID    string    `gorm:"primaryKey;size:32" json:"conn_id"`
@@ -956,6 +975,7 @@ func CoreModels() []any {
 		&SystemBackup{},
 		&WriterPresence{},
 		&WriterComment{},
+		&WriterSuggestion{},
 		// 成就相关表由「成就」插件在启用时建表（首次启用才创建），不在核心 AutoMigrate 里。
 	}
 }

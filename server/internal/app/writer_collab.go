@@ -148,7 +148,7 @@ func (a *App) WriterCollabStream(c *gin.Context) {
 		fail(c, status, "书籍不存在")
 		return
 	}
-	if !a.canEditBookContent(u, book) {
+	if !a.canSuggestBookContent(u, book) {
 		fail(c, http.StatusForbidden, "无权编辑该书籍")
 		return
 	}

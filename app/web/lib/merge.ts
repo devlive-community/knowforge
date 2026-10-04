@@ -143,3 +143,34 @@ export function mergeTitle(base: string, mine: string, theirs: string): string |
   if (theirs === base || mine === theirs) return mine
   return null
 }
+
+// —— 两方差异（审阅修改建议）——
+
+// Hunk 一处改动：a 中 [aStart, aEnd) 的行被替换为 b 中 [bStart, bEnd) 的行。
+export interface Hunk { aStart: number; aEnd: number; bStart: number; bEnd: number }
+
+// diffHunks 按行比较 a 与 b，返回改动块（相邻的增删合并为一处）。
+export function diffHunks(a: string[], b: string[]): Hunk[] {
+  const hunks: Hunk[] = []
+  let ia = 0
+  let ib = 0
+  for (const [ma, mb] of [...matchLines(a, b), [a.length, b.length] as [number, number]]) {
+    if (ma > ia || mb > ib) hunks.push({ aStart: ia, aEnd: ma, bStart: ib, bEnd: mb })
+    ia = ma + 1
+    ib = mb + 1
+  }
+  return hunks
+}
+
+// applyHunks 只采纳 accept[i] 为 true 的改动，其余保留 a 的原样。
+export function applyHunks(a: string[], b: string[], hunks: Hunk[], accept: boolean[]): string[] {
+  const out: string[] = []
+  let ia = 0
+  hunks.forEach((h, i) => {
+    out.push(...a.slice(ia, h.aStart))
+    out.push(...(accept[i] ? b.slice(h.bStart, h.bEnd) : a.slice(h.aStart, h.aEnd)))
+    ia = h.aEnd
+  })
+  out.push(...a.slice(ia))
+  return out
+}

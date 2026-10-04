@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,10 @@ func init() {
 		"zh-CN": "「{user}」在《{book}》的「{chapter}」中添加了批注",
 		"en":    `{user} commented on "{chapter}" in "{book}"`,
 	})
+	i18ntext.Register("notify.writerComment.mention", map[string]string{
+		"zh-CN": "「{user}」在《{book}》「{chapter}」的批注中提到了你",
+		"en":    `{user} mentioned you in a comment on "{chapter}" in "{book}"`,
+	})
 	i18ntext.Register("notify.writerComment.reply", map[string]string{
 		"zh-CN": "「{user}」回复了《{book}》「{chapter}」中的批注",
 		"en":    `{user} replied to a comment on "{chapter}" in "{book}"`,
@@ -46,7 +51,7 @@ func (a *App) commentDocument(c *gin.Context) (*models.Document, *models.Book, b
 		fail(c, status, "文档不存在")
 		return nil, nil, false
 	}
-	if !a.canEditBookContent(currentUser(c), book) {
+	if !a.canSuggestBookContent(currentUser(c), book) {
 		fail(c, http.StatusForbidden, "只有书籍作者与协作者可以查看批注")
 		return nil, nil, false
 	}
@@ -126,7 +131,7 @@ func (a *App) WriterCommentCounts(c *gin.Context) {
 		fail(c, status, "书籍不存在")
 		return
 	}
-	if !a.canEditBookContent(currentUser(c), book) {
+	if !a.canSuggestBookContent(currentUser(c), book) {
 		fail(c, http.StatusForbidden, "只有书籍作者与协作者可以查看批注")
 		return
 	}
@@ -203,9 +208,24 @@ func (a *App) CreateWriterComment(c *gin.Context) {
 	ok(c, a.commentViews([]models.WriterComment{cm})[0])
 }
 
-// notifyWriterComment 通知书籍作者与讨论串中的其他人（不含自己）。
+// mentionPattern 批注中的 @用户名（与注册用户名规则一致）。
+var mentionPattern = regexp.MustCompile(`@([A-Za-z0-9_-]{3,50})`)
+
+// notifyWriterComment 通知书籍作者与讨论串中的其他人（不含自己）；被 @ 提及的人（须能参与写作）收到「提到了你」的通知。
 func (a *App) notifyWriterComment(c *gin.Context, book *models.Book, doc *models.Document, cm *models.WriterComment, root *models.WriterComment) {
 	u := currentUser(c)
+	mentioned := map[uint]bool{}
+	for _, m := range mentionPattern.FindAllStringSubmatch(cm.Content, 20) {
+		var target models.User
+		if a.DB.Where("username = ?", m[1]).First(&target).Error == nil && target.ID != u.ID && a.canSuggestBookContent(&target, book) {
+			mentioned[target.ID] = true
+		}
+	}
+	params := map[string]string{"user": u.PublicName(), "book": book.Title, "chapter": doc.Title}
+	payload := map[string]any{"link": "/book/writer/" + book.Slug + "/" + doc.Slug + "?comments=open", "book_id": book.ID, "document_id": doc.ID, "comment_id": cm.ID}
+	for uid := range mentioned {
+		a.NotifyI18n(uid, "collaboration", "notify.writerComment.mention", params, payload)
+	}
 	recipients := map[uint]bool{book.UserID: true}
 	key := "notify.writerComment.new"
 	if root != nil {
@@ -219,14 +239,15 @@ func (a *App) notifyWriterComment(c *gin.Context, book *models.Book, doc *models
 	}
 	delete(recipients, u.ID)
 	for uid := range recipients {
+		if mentioned[uid] {
+			continue // 已收到「提到了你」
+		}
 		// 只通知仍可编辑该书的人（如协作者已被移除则不再通知）
 		var target models.User
-		if a.DB.First(&target, uid).Error != nil || !a.canEditBookContent(&target, book) {
+		if a.DB.First(&target, uid).Error != nil || !a.canSuggestBookContent(&target, book) {
 			continue
 		}
-		a.NotifyI18n(uid, "collaboration", key,
-			map[string]string{"user": u.PublicName(), "book": book.Title, "chapter": doc.Title},
-			map[string]any{"link": "/book/writer/" + book.Slug + "/" + doc.Slug + "?comments=open", "book_id": book.ID, "document_id": doc.ID, "comment_id": cm.ID})
+		a.NotifyI18n(uid, "collaboration", key, params, payload)
 	}
 }
 
@@ -237,7 +258,7 @@ func (a *App) findWriterComment(c *gin.Context) (*models.WriterComment, *models.
 		return nil, nil, false
 	}
 	var book models.Book
-	if a.DB.First(&book, cm.BookID).Error != nil || !a.canEditBookContent(currentUser(c), &book) {
+	if a.DB.First(&book, cm.BookID).Error != nil || !a.canSuggestBookContent(currentUser(c), &book) {
 		fail(c, http.StatusNotFound, "批注不存在")
 		return nil, nil, false
 	}

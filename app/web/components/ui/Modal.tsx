@@ -10,7 +10,7 @@ interface ModalProps {
   children: ReactNode
   footer?: ReactNode
   className?: string
-  /** 提升层级，置于全局对话框/Toast（z-150/160）之上。二次认证等常在确认框之后弹出，需盖过它 */
+  /** 提升层级（z-200），置于全局确认框（z-150）与写作台侧栏之上；Toast（z-210）仍显示在最上层。二次认证等常在确认框之后弹出，需盖过它 */
   elevated?: boolean
 }
 

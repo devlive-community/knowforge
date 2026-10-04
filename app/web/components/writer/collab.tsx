@@ -19,15 +19,16 @@ interface Options {
   onDocSaved: (ev: DocSavedEvent) => void
   onTreeChanged: () => void
   onComments?: (docId: number) => void
+  onSuggestions?: (docId: number) => void
 }
 
 // useWriterCollab 连接本书的写作台事件流：登记在线、同步自己正在编辑的章节与是否有未保存修改，
 // 接收他人的在线状态、章节保存与目录变化（自己发起的操作由连接 ID 识别后忽略）。
-export function useWriterCollab({ bookId, docId, dirty, onDocSaved, onTreeChanged, onComments }: Options): { connId: string; others: Presence[] } {
+export function useWriterCollab({ bookId, docId, dirty, onDocSaved, onTreeChanged, onComments, onSuggestions }: Options): { connId: string; others: Presence[] } {
   const [connId, setConnId] = useState('')
   const [presence, setPresence] = useState<Presence[]>([])
-  const handlers = useRef({ onDocSaved, onTreeChanged, onComments })
-  handlers.current = { onDocSaved, onTreeChanged, onComments }
+  const handlers = useRef({ onDocSaved, onTreeChanged, onComments, onSuggestions })
+  handlers.current = { onDocSaved, onTreeChanged, onComments, onSuggestions }
   const connRef = useRef('')
   const docRef = useRef(docId)
   docRef.current = docId
@@ -52,6 +53,10 @@ export function useWriterCollab({ bookId, docId, dirty, onDocSaved, onTreeChange
       es.addEventListener('comments', (e) => {
         const d = parse(e as MessageEvent)
         if (d && d.origin !== connRef.current) handlers.current.onComments?.(d.doc_id)
+      })
+      es.addEventListener('suggestions', (e) => {
+        const d = parse(e as MessageEvent)
+        if (d && d.origin !== connRef.current) handlers.current.onSuggestions?.(d.doc_id)
       })
       es.addEventListener('tree', (e) => {
         const d = parse(e as MessageEvent)
@@ -147,6 +152,7 @@ export interface ConflictState {
   titles: { base: string; mine: string; theirs: string } | null // 标题冲突时
   savedBy?: CollabUser
   savedAt?: string
+  fromSuggestion?: boolean // 采纳修改建议时与当前版本冲突
 }
 
 // ConflictDialog 保存冲突：逐块选择保留自己的、采用对方的或两者都保留；也可以放弃自己的修改改用对方版本。
@@ -166,10 +172,10 @@ export function ConflictDialog({ state, onResolve, onUseTheirs, onCancel }: {
     : list.join('\n')
 
   return (
-    <Modal open onClose={onCancel} className="max-w-4xl" title={t('writer.collab.conflictTitle')}
+    <Modal open elevated onClose={onCancel} className="max-w-4xl" title={t('writer.collab.conflictTitle')}
       footer={(
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          <Button variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={onUseTheirs} data-testid="conflict-use-theirs">{t('writer.collab.useTheirs')}</Button>
+          <Button variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={onUseTheirs} data-testid="conflict-use-theirs">{t(state.fromSuggestion ? 'writer.suggest.useSuggestion' : 'writer.collab.useTheirs')}</Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onCancel}>{t('writer.collab.cancel')}</Button>
             <Button onClick={() => onResolve(choices, titleChoice)} data-testid="conflict-save">{t('writer.collab.saveMerged')}</Button>
@@ -177,7 +183,7 @@ export function ConflictDialog({ state, onResolve, onUseTheirs, onCancel }: {
         </div>
       )}>
       <div className="space-y-4" data-testid="conflict-dialog">
-        <p className="text-sm text-slate-600">{t('writer.collab.conflictHint', { name, n: conflicts.length + (state.titles ? 1 : 0) })}</p>
+        <p className="text-sm text-slate-600">{t(state.fromSuggestion ? 'writer.suggest.conflictHint' : 'writer.collab.conflictHint', { name, n: conflicts.length + (state.titles ? 1 : 0) })}</p>
         {state.titles && (
           <div className="rounded-xl border border-slate-200 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -201,11 +207,11 @@ export function ConflictDialog({ state, onResolve, onUseTheirs, onCancel }: {
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
-                <div className="mb-1 text-[11px] font-medium text-emerald-700">{t('writer.collab.mine')}</div>
+                <div className="mb-1 text-[11px] font-medium text-emerald-700">{t(state.fromSuggestion ? 'writer.suggest.current' : 'writer.collab.mine')}</div>
                 <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">{lines(c.mine)}</pre>
               </div>
               <div>
-                <div className="mb-1 text-[11px] font-medium text-sky-700">{t('writer.collab.theirs', { name })}</div>
+                <div className="mb-1 text-[11px] font-medium text-sky-700">{t(state.fromSuggestion ? 'writer.suggest.theirs' : 'writer.collab.theirs', { name })}</div>
                 <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">{lines(c.theirs)}</pre>
               </div>
             </div>

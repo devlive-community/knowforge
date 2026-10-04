@@ -161,7 +161,7 @@ export default function NotificationsPage() {
                         <span className="text-sm font-semibold">{invitation.inviter_username || t('notify.adminDefault')}{t('notify.collabInviteText')}</span>
                       </div>
                       <p className="mt-2 truncate font-medium text-slate-900">《{invitation.book_title}》</p>
-                      <p className="mt-1 text-xs text-slate-500">{t('notify.collabRoleLabel')}{invitation.role === 'editor' ? t('notify.collabRoleEditor') : t('notify.collabRoleViewer')}</p>
+                      <p className="mt-1 text-xs text-slate-500">{t('notify.collabRoleLabel')}{invitation.role === 'editor' ? t('notify.collabRoleEditor') : invitation.role === 'suggester' ? t('notify.collabRoleSuggester') : t('notify.collabRoleViewer')}</p>
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Button variant="ghost" size="sm" disabled={workingInvitation === invitation.id}

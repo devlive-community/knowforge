@@ -20,7 +20,7 @@ import (
 //   - 只有 accepted editor 可编辑章节；accepted viewer 可访问私有书籍的已发布章节
 //   - 新邀请为 pending，通过 Notify 发送，并由受邀用户接受或拒绝
 
-var collaboratorRoles = map[string]bool{"editor": true, "viewer": true}
+var collaboratorRoles = map[string]bool{"editor": true, "viewer": true, "suggester": true} // suggester：只能以修改建议的方式参与写作
 var collaboratorStatuses = map[string]bool{"pending": true, "accepted": true, "rejected": true}
 
 // ListCollaborators GET /books/:id/collaborators

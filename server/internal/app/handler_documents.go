@@ -49,7 +49,7 @@ func (a *App) ListDocumentTree(c *gin.Context) {
 	var docs []models.Document
 	query := a.DB.Where("book_id = ?", book.ID).
 		Select("id", "book_id", "parent_id", "title", "slug", "user_id", "sort_order", "status", "icon", "external_url", "external_new_tab", "created_at", "updated_at")
-	if !a.canEditBookContent(u, book) {
+	if !a.canSuggestBookContent(u, book) {
 		query = query.Where("status = ?", "published")
 	}
 	if err := query.Order("sort_order ASC, created_at ASC").Find(&docs).Error; err != nil {
@@ -330,7 +330,7 @@ func (a *App) findDocument(c *gin.Context) (*models.Document, *models.Book, int)
 
 // canReadDocument 判断文档是否对当前用户可见
 func (a *App) canReadDocument(u *models.User, doc *models.Document, book *models.Book) bool {
-	if a.canEditBookContent(u, book) {
+	if a.canSuggestBookContent(u, book) {
 		return true
 	}
 	// viewer 协作者：私有书籍中可见已发布章节

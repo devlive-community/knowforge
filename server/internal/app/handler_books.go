@@ -103,6 +103,15 @@ func (a *App) collaboratorRole(u *models.User, bookID uint) (string, bool) {
 
 // canEditBookContent 内容归属校验：owner/admin 或 editor 协作者。
 // 仅覆盖章节内容与目录管理，书籍设置与删除仍限 canManageBook。
+// canSuggestBookContent 可以参与写作：能编辑的人，以及「建议者」协作者（查看草稿、批注、提交修改建议，但不能直接保存）。
+func (a *App) canSuggestBookContent(u *models.User, b *models.Book) bool {
+	if a.canEditBookContent(u, b) {
+		return true
+	}
+	role, ok := a.collaboratorRole(u, b.ID)
+	return ok && role == "suggester"
+}
+
 func (a *App) canEditBookContent(u *models.User, b *models.Book) bool {
 	if a.canManageBook(u, b) {
 		return true
@@ -142,6 +151,7 @@ type bookAccess struct {
 	CanManage        bool   `json:"can_manage"`
 	CanEditContent   bool   `json:"can_edit_content"`
 	CanExport        bool   `json:"can_export"`
+	CanSuggest       bool   `json:"can_suggest"` // 可以进入写作台提交修改建议（含能编辑的人）
 	CollaboratorRole string `json:"collaborator_role,omitempty"`
 }
 
@@ -165,6 +175,7 @@ func (a *App) GetBookAccess(c *gin.Context) {
 		CanManage:        canManage,
 		CanEditContent:   canEdit,
 		CanExport:        canEdit,
+		CanSuggest:       a.canSuggestBookContent(u, &book),
 		CollaboratorRole: role,
 	})
 }

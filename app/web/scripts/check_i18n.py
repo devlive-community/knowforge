@@ -97,6 +97,7 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
                                        'jobs', 'jobsWaiting', 'instances', 'dbConnections', 'totals', 'buildInfo'],
     # 协作写作：冲突块的选择 t(`writer.collab.choice.${choice}`)
     'writer.collab.choice.': ['mine', 'theirs', 'both'],
+    'writer.suggest.status.': ['pending', 'accepted', 'partial', 'rejected'],
     # 模板：t(`templates.kind.${kind}`)、t(`templates.manage.empty.${scope}.${kind}`)
     'templates.kind.': ['chapter', 'book'],
     'templates.manage.empty.': ['mine.chapter', 'mine.book', 'official.chapter', 'official.book'],

@@ -116,7 +116,7 @@ Authorization: Bearer kf_pat_…
 | `notification:read` | 查看自己的通知（含 SSE 流） | ✅ | ✅ |
 | `notification:update` | 标记通知已读 | ✅ | ✅ |
 | `collaborator:read` | 查看书籍协作者列表 | ✅ | ✅ |
-| `collaborator:create` | 添加/更新协作者（仅书籍所有者/管理员） | ✅ | ✅ |
+| `collaborator:create` | 添加/更新协作者（仅书籍所有者/管理员；角色 `editor` 编辑者、`suggester` 建议者（只能提交修改建议）、`viewer` 查看者） | ✅ | ✅ |
 | `collaborator:update` | 接受或拒绝发给自己的协作邀请 | ✅ | ✅ |
 | `collaborator:delete` | 移除协作者（所有者；协作者可自行退出） | ✅ | ✅ |
 | `book:export` | 导出书籍为 markdown zip（owner/admin/editor 协作者） | ✅ | ✅ |
@@ -379,6 +379,12 @@ Authorization: Bearer kf_pat_…
 | GET | `/books/:id/writer-comments/counts` | 各章节未解决的批注数 `{counts:{<doc_id>: n}}` | 同上 |
 | PUT / DELETE | `/writer-comments/:id` | 修改自己的批注 `{content}` / 删除（自己的，书籍所有者与管理员可删任何批注；删除顶级批注连同回复） | 同上 |
 | POST | `/writer-comments/:id/resolve` | `{resolved}` 标记讨论已解决或重新打开（仅顶级批注） | 同上 |
+| GET | `/documents/:id/suggestions?status=pending\|decided` | 修改建议（新的在前）`{items[{id,user,base_title,base_content,title,content,note,status,decided_at,created_at}], pending}`；`decided` 返回最近 50 条已处理的 | `document:update` + 能参与写作 |
+| POST | `/documents/:id/suggestions` | 提交修改建议 `{base_title, base_content, title, content, note?}`（依据的原文与建议后的内容；没有修改返回 400）；通知书籍作者与「编辑」协作者，并推送 `suggestions{doc_id, origin}` | 同上 |
+| GET | `/books/:id/suggestions/counts` | 各章节待处理的修改建议数 `{counts:{<doc_id>: n}}` | 同上 |
+| POST | `/suggestions/:id/decide` | `{status: accepted\|partial\|rejected}` 记录处理结果并通知建议者（采纳的内容由写作台合并后经 `PUT /documents/:id` 保存）；已处理过返回 409 | 能编辑该书 |
+| DELETE | `/suggestions/:id` | 建议者撤回自己尚未处理的建议 | 建议者本人 |
+| GET | `/books/:id/writer-members` | 书籍作者与已接受的协作者 `{items[{id,username,display_name,avatar,role}]}`（批注中 @ 提及的候选人）；批注正文中的 `@用户名` 会通知能参与写作的被提及者 | `document:update` + 能参与写作 |
 | POST | `/books/:id/documents/batch-status` | 批量改状态 `{ids[], status}`（含子章节级联，行为与单个修改一致），响应为事件流：`start{total}`、每个章节 `item{result{id,ok,status,held,error}, done, total}`、`done{total,done,failed}`；校验失败在推送前以 JSON 返回 | `document:update` |
 | POST | `/books/:id/documents/batch-delete` | 批量移入回收站 `{ids[]}`（含子章节），事件流同上，已随父章节删除的记 `skipped`；需二次认证（开启时） | `document:delete` |
 | POST | `/documents/:id/view` | 章节浏览计数 +1，并同步累加所属书籍的 `view_count` 及按日分析聚合；可选 JSON `{referrer}`；不可见返回 404 | `document:read` |

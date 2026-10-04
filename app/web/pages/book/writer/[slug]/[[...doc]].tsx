@@ -6,6 +6,7 @@ import type { BookAccess, User } from '@/lib/types'
 interface Props {
   user: User | null
   slug: string
+  suggestOnly: boolean // 「建议者」：修改以建议提交，不能直接保存
 }
 
 // 写作工作台：`/book/writer/:slug` 与 `/book/writer/:slug/:doc` 走同一页面（可选 catch-all），
@@ -20,13 +21,15 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ req, param
   }
   const slug = typeof params?.slug === 'string' ? params.slug : ''
   if (!slug) return { notFound: true }
+  let suggestOnly = false
   try {
     const access = await serverApi<BookAccess>(`/books/slug/${encodeURIComponent(slug)}/access`, { headers: authHeaderFrom(req) })
-    if (!access.can_edit_content) return { notFound: true }
+    if (!access.can_edit_content && !access.can_suggest) return { notFound: true }
+    suggestOnly = !access.can_edit_content
   } catch {
     return { notFound: true }
   }
-  return { props: { user, slug } }
+  return { props: { user, slug, suggestOnly } }
 }
 
 export default function WriterPage(props: Props) {

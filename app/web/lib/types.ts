@@ -72,7 +72,7 @@ export interface Book {
   /** 版本组内被标记为最新版的版本号 */
   latest_version?: string
   chapter_count?: number
-  collaborator_role?: 'editor' | 'viewer'
+  collaborator_role?: 'editor' | 'viewer' | 'suggester'
   watermark_enabled: boolean
   watermark_text: string
   export_enabled?: boolean
@@ -95,7 +95,7 @@ export interface CollaborationInvitation {
   book_id: number
   book_title: string
   book_slug: string
-  role: 'editor' | 'viewer'
+  role: 'editor' | 'viewer' | 'suggester'
   inviter_username: string
   created_at: string
 }
@@ -105,7 +105,8 @@ export interface BookAccess {
   can_manage: boolean
   can_edit_content: boolean
   can_export: boolean
-  collaborator_role?: 'editor' | 'viewer'
+  can_suggest?: boolean // 可以进入写作台提交修改建议（含能编辑的人）
+  collaborator_role?: 'editor' | 'viewer' | 'suggester'
 }
 
 export interface Document {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matchLines, merge3, mergeTitle, resolveMerge } from '../merge'
+import { applyHunks, diffHunks, matchLines, merge3, mergeTitle, resolveMerge } from '../merge'
 
 describe('matchLines', () => {
   it('finds the longest common subsequence of lines', () => {
@@ -90,5 +90,29 @@ describe('mergeTitle', () => {
     expect(mergeTitle('a', 'b', 'a')).toBe('b')
     expect(mergeTitle('a', 'b', 'b')).toBe('b')
     expect(mergeTitle('a', 'b', 'c')).toBeNull()
+  })
+})
+
+describe('diffHunks / applyHunks', () => {
+  const a = ['one', 'two', 'three', 'four', 'five']
+  const b = ['one', 'TWO', 'three', 'five', 'six']
+
+  it('lists replaced, removed and added blocks', () => {
+    expect(diffHunks(a, b)).toEqual([
+      { aStart: 1, aEnd: 2, bStart: 1, bEnd: 2 },
+      { aStart: 3, aEnd: 4, bStart: 3, bEnd: 3 },
+      { aStart: 5, aEnd: 5, bStart: 4, bEnd: 5 },
+    ])
+  })
+
+  it('applies all, none or some of the hunks', () => {
+    const hunks = diffHunks(a, b)
+    expect(applyHunks(a, b, hunks, [true, true, true])).toEqual(b)
+    expect(applyHunks(a, b, hunks, [false, false, false])).toEqual(a)
+    expect(applyHunks(a, b, hunks, [true, false, true])).toEqual(['one', 'TWO', 'three', 'four', 'five', 'six'])
+  })
+
+  it('returns no hunks for identical input', () => {
+    expect(diffHunks(a, a)).toEqual([])
   })
 })

@@ -262,6 +262,13 @@ func (a *App) Router() *gin.Engine {
 		api.PUT("/writer-comments/:id", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.UpdateWriterComment)
 		api.DELETE("/writer-comments/:id", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.DeleteWriterComment)
 		api.POST("/writer-comments/:id/resolve", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.ResolveWriterComment)
+		// 修改建议（「建议者」协作者提交，能编辑的人审阅）与写作成员（批注 @ 提及）
+		api.GET("/documents/:id/suggestions", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.ListWriterSuggestions)
+		api.POST("/documents/:id/suggestions", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.CreateWriterSuggestion)
+		api.GET("/books/:id/suggestions/counts", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.WriterSuggestionCounts)
+		api.POST("/suggestions/:id/decide", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.DecideWriterSuggestion)
+		api.DELETE("/suggestions/:id", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.DeleteWriterSuggestion)
+		api.GET("/books/:id/writer-members", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.WriterMembers)
 		// 备份下载：凭管理员换取的短时下载凭证（URL 中的 ticket）访问，不需要登录请求头
 		api.GET("/backups/:id/download", a.DownloadBackup)
 

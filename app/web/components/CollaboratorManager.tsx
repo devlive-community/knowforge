@@ -9,7 +9,7 @@ import type { Book, User } from '@/lib/types'
 interface Collaborator {
   id: number
   user_id: number
-  role: 'editor' | 'viewer'
+  role: 'editor' | 'viewer' | 'suggester'
   status: 'pending' | 'accepted' | 'rejected'
   created_at: string
   user?: Pick<User, 'id' | 'username' | 'avatar'>
@@ -18,7 +18,7 @@ interface Collaborator {
 // CollaboratorManager 书籍设置页的协作者管理：所有者可增删，协作者可查看与自己退出
 export default function CollaboratorManager({ book }: { book: Book }) {
   const { t } = useTranslation()
-  const ROLE_LABELS: Record<string, string> = { editor: t('collab.roleEditor'), viewer: t('collab.roleViewer') }
+  const ROLE_LABELS: Record<string, string> = { editor: t('collab.roleEditor'), suggester: t('collab.roleSuggester'), viewer: t('collab.roleViewer') }
   const STATUS_LABELS: Record<string, string> = { pending: t('collab.statusPending'), accepted: t('collab.statusAccepted'), rejected: t('collab.statusRejected') }
   const { confirmAction } = useFeedback()
   const { user } = useApp()
@@ -109,7 +109,7 @@ export default function CollaboratorManager({ book }: { book: Book }) {
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-slate-900">{c.user?.username}</div>
                   <span className="mt-0.5 inline-block">
-                    <Badge tone={c.role === 'editor' ? 'emerald' : 'slate'}>{ROLE_LABELS[c.role]}</Badge>
+                    <Badge tone={c.role === 'editor' ? 'emerald' : c.role === 'suggester' ? 'sky' : 'slate'}>{ROLE_LABELS[c.role]}</Badge>
                     <span className="ml-1.5">
                       <Badge tone={c.status === 'accepted' ? 'emerald' : c.status === 'pending' ? 'amber' : 'slate'}>
                         {STATUS_LABELS[c.status] || c.status}
@@ -132,8 +132,8 @@ export default function CollaboratorManager({ book }: { book: Book }) {
           <Input className="flex-1" value={username} onChange={(e) => setUsername(e.target.value)}
             placeholder={t('collab.usernamePlaceholder')} />
           <Select
-            className="sm:w-32"
-            options={[{ value: 'editor', label: t('collab.roleEditor') }, { value: 'viewer', label: t('collab.roleViewer') }]}
+            className="sm:w-36"
+            options={[{ value: 'editor', label: t('collab.roleEditor') }, { value: 'suggester', label: t('collab.roleSuggester') }, { value: 'viewer', label: t('collab.roleViewer') }]}
             value={role} onChange={setRole} />
           <Button type="submit" loading={adding}>{t('collab.sendInvite')}</Button>
         </form>

@@ -99,7 +99,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     <FeedbackContext.Provider value={{ showToast, confirmAction, requestInput }}>
       {children}
 
-      <div className="pointer-events-none fixed inset-x-4 top-4 z-[160] flex flex-col items-end gap-2 sm:left-auto sm:w-[360px]" aria-live="polite">
+      <div className="pointer-events-none fixed inset-x-4 top-4 z-[210] flex flex-col items-end gap-2 sm:left-auto sm:w-[360px]" aria-live="polite">
         {toasts.map((toast) => {
           const tone = toast.tone === 'success'
             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
