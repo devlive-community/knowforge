@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/router'
 import Container from '@/components/Container'
 import FeatureGate from '@/components/FeatureGate'
@@ -13,7 +14,7 @@ import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Badge, Button, Card, EmptyState, Input, Loading, useFeedback } from '@/components/ui'
 import { entitlementLabel, formatEntitlement, type EntitlementDef } from '@/lib/entitlements'
-import type { MembershipPlan, MembershipRecord, MyMembership, TrialInfo } from '@/lib/membership'
+import type { GroupCoverage, MembershipPlan, MembershipRecord, MyMembership, TrialInfo } from '@/lib/membership'
 import { checkoutAvailable, checkoutHref, durationLabel, formatPrice } from '@/lib/commerce'
 
 export default function MyMembershipPage() {
@@ -77,13 +78,13 @@ function MyMembershipInner() {
   const { confirmAction, showToast } = useFeedback()
   const siteName = site.site_name || 'KnowForge'
   const canBuy = checkoutAvailable(site)
-  const [mine, setMine] = useState<{ membership: MyMembership | null; records: MembershipRecord[]; currency: string; trial: TrialInfo } | null>(null)
+  const [mine, setMine] = useState<{ membership: MyMembership | null; records: MembershipRecord[]; currency: string; trial: TrialInfo; groups?: GroupCoverage[] } | null>(null)
   const [startingTrial, setStartingTrial] = useState<number | null>(null)
   const [plans, setPlans] = useState<MembershipPlan[]>([])
   const [defs, setDefs] = useState<EntitlementDef[]>([])
 
   const loadMine = useCallback(() => {
-    api<{ membership: MyMembership | null; records: MembershipRecord[]; currency: string; trial: TrialInfo }>('/users/me/membership').then(setMine).catch(() => {})
+    api<{ membership: MyMembership | null; records: MembershipRecord[]; currency: string; trial: TrialInfo; groups?: GroupCoverage[] }>('/users/me/membership').then(setMine).catch(() => {})
   }, [])
   useEffect(() => {
     if (!user) return
@@ -150,13 +151,43 @@ function MyMembershipInner() {
                   {m.active && m.trial && <p className="mt-1 text-xs text-sky-700">{t('membership.trial.activeHint')}</p>}
                 </>
               ) : (
-                <>
-                  <div className="text-xl font-bold text-slate-900">{t('membership.none')}</div>
-                  <p className="mt-1.5 text-sm text-slate-500">{t('membership.noneHint')}</p>
-                </>
+                (mine.groups || []).some((g) => g.covered) ? (
+                  <>
+                    <div className="text-xl font-bold text-slate-900">{t('membership.group.personalNone')}</div>
+                    <p className="mt-1.5 text-sm text-slate-500">{t('membership.group.personalNoneHint')}</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xl font-bold text-slate-900">{t('membership.none')}</div>
+                    <p className="mt-1.5 text-sm text-slate-500">{t('membership.noneHint')}</p>
+                  </>
+                )
               )}
             </div>
           </Card>
+
+          {/* 团队会员：通过所在团队享有（或席位已满） */}
+          {(mine.groups || []).map((g) => (
+            <Card key={`${g.group.kind}:${g.group.id}`} className="mt-4 flex flex-wrap items-center gap-3 p-5" data-testid="group-coverage">
+              <i className={`fa-solid fa-people-group text-xl ${g.covered ? 'text-violet-500' : 'text-slate-300'}`} aria-hidden="true" />
+              <div className="min-w-0 flex-1 text-sm">
+                <div className="font-medium text-slate-900">
+                  {g.covered
+                    ? t('membership.group.covered', { group: g.group.name, plan: g.plan?.name || '' })
+                    : t('membership.group.notCovered', { group: g.group.name, plan: g.plan?.name || '' })}
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500">
+                  {g.covered ? t('membership.group.coveredHint', { date: formatDate(g.expires_at), days: g.days_left }) : t('membership.group.notCoveredHint')}
+                </div>
+              </div>
+              <Link href={g.group.link} className="text-sm font-medium text-primary-600 hover:underline">{t('membership.group.viewTeam')}</Link>
+            </Card>
+          ))}
+          {(site.feature_plugins || []).includes('teams') && (
+            <p className="mt-3 text-xs text-slate-500">
+              {t('membership.group.manageHint')} <Link href="/user/membership/teams" className="font-medium text-primary-600 hover:underline">{t('membership.group.manageLink')}</Link>
+            </p>
+          )}
 
           {m?.active && !m.trial && m.plan && <RenewalCard plan={plans.find((p) => p.id === m.plan!.id) || m.plan} currency={mine.currency} />}
 

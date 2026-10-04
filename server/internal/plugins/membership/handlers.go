@@ -34,6 +34,8 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	api.PUT("/users/me/membership/renewal", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.UpdateRenewal)
 	api.GET("/users/me/membership/referral", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyReferral)
 	api.POST("/membership/redeem", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.Redeem)
+	api.GET("/membership/groups", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.MyGroups)
+	api.GET("/membership/groups/:kind/:id", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.GroupDetail)
 	api.POST("/membership/plans/:id/trial", core.RequireAuth(), feat, core.RequirePermissionMiddleware(PermRead), b.StartTrial)
 	// 管理员
 	adminGuard := []gin.HandlerFunc{core.RequireAuth(), core.RequireAdmin(), feat, core.RequirePermissionMiddleware(PermManage)}
@@ -49,6 +51,9 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	reg(http.MethodPut, "/admin/membership/members/:user_id", b.AdminAdjust)
 	reg(http.MethodPost, "/admin/membership/members/:user_id/revoke", b.AdminRevoke)
 	reg(http.MethodGet, "/admin/membership/records", b.AdminListRecords)
+	reg(http.MethodGet, "/admin/membership/groups", b.AdminListGroups)
+	reg(http.MethodPut, "/admin/membership/groups/:kind/:id", b.AdminAdjustGroup)
+	reg(http.MethodPost, "/admin/membership/groups/:kind/:id/revoke", b.AdminRevokeGroup)
 	reg(http.MethodGet, "/admin/membership/redeem/batches", b.AdminListBatches)
 	reg(http.MethodPost, "/admin/membership/redeem/batches", b.AdminCreateBatch)
 	reg(http.MethodPut, "/admin/membership/redeem/batches/:id", b.AdminUpdateBatch)
@@ -137,7 +142,7 @@ func (b *behavior) MyMembership(c *gin.Context) {
 	var records []Record
 	db.Where("user_id = ?", u.ID).Order("id DESC").Limit(20).Find(&records)
 	blocker := b.trialBlocker(u)
-	b.core.OK(c, gin.H{"membership": out, "records": records, "currency": b.currency(),
+	b.core.OK(c, gin.H{"membership": out, "records": records, "currency": b.currency(), "groups": b.myGroupCoverage(c, u),
 		"trial": gin.H{"eligible": blocker == nil, "needs_verified_email": errors.Is(blocker, errTrialUnverified)}})
 }
 
@@ -182,6 +187,7 @@ type planRequest struct {
 	Status       string                                    `json:"status"`
 	SortOrder    int                                       `json:"sort_order"`
 	TrialDays    int                                       `json:"trial_days"`
+	GroupEnabled bool                                      `json:"group_enabled"`
 	Prices       []priceInput                              `json:"prices"`
 	Translations map[string]plugincore.ResourceTranslation `json:"translations"`
 }
@@ -323,7 +329,7 @@ func (b *behavior) AdminCreatePlan(c *gin.Context) {
 	}
 	actor := b.core.CurrentUser(c).ID
 	plan := Plan{Name: req.Name, Description: req.Description, IconType: req.IconType, IconValue: req.IconValue, Color: req.Color,
-		Entitlements: req.Entitlements, Status: req.Status, SortOrder: req.SortOrder, TrialDays: req.TrialDays}
+		Entitlements: req.Entitlements, Status: req.Status, SortOrder: req.SortOrder, TrialDays: req.TrialDays, GroupEnabled: req.GroupEnabled}
 	if err := b.core.Gorm().Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&plan).Error; err != nil {
 			return err
@@ -369,6 +375,7 @@ func (b *behavior) AdminUpdatePlan(c *gin.Context) {
 		if err := tx.Model(&Plan{}).Where("id = ?", plan.ID).Updates(map[string]any{
 			"name": req.Name, "description": req.Description, "icon_type": req.IconType, "icon_value": req.IconValue,
 			"color": req.Color, "entitlements": req.Entitlements, "status": req.Status, "sort_order": req.SortOrder, "trial_days": req.TrialDays,
+			"group_enabled": req.GroupEnabled,
 		}).Error; err != nil {
 			return err
 		}

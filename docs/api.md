@@ -614,12 +614,19 @@ Authorization: Bearer kf_pat_…
 
 多个会员方案，每个方案可配置权益（见「权益」）与多档时长价格；用户同一时间持有一个方案：有效期内同方案续期顺延，有效期内更换方案从当前时间起按新方案计算（原方案剩余时长不保留）。会员有效期内作为**独占**权益来源（优先于成长等级，方案未配置的项回退基础值）。金额以最小货币单位（分）存储，货币由会员设置指定；启用「支付」插件后每档价格可在线购买（商品 `kind=membership`、`sku`=价格 ID，下单时方案须启用中，已付款订单即使方案随后归档也会开通）。方案名称/说明为可翻译资源（`membership_plan`），按请求语言回退。到期前 N 天（默认 3，0 不提醒）与到期后各通知一次。插件禁用后接口 404、会员权益不再生效，数据保留。
 
+**团队会员**：方案开启 `group_enabled` 后，成员组（经 `plugincore.MemberGroupProvider` 登记，目前为「团队空间」的团队）的所有者与管理员可以按席位购买：商品 `kind=membership_group`、`sku=价格ID-组类型-组ID-席位数`，金额为价格 × 席位数；有效期内只能按当前方案与席位数续期（顺延），否则 400。增加席位：`kind=membership_group_seats`、`sku=组类型-组ID-增加数`，按剩余天数（不足一天按一天）与开通时每席每天的单价折算。组内按席位优先次序（所有者、管理员、再按加入时间）的前 N 名成员享有方案权益，与个人会员同时有效时每项权益取较高值（不限视为最大）。退款并撤销时按比例扣回天数或席位（至少保留 1 席）；到期前与到期后通知购买人。
+
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/membership/plans` | 启用中的方案 `items:[{id,name,description,icon_*,color,entitlements,prices:[{id,duration_days,price_cents,original_price_cents}]}]` + `currency` | 公开 |
-| GET | `/users/me/membership` | 我的会员 `membership{plan,started_at,expires_at,active,days_left,trial}`（无则 null，含最近一次已到期）+ 最近 20 条 `records` + `currency` + `trial{eligible,needs_verified_email}`（能否领取免费试用） | `membership:read` |
+| GET | `/users/me/membership` | 我的会员 `membership{plan,started_at,expires_at,active,days_left,trial}`（无则 null，含最近一次已到期）+ 最近 20 条 `records` + `currency` + `trial{eligible,needs_verified_email}`（能否领取免费试用）+ `groups[]{group, plan, expires_at, days_left, covered}`（所在团队的有效团队会员，`covered` 为是否在席位内） | `membership:read` |
+| GET | `/membership/groups` | 团队会员：我能为之购买的成员组（如我管理的团队）`items[]{group{kind,id,name,link,member_count,can_purchase}, subscription{plan,seats,started_at,expires_at,active,days_left,covered}\|null}` + 可按团队购买的方案 `plans` + `currency` + `max_seats`（1000） | `membership:read` |
+| GET | `/membership/groups/:kind/:id` | 组的团队会员详情：`group`、`subscription`、`members[]{id,username,...,covered}`（按席位优先次序）、最近 20 条 `records`；只有能为该组购买的人可见 | 同上 |
+| GET | `/admin/membership/groups?page=&page_size=` | 全部团队会员 `items[]{group, group_found, subscription, buyer_id}`（组已解散时 `group_found=false`） | 管理员 + `membership:manage` |
+| PUT | `/admin/membership/groups/:kind/:id` | `{plan_id, seats(1–1000), expires_at(RFC3339，晚于当前), reason?}` 开通或调整团队会员（审计 `membership.group_adjusted`） | 同上 |
+| POST | `/admin/membership/groups/:kind/:id/revoke` | 立即结束团队会员（审计 `membership.group_revoked`） | 同上 |
 | GET | `/admin/membership/plans` | 全部方案（含归档）`items:[{plan{...,translations},active_members}]` | `membership:manage` |
-| POST/PUT | `/admin/membership/plans[/:id]` | `{translations 或 name/description, icon_type, icon_value, color, status: active\|archived, sort_order, entitlements, prices:[{id?,duration_days,price_cents,original_price_cents}]}`；价格按请求整体替换（带 id 更新、新增、缺失删除），时长不可重复，售价 > 0，划线价为 0 或不低于售价；启用需有已发布的默认语言名称 | `membership:manage` |
+| POST/PUT | `/admin/membership/plans[/:id]` | `{translations 或 name/description, icon_type, icon_value, color, status: active\|archived, sort_order, trial_days, group_enabled（可按团队购买）, entitlements, prices:[{id?,duration_days,price_cents,original_price_cents}]}`；价格按请求整体替换（带 id 更新、新增、缺失删除），时长不可重复，售价 > 0，划线价为 0 或不低于售价；启用需有已发布的默认语言名称 | `membership:manage` |
 | DELETE | `/admin/membership/plans/:id` | 仅可删除无人持有的方案（否则 409，请归档）；归档方案不能再开通，已有会员不受影响 | `membership:manage` |
 | GET | `/admin/membership/members?q=&status=active\|expired&plan_id=&page=&page_size=` | 会员列表 `items:[{user,plan,started_at,expires_at,active}]` | `membership:manage` |
 | POST | `/admin/membership/grant` | `{user_id, plan_id, days(1–3650), reason?}` 开通/续期/更换，返回 `{action: grant\|extend\|switch, expires_at,...}`，通知用户 | `membership:manage` |
@@ -805,6 +812,7 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 - **角色**：所有者与管理员可邀请成员、修改团队信息；只有所有者能邀请管理员、调整角色、转交与解散团队；管理员只能移除普通成员；成员可自行退出（所有者需先转交）。所有者注销账号后由最早加入的管理员（没有则为最早加入的成员）接任，已无成员时解散团队。
 - **权益**：`teams.owned` 每人可创建的团队数（基础 3），`teams.members` 每个团队的成员数（基础 20，含待接受的邀请，按团队所有者计）。
 - **插件开关**：禁用时收回全部团队授予的权限，重新启用时按团队数据恢复。
+- **成员组**：团队登记为成员组（`kind=team`），其他插件可整体为团队发放按席位计的权益（如「会员」插件的团队会员）；席位优先次序为所有者、管理员、再按加入时间，所有者与管理员可以为团队购买。
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |

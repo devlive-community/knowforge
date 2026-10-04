@@ -52,20 +52,32 @@ func planGrants(core plugincore.Core, key string) []plugincore.EntitlementGrant 
 	return out
 }
 
-// resolveEntitlements 权益来源：有效会员独占（返回非 nil 即不再参考成长等级，未配置的键回退基础值）。
+// resolveEntitlements 权益来源：有效会员（个人会员或所在团队的团队会员席位）独占（返回非 nil 即不再参考成长等级，未配置的键回退基础值）。
 func resolveEntitlements(core plugincore.Core, u *models.User) (map[string]int64, bool) {
 	if !core.PluginEnabled(plugins.KeyMembership) {
 		return nil, false
 	}
-	_, plan := activeMembership(core.Gorm(), u.ID, time.Now())
-	if plan == nil {
-		return nil, false
+	now := time.Now()
+	_, plan := activeMembership(core.Gorm(), u.ID, now)
+	var values map[string]int64
+	if plan != nil {
+		values = make(map[string]int64, len(plan.Entitlements))
+		for k, v := range plan.Entitlements {
+			values[k] = v
+		}
 	}
-	values := make(map[string]int64, len(plan.Entitlements))
-	for k, v := range plan.Entitlements {
-		values[k] = v
+	// 团队会员：席位内的成员享有方案权益，与个人会员逐项取较高值
+	for _, cov := range userGroupCoverage(core, u.ID, now) {
+		var gp Plan
+		if !cov.Covered || core.Gorm().First(&gp, cov.Sub.PlanID).Error != nil {
+			continue
+		}
+		if values == nil {
+			values = map[string]int64{}
+		}
+		mergeEntitlements(values, gp.Entitlements)
 	}
-	return values, true
+	return values, values != nil
 }
 
 // grant 一次开通/续期请求（管理员开通或其他插件履约）。
@@ -187,6 +199,7 @@ func sweep(core plugincore.Core, _ *jobqueue.Queue) {
 		}
 	}
 	b.sweepRenewals(now) // 续费计划先处理（已处理的周期不再发普通到期提醒）
+	b.sweepGroups(now)
 	if days := b.reminderDays(); days > 0 {
 		notify(db.Where("reminded_at IS NULL AND expires_at > ? AND expires_at <= ?", now, addDays(now, days)), "notify.membership.expiring", "notify.membership.trialExpiring", "reminded_at")
 	}

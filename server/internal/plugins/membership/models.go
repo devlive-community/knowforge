@@ -20,8 +20,10 @@ type Plan struct {
 	Status       string                `gorm:"size:20;default:'active';index" json:"status"` // active | archived（归档后不再开通/售卖，已有会员不受影响）
 	SortOrder    int                   `gorm:"default:0" json:"sort_order"`
 	TrialDays    int                   `gorm:"default:0" json:"trial_days"` // 免费试用天数（0 为不提供试用）
-	CreatedAt    time.Time             `json:"created_at"`
-	UpdatedAt    time.Time             `json:"updated_at"`
+	// GroupEnabled 可作为团队会员购买（按席位计价：每个席位按该方案的价格）
+	GroupEnabled bool      `gorm:"default:false" json:"group_enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 
 	Prices       []Price         `gorm:"foreignKey:PlanID" json:"prices"`
 	Translations json.RawMessage `gorm:"-" json:"translations,omitempty"`

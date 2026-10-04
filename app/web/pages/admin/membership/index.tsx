@@ -4,6 +4,7 @@ import AdminLayout from '@/components/AdminLayout'
 import RedeemPanel from '@/components/membership/RedeemPanel'
 import CouponPanel from '@/components/membership/CouponPanel'
 import ReferralPanel from '@/components/membership/ReferralPanel'
+import GroupsPanel from '@/components/membership/GroupsPanel'
 import FeatureGate from '@/components/FeatureGate'
 import ResourceIcon from '@/components/ResourceIcon'
 import IconPicker from '@/components/IconPicker'
@@ -12,6 +13,7 @@ import UserAvatar from '@/components/UserAvatar'
 import EntitlementEditor from '@/components/EntitlementEditor'
 import LocalizedFields, { type ResourceTranslations } from '@/components/LocalizedFields'
 import { api, formatDate } from '@/lib/api'
+import { useApp } from '@/lib/auth'
 import { Badge, Button, Card, DateTimePicker, EmptyState, Field, Input, Loading, Modal, Pagination, Select, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import type { EntitlementDef } from '@/lib/entitlements'
@@ -20,8 +22,8 @@ import { durationLabel, formatPrice } from '@/lib/commerce'
 import { displayName } from '@/lib/users'
 import { useUrlPage } from '@/lib/use-url-page'
 
-type Tab = 'plans' | 'members' | 'redeem' | 'coupons' | 'referral' | 'records' | 'settings'
-const TABS: Tab[] = ['plans', 'members', 'redeem', 'coupons', 'referral', 'records', 'settings']
+type Tab = 'plans' | 'members' | 'groups' | 'redeem' | 'coupons' | 'referral' | 'records' | 'settings'
+const TABS: Tab[] = ['plans', 'members', 'groups', 'redeem', 'coupons', 'referral', 'records', 'settings']
 
 interface PlanItem { plan: MembershipPlan; active_members: number }
 interface PriceRow { key: string; id?: number; duration_days: string; price: string; original: string }
@@ -33,6 +35,7 @@ interface PlanForm {
   status: 'active' | 'archived'
   sort_order: number
   trial_days: string
+  group_enabled: boolean
   entitlements: Record<string, number>
   prices: PriceRow[]
   translations: ResourceTranslations
@@ -66,7 +69,10 @@ export default function AdminMembership() {
 function AdminMembershipInner() {
   const { t } = useTranslation()
   const router = useRouter()
-  const tab: Tab = TABS.includes(router.query.tab as Tab) ? (router.query.tab as Tab) : 'plans' // tab 由 URL 驱动
+  const { site } = useApp()
+  const groupsOn = (site.feature_plugins || []).includes('teams') // 团队会员需要成员组（团队空间）
+  const tabs = TABS.filter((key) => key !== 'groups' || groupsOn)
+  const tab: Tab = tabs.includes(router.query.tab as Tab) ? (router.query.tab as Tab) : 'plans' // tab 由 URL 驱动
   const [plans, setPlans] = useState<PlanItem[] | null>(null)
   const [currency, setCurrency] = useState('CNY')
   const { showToast } = useFeedback()
@@ -85,10 +91,11 @@ function AdminMembershipInner() {
         <p className="mt-1.5 text-sm text-slate-500">{t('admin.membership.description')}</p>
       </div>
       <SegmentedTabs className="mt-6" value={tab} ariaLabel={t('admin.nav.membership')}
-        items={TABS.map((key) => ({ value: key, label: t(`admin.membership.tab.${key}`), href: `/admin/membership?tab=${key}` }))} />
+        items={tabs.map((key) => ({ value: key, label: t(`admin.membership.tab.${key}`), href: `/admin/membership?tab=${key}` }))} />
       <div className="mt-6">
         {tab === 'plans' && <PlansPanel plans={plans} currency={currency} onChanged={loadPlans} />}
         {tab === 'members' && <MembersPanel plans={plans || []} onChanged={loadPlans} />}
+        {tab === 'groups' && (plans ? <GroupsPanel plans={plans.map((p) => p.plan)} /> : <Loading className="py-16" />)}
         {tab === 'redeem' && (plans ? <RedeemPanel plans={plans} /> : <Loading className="py-16" />)}
         {tab === 'coupons' && (plans ? <CouponPanel plans={plans} /> : <Loading className="py-16" />)}
         {tab === 'referral' && (plans ? <ReferralPanel plans={plans} /> : <Loading className="py-16" />)}
@@ -114,13 +121,13 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
   }, [])
 
   function openNew() {
-    setForm({ icon_type: 'fa', icon_value: 'fa-crown', color: '', status: 'active', sort_order: (plans?.length || 0) + 1, trial_days: '0', entitlements: {},
+    setForm({ icon_type: 'fa', icon_value: 'fa-crown', color: '', status: 'active', sort_order: (plans?.length || 0) + 1, trial_days: '0', group_enabled: false, entitlements: {},
       prices: [newRow({ duration_days: '30' }), newRow({ duration_days: '365' })],
       translations: { [defaultLocale]: { fields: {}, revision: 0, publish: true } } })
   }
   function openEdit(p: MembershipPlan) {
     setForm({ id: p.id, icon_type: p.icon_type || 'fa', icon_value: p.icon_value || 'fa-crown', color: p.color || '', status: p.status,
-      sort_order: p.sort_order, trial_days: String(p.trial_days || 0), entitlements: { ...(p.entitlements || {}) },
+      sort_order: p.sort_order, trial_days: String(p.trial_days || 0), group_enabled: !!p.group_enabled, entitlements: { ...(p.entitlements || {}) },
       prices: p.prices.map((pr) => newRow({ id: pr.id, duration_days: String(pr.duration_days), price: inputFromCents(pr.price_cents), original: inputFromCents(pr.original_price_cents) })),
       translations: Object.fromEntries(Object.entries(p.translations || {}).map(([code, entry]) => [code, { ...entry, publish: false }])) })
   }
@@ -134,7 +141,7 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
     setSaving(true)
     try {
       await api(form.id ? `/admin/membership/plans/${form.id}` : '/admin/membership/plans', { method: form.id ? 'PUT' : 'POST', body: {
-        icon_type: form.icon_type, icon_value: form.icon_value, color: form.color, status: form.status, sort_order: form.sort_order, trial_days: Number(form.trial_days) || 0,
+        icon_type: form.icon_type, icon_value: form.icon_value, color: form.color, status: form.status, sort_order: form.sort_order, trial_days: Number(form.trial_days) || 0, group_enabled: form.group_enabled,
         entitlements: form.entitlements,
         prices: form.prices.map((r) => ({ id: r.id, duration_days: Number(r.duration_days) || 0, price_cents: centsFromInput(r.price), original_price_cents: centsFromInput(r.original) })),
         translations: Object.fromEntries(Object.entries(form.translations).filter(([, entry]) => entry.dirty)),
@@ -180,6 +187,7 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
                   </span>
                 ))}
                 {p.trial_days > 0 && <span className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs text-sky-700">{t('membership.trial.days', { n: p.trial_days })}</span>}
+                {p.group_enabled && <span className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs text-violet-700">{t('admin.membership.plan.groupBadge')}</span>}
               </div>
               <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
                 <span>{t('admin.membership.plan.stats', { members: active_members, privileges: Object.keys(p.entitlements || {}).length })}</span>
@@ -213,6 +221,13 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
               <Input type="number" min={0} max={365} value={form.trial_days} onChange={(e) => setForm({ ...form, trial_days: e.target.value })}
                 trailing={<span className="text-xs text-slate-400">{t('admin.membership.plan.daysUnit')}</span>} />
             </Field>
+            <label className="flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+              <span>
+                <span className="block text-sm font-medium text-slate-800">{t('admin.membership.plan.groupEnabled')}</span>
+                <span className="mt-0.5 block text-xs text-slate-500">{t('admin.membership.plan.groupEnabledHint')}</span>
+              </span>
+              <Switch checked={form.group_enabled} onChange={(v) => setForm({ ...form, group_enabled: v })} ariaLabel={t('admin.membership.plan.groupEnabled')} />
+            </label>
             <Field label={t('admin.membership.plan.icon')}>
               <IconPicker value={{ icon_type: form.icon_type, icon_value: form.icon_value }} onChange={(v) => setForm({ ...form, icon_type: v.icon_type || 'fa', icon_value: v.icon_value })} fallback="fa-crown" />
             </Field>

@@ -11,7 +11,7 @@ import { api } from '@/lib/api'
 import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { TEAM_ROLE_KEYS, teamTab, type TeamDetail } from '@/lib/teams'
-import { Badge, EmptyState, Loading, SegmentedTabs } from '@/components/ui'
+import { Badge, ButtonLink, EmptyState, Loading, SegmentedTabs } from '@/components/ui'
 
 // 团队主页：团队书籍、成员与设置（?tab=books|members|settings）。只有团队成员可以查看。
 export default function TeamPage() {
@@ -33,6 +33,8 @@ export default function TeamPage() {
 
 function TeamInner({ slug }: { slug: string }) {
   const { t } = useTranslation()
+  const { site } = useApp()
+  const membershipOn = (site.feature_plugins || []).includes('membership')
   const router = useRouter()
   const [data, setData] = useState<TeamDetail | null>(null)
   const [error, setError] = useState('')
@@ -79,6 +81,11 @@ function TeamInner({ slug }: { slug: string }) {
             <span>{t('teams.stats.books', { n: team.book_count })}</span>
           </div>
         </div>
+        {membershipOn && data.can_manage && team.my_role && (
+          <ButtonLink href="/user/membership/teams" variant="outline" size="sm" data-testid="team-membership-link">
+            <i className="fa-solid fa-crown text-amber-500" aria-hidden="true" /> {t('teams.page.membership')}
+          </ButtonLink>
+        )}
       </div>
       <SegmentedTabs className="mb-6" value={tab} ariaLabel={t('teams.page.tabs')} items={[
         { value: 'books', label: t('teams.tab.books'), href: base },

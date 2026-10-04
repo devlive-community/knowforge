@@ -46,8 +46,8 @@ func init() {
 		Kind:        plugins.KindFeature,
 		Builtin:     true,
 		EnabledKey:  cfgEnabled,
-		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}, &TrialUse{}, &ReferralReward{}, &RedeemFail{}, &Renewal{}},
-		Tables:      []string{"membership_renewals", "membership_redeem_fails", "membership_referral_rewards", "membership_trial_uses", "membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
+		Models:      []any{&Plan{}, &Price{}, &UserMembership{}, &Record{}, &RedeemBatch{}, &RedeemCode{}, &RedeemUse{}, &GiftRefund{}, &Coupon{}, &CouponUse{}, &TrialUse{}, &ReferralReward{}, &RedeemFail{}, &Renewal{}, &GroupMembership{}, &GroupRecord{}},
+		Tables:      []string{"membership_group_records", "membership_groups", "membership_renewals", "membership_redeem_fails", "membership_referral_rewards", "membership_trial_uses", "membership_coupon_uses", "membership_coupons", "membership_gift_refunds", "membership_redeem_uses", "membership_redeem_codes", "membership_redeem_batches", "membership_records", "user_memberships", "membership_prices", "membership_plans"},
 		AdminPerms:  []authz.Permission{PermManage},
 		UserPerms:   []authz.Permission{PermRead},
 	})
@@ -71,5 +71,9 @@ func init() {
 	i18ntext.Register("notify.membership.renewalDue", map[string]string{"zh-CN": "你的「{plan}」会员将于 {date} 到期，点击一键续费", "en": "Your {plan} membership expires on {date}. Tap to renew in one step"})
 	i18ntext.Register("notify.membership.renewalFailed", map[string]string{"zh-CN": "「{plan}」会员自动续费未成功，将于 {date} 到期，请手动续费", "en": "Automatic renewal of {plan} didn't go through. It expires on {date}; please renew manually"})
 	i18ntext.Register("notify.membership.renewalDisabled", map[string]string{"zh-CN": "续费计划已关闭：所选的「{plan}」时长已下架或你已更换方案，可在「我的会员」重新设置", "en": "Your renewal plan was turned off because the chosen {plan} option is no longer available or you changed plans. You can set it again under My membership"})
+	i18ntext.Register("notify.membership.groupActive", map[string]string{"zh-CN": "团队「{group}」的「{plan}」团队会员（{seats} 席）有效期至 {date}", "en": "The {plan} team membership for \"{group}\" ({seats} seats) is active until {date}"})
+	i18ntext.Register("notify.membership.groupCovered", map[string]string{"zh-CN": "你已通过团队「{group}」享有「{plan}」会员，有效期至 {date}", "en": "You now have {plan} through the team \"{group}\" until {date}"})
+	i18ntext.Register("notify.membership.groupExpiring", map[string]string{"zh-CN": "团队「{group}」的「{plan}」团队会员将于 {date} 到期", "en": "The {plan} team membership for \"{group}\" expires on {date}"})
+	i18ntext.Register("notify.membership.groupExpired", map[string]string{"zh-CN": "团队「{group}」的「{plan}」团队会员已到期", "en": "The {plan} team membership for \"{group}\" has expired"})
 	i18ntext.Register("notify.membership.revoked", map[string]string{"zh-CN": "你的「{plan}」会员已被取消", "en": "Your {plan} membership has been cancelled"})
 }
