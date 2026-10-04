@@ -108,7 +108,8 @@ func (a *App) Router() *gin.Engine {
 				authed.GET("/invited", a.MyInvitedUsers)           // 我邀请的用户列表
 				authed.GET("/notification-prefs", a.GetNotificationPrefs)
 				authed.PUT("/notification-prefs", a.UpdateNotificationPrefs)
-				authed.POST("/email/resend", a.ResendActivation) // 重新发送激活邮件
+				authed.POST("/notification-prefs/digest-preview", a.RequirePermission(authz.NotificationUpdate), a.SendDigestPreview) // 立即发一封摘要给自己
+				authed.POST("/email/resend", a.ResendActivation)                                                                      // 重新发送激活邮件
 				// ── 二次认证（TOTP） ──
 				authed.GET("/2fa", a.GetTwoFactor)
 				authed.POST("/2fa/setup", a.SetupTwoFactor)
@@ -252,6 +253,8 @@ func (a *App) Router() *gin.Engine {
 		}
 		api.POST("/stream-tickets", a.RequireAuth(), a.IssueStreamTicket)
 		api.GET("/notifications/stream", a.SSENotifications)
+		// 邮件摘要一键退订：凭邮件中的签名链接，不需要登录
+		api.POST("/email/unsubscribe", a.UnsubscribeDigest)
 		// 写作台协作事件流：凭短时事件流凭证（?ticket=）连接，须能编辑该书
 		api.GET("/books/:id/collab/stream", a.WriterCollabStream)
 		api.POST("/books/:id/collab/presence", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.UpdateWriterPresence)

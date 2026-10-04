@@ -214,7 +214,9 @@ Authorization: Bearer kf_pat_…
 | POST | `/auth/email/resend` | 登录用户重发激活邮件 | 登录 |
 | GET/POST/DELETE | `/auth/invite-code` | 邀请码 opt-in：GET 返回 `{invite_code, enabled}`；POST 开启（首次可选自定义 `{code}`，4-20 位字母数字、全站唯一、只能设置一次，不传则自动生成）；DELETE 停用（保留邀请码，再开启仍是同一个）。仅启用中的邀请码可用于注册 | 登录 |
 | GET | `/auth/invited` | 我邀请的用户列表 `{items:[{username,avatar,created_at}],total}`（关闭邀请码后仍可查看） | 登录 |
-| GET/PUT | `/auth/notification-prefs` | 邮件通知偏好：GET 返回 `{email_enabled(站点总开关), prefs:{comment,reaction,collaboration,moderation,system,achievement}}`；PUT 保存 `prefs`（缺省全开） | 登录 |
+| GET/PUT | `/auth/notification-prefs` | 邮件通知偏好：GET 返回 `{email_enabled(站点总开关), prefs:{comment,reaction,collaboration,moderation,system,achievement,book_update,growth,digest_mode}}`；PUT 保存 `prefs`（缺省全开）；`digest_mode` 为 `instant`（每条即时发送，默认）/ `daily` / `weekly`（服务器时间每天 8 点汇总，每周摘要为周一）/ `off`（不发送邮件） | 登录 |
+| POST | `/auth/notification-prefs/digest-preview` | 按最近 7 天的内容立即给自己发一封摘要；返回 `{sent, count}`，没有内容时不发送 | 登录 |
+| POST | `/email/unsubscribe` | 摘要邮件中的一键退订：`{u, token}`（签名链接），把邮件发送方式改为 `off` | 匿名 |
 | GET | `/auth/2fa` | 二次认证状态 `{enabled, operations:[login\|credentials\|delete\|unbind_export]}` | 登录 |
 | POST | `/auth/2fa/setup` | 预配置 TOTP：返回 `{secret, otpauth_url, qr(data-uri)}`（尚未开启） | 登录 |
 | POST | `/auth/2fa/enable` | 校验 `{code}` 后开启，默认勾选全部敏感操作，返回一次性 `backup_codes` | 登录 |

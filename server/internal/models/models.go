@@ -213,6 +213,9 @@ type UserNotificationPref struct {
 	Achievement   bool `gorm:"default:true" json:"achievement"`
 	BookUpdate    bool `gorm:"default:true" json:"book_update"` // 关注书籍更新通知
 	Growth        bool `gorm:"default:true" json:"growth"`      // 成长升级通知
+	// DigestMode 邮件发送方式：instant 每条即时发送（默认）| daily 每日摘要 | weekly 每周摘要 | off 不发送邮件
+	DigestMode   string     `gorm:"size:16;default:instant" json:"digest_mode"`
+	LastDigestAt *time.Time `json:"-"` // 上次发送摘要（或检查后无内容）的时间
 }
 
 // LoginLockout 登录失败锁定计数（每账户一条，多实例共享）。

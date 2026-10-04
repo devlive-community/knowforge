@@ -272,6 +272,7 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 	var cancel context.CancelFunc
 	nextMaintenanceCheck := time.Time{}
 	nextBackupCheck := time.Time{} // 自动备份按计划检查（每 10 分钟）
+	nextDigestCheck := time.Time{} // 邮件摘要按时发送（每 10 分钟检查）
 	for {
 		queue := a.jobQueue()
 		if queue != nil && queue != active {
@@ -297,6 +298,10 @@ func (a *App) startJobSupervisor(ctx context.Context) {
 		if queue != nil && !currentTime().Before(nextBackupCheck) {
 			a.enqueueBackupIfDue(ctx)
 			nextBackupCheck = currentTime().Add(backupCheckInterval)
+		}
+		if queue != nil && !currentTime().Before(nextDigestCheck) {
+			a.sendDigestsIfDue(ctx)
+			nextDigestCheck = currentTime().Add(digestCheckInterval)
 		}
 		select {
 		case <-ctx.Done():

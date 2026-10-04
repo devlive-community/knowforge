@@ -176,3 +176,58 @@ func ActionEmailHTML(e ActionEmail) string {
 <p>%s</p>
 </div>`, html.EscapeString(e.Greeting), html.EscapeString(e.Intro), safeLink, safeLink, html.EscapeString(e.Note), html.EscapeString(e.Signature))
 }
+
+// DigestEmail 邮件摘要（每日 / 每周）的内容，文案已按收件人语言渲染。
+type DigestEmail struct {
+	Greeting    string
+	Intro       string
+	Sections    []DigestSection
+	ViewAllText string
+	ViewAllLink string
+	Footer      string
+	Unsubscribe string // 退订链接文字
+	UnsubLink   string
+}
+
+// DigestSection 摘要中的一组内容（如「评论」「关注的书籍更新」「协作动态」）。
+type DigestSection struct {
+	Title string
+	Items []DigestItem
+	More  string // 未列出部分的说明，如「还有 3 条」
+}
+
+// DigestItem 一条内容；Link 为空时只显示文字。
+type DigestItem struct {
+	Text string
+	Link string
+}
+
+// DigestHTML 生成邮件摘要正文。
+func DigestHTML(e DigestEmail) string {
+	var b strings.Builder
+	b.WriteString(`<div style="max-width:560px;margin:0 auto;font-family:sans-serif;color:#1e293b">`)
+	fmt.Fprintf(&b, `<p>%s</p><p>%s</p>`, html.EscapeString(e.Greeting), html.EscapeString(e.Intro))
+	for _, s := range e.Sections {
+		fmt.Fprintf(&b, `<h3 style="margin:24px 0 8px;font-size:15px">%s</h3><ul style="margin:0;padding-left:20px">`, html.EscapeString(s.Title))
+		for _, it := range s.Items {
+			if strings.TrimSpace(it.Link) != "" {
+				fmt.Fprintf(&b, `<li style="margin:4px 0"><a href="%s" style="color:#4169e1;text-decoration:none">%s</a></li>`, html.EscapeString(it.Link), html.EscapeString(it.Text))
+			} else {
+				fmt.Fprintf(&b, `<li style="margin:4px 0">%s</li>`, html.EscapeString(it.Text))
+			}
+		}
+		b.WriteString(`</ul>`)
+		if s.More != "" {
+			fmt.Fprintf(&b, `<p style="margin:4px 0 0;color:#64748b;font-size:13px">%s</p>`, html.EscapeString(s.More))
+		}
+	}
+	if e.ViewAllLink != "" {
+		fmt.Fprintf(&b, `<p style="margin-top:24px"><a href="%s" style="color:#4169e1">%s</a></p>`, html.EscapeString(e.ViewAllLink), html.EscapeString(e.ViewAllText))
+	}
+	fmt.Fprintf(&b, `<p style="color:#888;font-size:12px;margin-top:24px">%s`, html.EscapeString(e.Footer))
+	if e.UnsubLink != "" {
+		fmt.Fprintf(&b, ` · <a href="%s" style="color:#888">%s</a>`, html.EscapeString(e.UnsubLink), html.EscapeString(e.Unsubscribe))
+	}
+	b.WriteString(`</p></div>`)
+	return b.String()
+}

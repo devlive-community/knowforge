@@ -58,6 +58,9 @@ func (a *App) maybeSendNotificationEmail(userID uint, ntype, title string, paylo
 	if !a.emailPrefFor(&u, ntype) {
 		return
 	}
+	if a.notificationPref(u.ID).DigestMode != "instant" {
+		return // 选择了每日 / 每周摘要或不发送邮件：不再逐条发送
+	}
 	link := ""
 	if v, ok := payload["link"].(string); ok && v != "" {
 		base := strings.TrimRight(a.getSetting("site_url"), "/")
@@ -88,39 +91,41 @@ func (a *App) maybeSendNotificationEmail(userID uint, ntype, title string, paylo
 // ---- 用户：通知偏好 ----
 
 type notificationPrefs struct {
-	Comment       bool `json:"comment"`
-	Reaction      bool `json:"reaction"`
-	Collaboration bool `json:"collaboration"`
-	Moderation    bool `json:"moderation"`
-	System        bool `json:"system"`
-	Achievement   bool `json:"achievement"`
-	BookUpdate    bool `json:"book_update"`
-	Growth        bool `json:"growth"`
+	Comment       bool   `json:"comment"`
+	Reaction      bool   `json:"reaction"`
+	Collaboration bool   `json:"collaboration"`
+	Moderation    bool   `json:"moderation"`
+	System        bool   `json:"system"`
+	Achievement   bool   `json:"achievement"`
+	BookUpdate    bool   `json:"book_update"`
+	Growth        bool   `json:"growth"`
+	DigestMode    string `json:"digest_mode"`
 }
 
 type notificationPrefsUpdate struct {
-	Comment       bool  `json:"comment"`
-	Reaction      bool  `json:"reaction"`
-	Collaboration bool  `json:"collaboration"`
-	Moderation    bool  `json:"moderation"`
-	System        bool  `json:"system"`
-	Achievement   *bool `json:"achievement"`
-	BookUpdate    *bool `json:"book_update"`
-	Growth        *bool `json:"growth"`
+	Comment       bool    `json:"comment"`
+	Reaction      bool    `json:"reaction"`
+	Collaboration bool    `json:"collaboration"`
+	Moderation    bool    `json:"moderation"`
+	System        bool    `json:"system"`
+	Achievement   *bool   `json:"achievement"`
+	BookUpdate    *bool   `json:"book_update"`
+	Growth        *bool   `json:"growth"`
+	DigestMode    *string `json:"digest_mode"` // instant | daily | weekly | off
 }
 
 func prefsPayload(p models.UserNotificationPref) notificationPrefs {
 	return notificationPrefs{
 		Comment: p.Comment, Reaction: p.Reaction, Collaboration: p.Collaboration,
 		Moderation: p.Moderation, System: p.System, Achievement: p.Achievement, BookUpdate: p.BookUpdate, Growth: p.Growth,
+		DigestMode: p.DigestMode,
 	}
 }
 
 // GetNotificationPrefs GET /auth/notification-prefs（含总开关，供前端提示）
 func (a *App) GetNotificationPrefs(c *gin.Context) {
 	u := currentUser(c)
-	p := models.UserNotificationPref{UserID: u.ID, Comment: true, Reaction: true, Collaboration: true, Moderation: true, System: true, Achievement: true, BookUpdate: true, Growth: true}
-	a.DB.Where("user_id = ?", u.ID).First(&p)
+	p := a.notificationPref(u.ID)
 	ok(c, gin.H{
 		"email_enabled": a.mailNotificationsEnabled(),
 		"prefs":         prefsPayload(p),
@@ -135,8 +140,15 @@ func (a *App) UpdateNotificationPrefs(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "参数错误")
 		return
 	}
-	existing := models.UserNotificationPref{UserID: u.ID, Achievement: true, BookUpdate: true, Growth: true}
-	a.DB.Where("user_id = ?", u.ID).First(&existing)
+	existing := a.notificationPref(u.ID)
+	digestMode := existing.DigestMode
+	if req.DigestMode != nil {
+		if !digestModes[*req.DigestMode] {
+			fail(c, http.StatusBadRequest, "邮件发送方式无效")
+			return
+		}
+		digestMode = *req.DigestMode
+	}
 	achievement := existing.Achievement
 	if req.Achievement != nil {
 		achievement = *req.Achievement
@@ -153,7 +165,20 @@ func (a *App) UpdateNotificationPrefs(c *gin.Context) {
 		UserID: u.ID, Comment: req.Comment, Reaction: req.Reaction,
 		Collaboration: req.Collaboration, Moderation: req.Moderation, System: req.System,
 		Achievement: achievement, BookUpdate: bookUpdate, Growth: growth,
+		DigestMode: digestMode, LastDigestAt: existing.LastDigestAt,
 	}
-	a.DB.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "user_id"}}, UpdateAll: true}).Create(&p)
+	if err := a.saveNotificationPref(p); err != nil {
+		fail(c, http.StatusInternalServerError, "保存失败")
+		return
+	}
 	ok(c, gin.H{"prefs": prefsPayload(p)})
+}
+
+// saveNotificationPref 写入整行偏好。不能直接 Create / upsert：布尔列带 default:true，
+// 首次插入时 false 会被当作零值跳过，存成 true（关掉的开关又被打开）。先确保行存在，再按全部列更新。
+func (a *App) saveNotificationPref(p models.UserNotificationPref) error {
+	if err := a.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.UserNotificationPref{UserID: p.UserID}).Error; err != nil {
+		return err
+	}
+	return a.DB.Model(&models.UserNotificationPref{UserID: p.UserID}).Select("*").Updates(&p).Error
 }
