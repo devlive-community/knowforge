@@ -93,13 +93,17 @@ func (a *App) AddCollaborator(c *gin.Context) {
 
 	var collab models.BookCollaborator
 	lookupErr := a.DB.Where("book_id = ? AND user_id = ?", book.ID, target.ID).First(&collab).Error
+	if lookupErr == nil && collab.TeamID != 0 {
+		fail(c, http.StatusConflict, "该用户通过团队获得本书权限，请在团队中调整")
+		return
+	}
 	// 新增协作者或重新邀请已拒绝者会占用名额：按书籍所有者的「协作者人数」权益校验（调整现有协作者角色不受限）
 	if lookupErr != nil || collab.Status == "rejected" {
 		var owner models.User
 		if a.DB.First(&owner, book.UserID).Error == nil {
 			limit := a.entitlement(&owner, entCollaboratorsMax)
 			var count int64
-			a.DB.Model(&models.BookCollaborator{}).Where("book_id = ? AND status IN ?", book.ID, []string{"pending", "accepted"}).Count(&count)
+			a.DB.Model(&models.BookCollaborator{}).Where("book_id = ? AND team_id = 0 AND status IN ?", book.ID, []string{"pending", "accepted"}).Count(&count)
 			if !plugincore.WithinLimit(limit, count) {
 				fail(c, http.StatusForbidden, fmt.Sprintf("该书的协作者已达上限（%d 人），升级等级或开通会员可邀请更多协作者", limit))
 				return
@@ -232,6 +236,9 @@ func (a *App) respondCollaborationInvitation(c *gin.Context, nextStatus string) 
 			map[string]string{"user": u.Username, "book": book.Title},
 			map[string]any{"link": "/book/settings/" + book.Slug, "book_slug": book.Slug})
 	}
+	if nextStatus == "rejected" {
+		plugincore.FireBookCollaboratorsChanged(a, book.ID)
+	}
 	ok(c, gin.H{"id": collab.ID, "status": nextStatus, "book_slug": book.Slug})
 }
 
@@ -261,7 +268,12 @@ func (a *App) RemoveCollaborator(c *gin.Context) {
 		fail(c, http.StatusForbidden, "仅书籍所有者可移除协作者")
 		return
 	}
-	result := a.DB.Where("book_id = ? AND user_id = ?", book.ID, targetID).Delete(&models.BookCollaborator{})
+	var existing models.BookCollaborator
+	if a.DB.Where("book_id = ? AND user_id = ?", book.ID, targetID).First(&existing).Error == nil && existing.TeamID != 0 {
+		fail(c, http.StatusConflict, "该成员通过团队获得本书权限，请在团队中移除或把书移出团队")
+		return
+	}
+	result := a.DB.Where("book_id = ? AND user_id = ? AND team_id = 0", book.ID, targetID).Delete(&models.BookCollaborator{})
 	if result.Error != nil {
 		fail(c, http.StatusInternalServerError, "移除失败")
 		return
@@ -270,5 +282,6 @@ func (a *App) RemoveCollaborator(c *gin.Context) {
 		fail(c, http.StatusNotFound, "该用户不是协作者")
 		return
 	}
+	plugincore.FireBookCollaboratorsChanged(a, book.ID) // 仍属书籍所在团队的成员由团队补回权限
 	ok(c, gin.H{"message": "已移除"})
 }

@@ -142,6 +142,7 @@ type BookCollaborator struct {
 	Role        string     `gorm:"size:20;default:editor" json:"role"`           // editor | viewer
 	Status      string     `gorm:"size:20;default:accepted;index" json:"status"` // pending | accepted | rejected
 	InvitedBy   uint       `gorm:"index;default:0" json:"invited_by"`
+	TeamID      uint       `gorm:"index;default:0" json:"team_id"` // 非 0：权限来自书籍所属团队（团队插件维护），不能在协作者中直接修改或移除
 	RespondedAt *time.Time `json:"responded_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`

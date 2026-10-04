@@ -419,9 +419,9 @@ Authorization: Bearer kf_pat_…
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/books/:id/collaborators` | 协作者列表（含 user 摘要与 pending/accepted/rejected 状态）；所有者/管理员可查全部，已接受协作者只看已加入成员 | `collaborator:read` |
-| POST | `/books/:id/collaborators` | 发送邀请 `{username, role: editor\|viewer}`；新邀请为 pending；已接受成员仅覆盖角色 | `collaborator:create` |
-| DELETE | `/books/:id/collaborators/:userId` | 移除协作者；协作者可传自己的 userId 退出协作 | `collaborator:delete` |
+| GET | `/books/:id/collaborators` | 协作者列表（`team_id` 非 0 为书籍所属团队授予的权限，由团队维护；含 user 摘要与 pending/accepted/rejected 状态）；所有者/管理员可查全部，已接受协作者只看已加入成员 | `collaborator:read` |
+| POST | `/books/:id/collaborators` | 发送邀请（对方的权限来自团队时 409，需在团队中调整；协作者人数权益不计团队成员） `{username, role: editor\|viewer}`；新邀请为 pending；已接受成员仅覆盖角色 | `collaborator:create` |
+| DELETE | `/books/:id/collaborators/:userId` | 移除协作者（团队授予的权限 409；移除直接协作者后，若对方仍是书籍所属团队的成员则恢复团队权限）；协作者可传自己的 userId 退出协作 | `collaborator:delete` |
 | GET | `/collaboration/invitations` | 当前用户待确认的协作邀请 | `collaborator:read` |
 | POST | `/collaboration/invitations/:id/accept` | 接受自己的待确认邀请，随后协作权限生效 | `collaborator:update` |
 | POST | `/collaboration/invitations/:id/reject` | 拒绝自己的待确认邀请，不授予权限 | `collaborator:update` |
@@ -796,6 +796,34 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | DELETE | `/chapter-guides/docs/:id` | 删除导读（进行中 409） | 同上 |
 | GET | `/chapter-guides/books/:id/stream?ticket=` | SSE：`guide`（章节导读，删除时 summary 为空且无状态）、`overview`（删除时为 null）；连接建立时推 `ready`，25 秒心跳 | 同上 |
 | GET/PUT | `/admin/chapter-guides/settings` | `{cost_bearer: author\|site, ai_available}` | 管理员 + `chapterguide:manage` |
+
+## 团队空间（「团队空间」插件，默认关闭）
+
+用户可以创建团队、邀请成员并分配角色（`owner` 所有者 / `admin` 管理员 / `member` 成员），把自己创建的书加入团队共享。
+
+- **权限**：书籍加入团队后（一本书最多属于一个团队），团队的所有者与管理员获得 `editor`，普通成员获得该书的 `member_role`（`editor` / `suggester` / `viewer`）。权限以协作者记录（`team_id` = 团队 ID）维护，成员、角色或书籍变动时同步，搜索、书单、写作台、提及与通知等沿用协作者规则。书籍作者本人不建记录；已有直接邀请（待确认或已接受）的成员保持原样，直接邀请被拒绝或移除后改由团队授权。
+- **角色**：所有者与管理员可邀请成员、修改团队信息；只有所有者能邀请管理员、调整角色、转交与解散团队；管理员只能移除普通成员；成员可自行退出（所有者需先转交）。所有者注销账号后由最早加入的管理员（没有则为最早加入的成员）接任，已无成员时解散团队。
+- **权益**：`teams.owned` 每人可创建的团队数（基础 3），`teams.members` 每个团队的成员数（基础 20，含待接受的邀请，按团队所有者计）。
+- **插件开关**：禁用时收回全部团队授予的权限，重新启用时按团队数据恢复。
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/teams` | 我的团队 `{teams[]{id, name, slug, description, owner_id, my_role, member_count, book_count}, invitations[]{id, team, role, inviter, created_at}, owned, owned_limit(-1 不限)}` | 登录 + `teams:use` |
+| POST | `/teams` | `{name(≤60), description(≤500)}` 创建团队（slug 由名称生成），超出团队数 403 | 同上 |
+| GET | `/teams/:id` | `:id` 为 ID 或 slug；团队成员（及站点管理员）可见，否则 404：`{team, members[]{id, user, role, status}, books[]（书籍 + member_role, added_by, added_at）, can_manage, seats{used, limit}}`，待接受的邀请仅管理者可见 | 同上 |
+| PUT | `/teams/:id` | `{name?, description?}` | 所有者 / 管理员 |
+| DELETE | `/teams/:id` | 解散团队（收回团队权限，书籍仍归作者） | 所有者 |
+| POST | `/teams/:id/transfer` | `{user_id}` 转交给已加入的成员（对方的团队数受权益限制），原所有者改为管理员 | 所有者 |
+| POST | `/teams/:id/members` | `{username, role: admin\|member}` 邀请（通知对方）；已是成员或已邀请 409，超出成员数 403 | 所有者 / 管理员（管理员只能邀请成员） |
+| PUT | `/teams/:id/members/:userId` | `{role: admin\|member}` | 所有者 |
+| DELETE | `/teams/:id/members/:userId` | 移除成员或撤回邀请；传自己的 ID 为退出 | 见上文角色规则 |
+| POST | `/team-invitations/:id/accept` · `/decline` | 接受或拒绝自己的邀请（通知邀请人） | 登录 + `teams:use` |
+| POST | `/teams/:id/books` | `{book_id, member_role}` 把自己创建的书加入团队；已属于其他团队 409 | 团队成员 |
+| PUT | `/teams/:id/books/:bookId` | `{member_role}` | 所有者 / 管理员 / 书籍作者 |
+| DELETE | `/teams/:id/books/:bookId` | 移出团队，收回团队权限 | 同上 |
+| GET | `/team-books/:bookId` | 书籍所属团队 `{team: {id, name, slug} \| null, member_role, can_change}`（书籍作者与团队成员可见） | 登录 + `teams:use` |
+| GET | `/admin/teams?q=&page=` | 全部团队（分页）`items[]{team, owner}` | 管理员 + `teams:manage` |
+| DELETE | `/admin/teams/:id` | 解散团队（记审计日志 `teams.deleted`） | 同上 |
 
 ## AI 朗读（「AI 朗读」插件，默认关闭）
 

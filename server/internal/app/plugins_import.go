@@ -23,6 +23,7 @@ import (
 	_ "knowforge/server/internal/plugins/qa"
 	_ "knowforge/server/internal/plugins/readaloud"
 	_ "knowforge/server/internal/plugins/tags"
+	_ "knowforge/server/internal/plugins/teams"
 	_ "knowforge/server/internal/plugins/templates"
 	_ "knowforge/server/internal/plugins/watermark"
 	_ "knowforge/server/internal/plugins/webhooks"

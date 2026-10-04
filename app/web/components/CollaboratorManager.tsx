@@ -11,6 +11,7 @@ interface Collaborator {
   user_id: number
   role: 'editor' | 'viewer' | 'suggester'
   status: 'pending' | 'accepted' | 'rejected'
+  team_id?: number // 非 0：权限来自书籍所属团队，在团队中调整
   created_at: string
   user?: Pick<User, 'id' | 'username' | 'avatar'>
 }
@@ -115,13 +116,16 @@ export default function CollaboratorManager({ book }: { book: Book }) {
                         {STATUS_LABELS[c.status] || c.status}
                       </Badge>
                     </span>
+                    {!!c.team_id && <span className="ml-1.5"><Badge tone="violet">{t('collab.fromTeam')}</Badge></span>}
                   </span>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" loading={removingId === c.user_id} disabled={removingId !== null}
-                onClick={() => remove(c.user_id, c.user?.username || '')}>
-                {user?.id === c.user_id ? t('collab.leave') : t('collab.remove')}
-              </Button>
+              {!c.team_id && (
+                <Button variant="ghost" size="sm" loading={removingId === c.user_id} disabled={removingId !== null}
+                  onClick={() => remove(c.user_id, c.user?.username || '')}>
+                  {user?.id === c.user_id ? t('collab.leave') : t('collab.remove')}
+                </Button>
+              )}
             </li>
           ))}
         </ul>

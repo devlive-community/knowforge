@@ -287,6 +287,32 @@ func OnPluginEnabled(key string, h func(core Core) error) {
 // PluginEnabledHooks 返回某插件的启用回调。
 func PluginEnabledHooks(key string) []func(core Core) error { return pluginEnabledHooks[key] }
 
+var pluginDisabledHooks = map[string][]func(core Core) error{}
+
+// OnPluginDisabled 订阅某插件被禁用（如收回插件在核心表中授予的权限）。
+func OnPluginDisabled(key string, h func(core Core) error) {
+	pluginDisabledHooks[key] = append(pluginDisabledHooks[key], h)
+}
+
+// PluginDisabledHooks 返回某插件的禁用回调。
+func PluginDisabledHooks(key string) []func(core Core) error { return pluginDisabledHooks[key] }
+
+// —— 协作者变化：书籍的直接协作者被移除或拒绝邀请后通知订阅者（如团队插件为仍属团队的成员补回团队权限）。——
+
+var collaboratorsChangedHooks []func(core Core, bookID uint)
+
+// OnBookCollaboratorsChanged 订阅书籍直接协作者的变化。
+func OnBookCollaboratorsChanged(h func(core Core, bookID uint)) {
+	collaboratorsChangedHooks = append(collaboratorsChangedHooks, h)
+}
+
+// FireBookCollaboratorsChanged 由核心在直接协作者被移除或拒绝邀请后调用。
+func FireBookCollaboratorsChanged(core Core, bookID uint) {
+	for _, h := range collaboratorsChangedHooks {
+		h(core, bookID)
+	}
+}
+
 // —— 用户数据：插件声明按 user_id 归属的表，核心删除用户（注销/管理员删除）时一并清理（表不存在则跳过）。——
 
 var userDataModels []any

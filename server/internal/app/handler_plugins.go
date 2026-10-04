@@ -509,6 +509,11 @@ func (a *App) AdminUninstallPlugin(c *gin.Context) {
 			fail(c, http.StatusInternalServerError, "禁用失败: "+err.Error())
 			return
 		}
+		for _, hook := range plugincore.PluginDisabledHooks(info.Key) { // 插件子包登记的禁用钩子（如收回团队授予的书籍权限）
+			if err := hook(a); err != nil {
+				log.Printf("plugin %s disable hook failed: %v", key, err)
+			}
+		}
 		a.syncPluginPermissions() // 移除该插件权限
 		broadcastReload(reloadPlugins)
 		purged := false
