@@ -269,6 +269,9 @@ func (a *App) Router() *gin.Engine {
 		api.POST("/suggestions/:id/decide", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.DecideWriterSuggestion)
 		api.DELETE("/suggestions/:id", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.DeleteWriterSuggestion)
 		api.GET("/books/:id/writer-members", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.WriterMembers)
+		// 章节分工（负责人、阶段、截止日期）
+		api.GET("/books/:id/chapter-tasks", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.ListWriterTasks)
+		api.PUT("/documents/:id/task", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.UpdateWriterTask)
 		// 备份下载：凭管理员换取的短时下载凭证（URL 中的 ticket）访问，不需要登录请求头
 		api.GET("/backups/:id/download", a.DownloadBackup)
 

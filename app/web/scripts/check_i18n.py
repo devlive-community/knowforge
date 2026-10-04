@@ -98,6 +98,8 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     # 协作写作：冲突块的选择 t(`writer.collab.choice.${choice}`)
     'writer.collab.choice.': ['mine', 'theirs', 'both'],
     'writer.suggest.status.': ['pending', 'accepted', 'partial', 'rejected'],
+    'writer.task.stage.': ['todo', 'writing', 'review', 'done'],
+    'writer.task.filter.': ['all', 'mine', 'review', 'unfinished'],
     # 模板：t(`templates.kind.${kind}`)、t(`templates.manage.empty.${scope}.${kind}`)
     'templates.kind.': ['chapter', 'book'],
     'templates.manage.empty.': ['mine.chapter', 'mine.book', 'official.chapter', 'official.book'],

@@ -36,7 +36,7 @@ func (a *App) deleteUserCompletely(uid uint) error {
 			for _, m := range []any{
 				&models.BookCollaborator{}, &models.Reaction{}, &models.ReadingProgress{}, &models.ReadChapter{},
 				&models.ReadingAnnotation{}, &models.BookAnalyticsDaily{}, &models.BookExportSetting{},
-				&models.WriterComment{}, &models.WriterSuggestion{}, &models.DocumentRevision{}, &models.Document{},
+				&models.WriterComment{}, &models.WriterSuggestion{}, &models.WriterChapterTask{}, &models.DocumentRevision{}, &models.Document{},
 			} {
 				if err := tx.Unscoped().Where("book_id IN ?", bookIDs).Delete(m).Error; err != nil {
 					return err

@@ -27,6 +27,7 @@ import { CollabAvatar, CollabAvatars, ConflictDialog, SameChapterBanner, useWrit
 import { merge3, mergeTitle, resolveMerge, type ConflictChoice } from '@/lib/merge'
 import CommentsDrawer, { type CommentsTab } from '@/components/writer/CommentsDrawer'
 import SuggestionReview, { type AcceptedSuggestion, type WriterSuggestion } from '@/components/writer/SuggestionReview'
+import { TaskBadge, TaskPanel, type WriterMember, type WriterTask } from '@/components/writer/tasks'
 import { buildAnchor, type TextAnchor } from '@/lib/anchor'
 import { browserTimeZone, templatesEnabled, type TemplateSummary } from '@/lib/templates'
 import { displayName } from '@/lib/users'
@@ -160,6 +161,13 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
   const [suggestionsReload, setSuggestionsReload] = useState(0)
   const [suggestionCounts, setSuggestionCounts] = useState<Record<string, number>>({})
   const [reviewing, setReviewing] = useState<WriterSuggestion | null>(null)
+  // 章节分工与目录筛选（?filter=mine|review|unfinished）
+  const [tasks, setTasks] = useState<Record<number, WriterTask>>({})
+  const [members, setMembers] = useState<WriterMember[]>([])
+  const taskFilter = (['mine', 'review', 'unfinished'] as const).find((v) => v === router.query.filter) ?? 'all'
+  // 编辑者也可以切换到建议模式（按书记住），修改以建议提交
+  const [suggestToggle, setSuggestToggle] = useState(false)
+  const suggestMode = suggestOnly || suggestToggle
   // 模板（插件）：章节模板插入到光标处，也可把当前章节存为模板
   const templatesOn = templatesEnabled(site) && !suggestOnly
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -555,6 +563,7 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
       void loadSuggestionCounts()
       if (docId === current?.id) setSuggestionsReload((n) => n + 1)
     },
+    onTasks: () => { void loadTasks() },
   })
   const sameChapterOthers = collab.others.filter((p) => current && p.doc_id === current.id)
   const presenceByDoc = useMemo(() => {
@@ -659,7 +668,7 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
       return false
     }
   }, [book, title, content, status, parentId, sortOrder, allowComments, slug, externalUrl, externalNewTab, current, loadTree]) // eslint-disable-line react-hooks/exhaustive-deps
-  saveRef.current = suggestOnly ? async () => { openSuggestDialog(); return false } : save
+  saveRef.current = suggestMode ? async () => { openSuggestDialog(); return false } : save
 
   // —— 审阅修改建议：采纳的部分以建议依据的原文为基准与当前版本三方合并（冲突时由作者选择），保存后记录结果 ——
   async function applySuggestion(s: WriterSuggestion, accepted: AcceptedSuggestion): Promise<boolean> {
@@ -1011,6 +1020,29 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
     } catch { /* 忽略 */ }
   }, [book])
   useEffect(() => { void loadSuggestionCounts() }, [loadSuggestionCounts])
+  const loadTasks = useCallback(async () => {
+    if (!book) return
+    try {
+      const d = await api<{ items: WriterTask[] }>(`/books/${book.id}/chapter-tasks`)
+      setTasks(Object.fromEntries((d.items || []).map((x) => [x.document_id, x])))
+    } catch { /* 忽略 */ }
+  }, [book])
+  useEffect(() => { void loadTasks() }, [loadTasks])
+  useEffect(() => {
+    if (!book) return
+    api<{ items: WriterMember[] }>(`/books/${book.id}/writer-members`).then((d) => setMembers(d.items || [])).catch(() => {})
+    try { setSuggestToggle(!suggestOnly && localStorage.getItem(`writer:suggest-mode:${book.id}`) === '1') } catch { /* 忽略 */ }
+  }, [book?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  function toggleSuggestMode(on: boolean) {
+    setSuggestToggle(on)
+    if (book) { try { localStorage.setItem(`writer:suggest-mode:${book.id}`, on ? '1' : '0') } catch { /* 忽略 */ } }
+  }
+  function setTaskFilter(value: string) {
+    const query = { ...router.query }
+    if (value === 'all') delete query.filter
+    else query.filter = value
+    void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
+  }
   const [aiSelectionLength, setAISelectionLength] = useState(0)
   const aiEditor: WriterEditorBridge = {
     read: () => {
@@ -1678,7 +1710,13 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
 
   const titleText = current ? `${chapterPrefix}${current.title} · ${book.title}` : `${t('writer.newChapterTitle')} · ${book.title}`
 
-  const filteredTree = search.trim() ? filterTree(tree, search.trim()) : tree
+  const searchedTree = search.trim() ? filterTree(tree, search.trim()) : tree
+  const filteredTree = taskFilter === 'all' ? searchedTree : filterTreeBy(searchedTree, (d) => {
+    const task = tasks[d.id]
+    if (taskFilter === 'mine') return !!task?.assignee && task.assignee.id === user?.id
+    if (taskFilter === 'review') return task?.stage === 'review'
+    return task?.stage !== 'done'
+  })
 
   return (
     <div className={`flex h-screen flex-col bg-warm ${aiTab || commentsTab ? 'lg:pr-96 2xl:pr-[28rem]' : ''}`}>
@@ -1761,7 +1799,13 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
           <Button variant="ghost" onClick={() => { setPreview((p) => !p); setSplitPreview(false) }}>
             <EyeIcon className="h-4 w-4" /> {preview ? t('writer.edit') : t('writer.preview')}
           </Button>
-          {suggestOnly ? (
+          {!suggestOnly && (
+            <label className="hidden items-center gap-1.5 text-xs text-slate-500 lg:flex">
+              <Switch checked={suggestToggle} onChange={toggleSuggestMode} ariaLabel={t('writer.suggest.mode')} />
+              {t('writer.suggest.mode')}
+            </label>
+          )}
+          {suggestMode ? (
             <Button onClick={openSuggestDialog} disabled={!current || submittingSuggestion} data-testid="suggest-submit">
               <i className="fa-solid fa-code-pull-request" aria-hidden="true" /> {t('writer.suggest.button')}
             </Button>
@@ -1811,6 +1855,10 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
                   <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input className="pl-9" placeholder={t('writer.searchChapter')} value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
+                <div className="mt-2" data-testid="task-filter">
+                  <Select size="sm" value={taskFilter} onChange={setTaskFilter}
+                    options={(['all', 'mine', 'review', 'unfinished'] as const).map((v) => ({ value: v, label: t(`writer.task.filter.${v}`) }))} />
+                </div>
                 {suggestOnly ? (
                   <p className="mt-2.5 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800" data-testid="suggest-hint">{t('writer.suggest.hint')}</p>
                 ) : (
@@ -1844,7 +1892,7 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
                 {filteredTree.length === 0 ? (
                   <EmptyState>{search ? t('writer.noMatch') : t('writer.noChapters')}</EmptyState>
                 ) : (
-                  <TreeItems items={filteredTree} search={search.trim()} expanded={expanded} setExpanded={setExpanded} presence={presenceByDoc} commentCounts={commentCounts} suggestionCounts={suggestionCounts}
+                  <TreeItems items={filteredTree} search={search.trim()} expanded={expanded} setExpanded={setExpanded} presence={presenceByDoc} commentCounts={commentCounts} suggestionCounts={suggestionCounts} tasks={tasks}
                     currentId={current?.id ?? creatingUnder ?? undefined} chapterPrefix={chapterPrefix}
                     onSelect={selectDoc} onMove={move} onDelete={removeDoc}
                     menuFor={chapterMenu?.doc.id ?? null} onOpenMenu={openChapterMenu} onCloseMenu={closeChapterMenu}
@@ -1922,10 +1970,10 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
               className="w-full shrink-0 border-0 bg-transparent p-0 text-3xl font-bold text-ink placeholder:text-slate-300 focus:outline-none focus:ring-0"
               placeholder={t('writer.chapterTitlePlaceholder')} value={title} onChange={(e) => setTitle(e.target.value)} />
 
-            {suggestOnly && current && (
+            {suggestMode && current && (
               <div className="mt-3 flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-800" data-testid="suggest-banner">
                 <i className="fa-solid fa-code-pull-request" aria-hidden="true" />
-                <span>{t('writer.suggest.banner')}</span>
+                <span>{t(suggestOnly ? 'writer.suggest.banner' : 'writer.suggest.modeBanner')}</span>
               </div>
             )}
             {current && <SameChapterBanner others={sameChapterOthers} remoteSave={remoteSave} />}
@@ -2213,9 +2261,22 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
             <Button variant="outline" className="mt-4 w-full" onClick={() => navigateComments('suggestions')} disabled={!current}>
               <i className="fa-solid fa-code-pull-request" aria-hidden="true" /> {t('writer.suggest.mine')}
             </Button>
+            {current && (
+              <section className="mt-6 border-t border-slate-100 pt-5">
+                <h2 className="mb-3 font-bold text-slate-900">{t('writer.task.title')}</h2>
+                <TaskPanel docId={current.id} task={tasks[current.id]} members={members} canEdit={false} onSaved={() => {}} />
+              </section>
+            )}
           </aside>
         ) : (
         <aside className="hidden w-72 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 xl:block">
+          {current && (
+            <section className="mb-5 border-b border-slate-100 pb-5">
+              <h2 className="mb-3 font-bold text-slate-900">{t('writer.task.title')}</h2>
+              <TaskPanel docId={current.id} task={tasks[current.id]} members={members} canEdit
+                onSaved={(task) => setTasks((m) => ({ ...m, [task.document_id]: task }))} />
+            </section>
+          )}
           <h2 className="mb-4 font-bold text-slate-900">{t('writer.chapterSettings')}</h2>
           <div className="space-y-4">
             <Field label={t('writer.publishStatus')}>
@@ -2890,6 +2951,7 @@ interface TreeProps {
   commentCounts?: Record<string, number> // 各章节未解决的批注数
   suggestionCounts?: Record<string, number> // 各章节待处理的修改建议数
   readOnly?: boolean // 建议者：不能调整目录（无拖拽与章节菜单）
+  tasks?: Record<number, WriterTask> // 章节分工
 }
 
 // TreeItems 章节树：文件夹/文件图标、展开折叠、搜索过滤、行内菜单、同级拖拽排序
@@ -2959,6 +3021,7 @@ function TreeItem(props: TreeProps & { item: Document; depth: number }) {
           className="flex flex-1 items-center gap-1.5 py-2 pl-1 pr-1 text-left">
           <DocTreeIcon icon={item.icon} hasChildren={hasChildren} colorClass={active ? 'text-primary-500' : 'text-slate-400'} />
           <span className={`whitespace-nowrap ${active ? 'font-medium text-primary-700' : 'text-slate-700'}`}>{chapterPrefix}{item.title}</span>
+          {props.tasks?.[item.id] && <TaskBadge task={props.tasks[item.id]} />}
           {!!props.suggestionCounts?.[item.id] && (
             <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-1.5 text-[10px] font-medium text-sky-700" data-testid="tree-suggestions">
               <i className="fa-solid fa-code-pull-request" aria-hidden="true" />{props.suggestionCounts[item.id]}
@@ -3016,6 +3079,16 @@ function filterTree(items: Document[], q: string): Document[] {
     if (item.title.toLowerCase().includes(lower) || children.length > 0) {
       result.push({ ...item, children: children.length > 0 ? children : item.children })
     }
+  }
+  return result
+}
+
+// filterTreeBy 只保留满足条件的章节及其上级（上级只作为路径显示）。
+function filterTreeBy(items: Document[], match: (d: Document) => boolean): Document[] {
+  const result: Document[] = []
+  for (const item of items) {
+    const children = item.children ? filterTreeBy(item.children, match) : []
+    if (match(item) || children.length > 0) result.push({ ...item, children })
   }
   return result
 }

@@ -385,6 +385,8 @@ Authorization: Bearer kf_pat_…
 | POST | `/suggestions/:id/decide` | `{status: accepted\|partial\|rejected}` 记录处理结果并通知建议者（采纳的内容由写作台合并后经 `PUT /documents/:id` 保存）；已处理过返回 409 | 能编辑该书 |
 | DELETE | `/suggestions/:id` | 建议者撤回自己尚未处理的建议 | 建议者本人 |
 | GET | `/books/:id/writer-members` | 书籍作者与已接受的协作者 `{items[{id,username,display_name,avatar,role}]}`（批注中 @ 提及的候选人）；批注正文中的 `@用户名` 会通知能参与写作的被提及者 | `document:update` + 能参与写作 |
+| GET | `/books/:id/chapter-tasks` | 章节分工 `{items[{document_id, assignee{id,username,display_name,avatar}\|null, stage, due_at, updated_at}]}`；`stage` 为 `todo`（未开始）、`writing`（写作中）、`review`（待审阅）、`done`（已定稿） | `document:update` + 能参与写作 |
+| PUT | `/documents/:id/task` | 设置分工 `{assignee_id?（0 取消）, stage?, due_at?（YYYY-MM-DD，null 取消）}`，只改动传入的字段；负责人须是书籍作者或编辑者、建议者；分配给他人时通知对方，进入 `review` 时通知作者与编辑者；推送 `tasks{doc_id, origin}` | 能编辑该书 |
 | POST | `/books/:id/documents/batch-status` | 批量改状态 `{ids[], status}`（含子章节级联，行为与单个修改一致），响应为事件流：`start{total}`、每个章节 `item{result{id,ok,status,held,error}, done, total}`、`done{total,done,failed}`；校验失败在推送前以 JSON 返回 | `document:update` |
 | POST | `/books/:id/documents/batch-delete` | 批量移入回收站 `{ids[]}`（含子章节），事件流同上，已随父章节删除的记 `skipped`；需二次认证（开启时） | `document:delete` |
 | POST | `/documents/:id/view` | 章节浏览计数 +1，并同步累加所属书籍的 `view_count` 及按日分析聚合；可选 JSON `{referrer}`；不可见返回 404 | `document:read` |

@@ -281,6 +281,19 @@ type WriterSuggestion struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+// WriterChapterTask 章节分工：负责人、写作阶段与截止日期（每章至多一条，由能编辑的人在写作台设置）。
+type WriterChapterTask struct {
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	BookID     uint       `gorm:"index;not null" json:"book_id"`
+	DocumentID uint       `gorm:"uniqueIndex;not null" json:"document_id"`
+	AssigneeID uint       `gorm:"index;default:0" json:"assignee_id"`
+	Stage      string     `gorm:"size:16;index;not null;default:todo" json:"stage"` // todo | writing | review | done
+	DueAt      *time.Time `json:"due_at"`
+	UpdatedBy  uint       `gorm:"default:0" json:"updated_by"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
 // WriterPresence 写作台在线状态：每个打开的写作台事件流一条（连接断开时删除，SeenAt 由服务端心跳刷新，过期即视为离开）。
 type WriterPresence struct {
 	ConnID    string    `gorm:"primaryKey;size:32" json:"conn_id"`
@@ -976,6 +989,7 @@ func CoreModels() []any {
 		&WriterPresence{},
 		&WriterComment{},
 		&WriterSuggestion{},
+		&WriterChapterTask{},
 		// 成就相关表由「成就」插件在启用时建表（首次启用才创建），不在核心 AutoMigrate 里。
 	}
 }
