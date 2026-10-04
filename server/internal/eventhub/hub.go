@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"knowforge/server/internal/cluster"
+	"knowforge/server/internal/metrics"
 )
 
 // Event 一条待推送的事件（data 为 JSON）。
@@ -106,7 +107,16 @@ func StartSSE(c *gin.Context) {
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	c.Writer.WriteHeader(http.StatusOK)
+	// 运行指标：当前打开的事件流连接数（请求结束或客户端断开时减一）
+	route := c.FullPath()
+	sseConnections.Add(1, route)
+	go func() {
+		<-c.Request.Context().Done()
+		sseConnections.Add(-1, route)
+	}()
 }
+
+var sseConnections = metrics.Default.NewGaugeVec("knowforge_sse_connections", "Open server-sent event streams on this instance.", "route")
 
 // Write 写出一条事件并立即刷新。
 func Write(w gin.ResponseWriter, name string, data []byte) {

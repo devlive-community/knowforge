@@ -41,12 +41,15 @@ func (a *App) installGate() gin.HandlerFunc {
 func (a *App) Router() *gin.Engine {
 	r := gin.New()
 	configureTrustedProxies(r)
-	r.Use(gin.Logger(), gin.Recovery(), CORS())
+	r.Use(gin.Logger(), metricsMiddleware(), gin.Recovery(), CORS()) // 指标在 Recovery 之外：发生 panic 的请求按 500 计入
+	metricsApp.Store(a)
 	r.MaxMultipartMemory = 10 << 20
 
 	// ── 基础：健康检查（CI 与 nginx 使用，无业务权限） ──
 	r.GET("/health", a.Health)
 	r.GET("/api/v1/health", a.Health)
+	// ── 运行指标（Prometheus）：默认关闭，开启后凭访问令牌（Authorization: Bearer）抓取，无业务权限 ──
+	r.GET("/metrics", a.ServeMetrics)
 
 	a.ServeUploads(r)
 
@@ -341,6 +344,10 @@ func (a *App) Router() *gin.Engine {
 			admin.PUT("/storage", a.RequirePermission(authz.SiteUpdate), a.AdminSaveStorage)
 			admin.GET("/storage/migration", a.RequirePermission(authz.SiteUpdate), a.AdminStorageMigration)
 			admin.POST("/storage/migration", a.RequirePermission(authz.SiteUpdate), a.AdminStartStorageMigration)
+			admin.GET("/metrics/settings", a.RequirePermission(authz.SiteUpdate), a.AdminGetMetricsSettings)
+			admin.PUT("/metrics/settings", a.RequirePermission(authz.SiteUpdate), a.AdminSaveMetricsSettings)
+			admin.POST("/metrics/token", a.RequirePermission(authz.SiteUpdate), a.AdminRegenerateMetricsToken)
+			admin.GET("/metrics/preview", a.RequirePermission(authz.SiteUpdate), a.AdminPreviewMetrics)
 			admin.GET("/backups", a.RequirePermission(authz.SystemBackup), a.AdminListBackups)
 			admin.POST("/backups", a.RequirePermission(authz.SystemBackup), a.AdminCreateBackup)
 			admin.PUT("/backups/settings", a.RequirePermission(authz.SystemBackup), a.AdminSaveBackupSettings)

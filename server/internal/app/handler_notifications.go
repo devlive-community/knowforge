@@ -10,6 +10,7 @@ import (
 
 	"knowforge/server/internal/authz"
 	"knowforge/server/internal/cluster"
+	"knowforge/server/internal/eventhub"
 	"knowforge/server/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -194,11 +195,7 @@ func (a *App) SSENotifications(c *gin.Context) {
 	var unread int64
 	a.DB.Model(&models.Notification{}).Where("user_id = ? AND read_at IS NULL", userID).Count(&unread)
 
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("X-Accel-Buffering", "no")
-	c.Writer.WriteHeader(http.StatusOK)
+	eventhub.StartSSE(c)
 
 	flusher, canFlush := c.Writer.(http.Flusher)
 	if !canFlush {

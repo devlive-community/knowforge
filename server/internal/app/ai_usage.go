@@ -140,6 +140,7 @@ func (a *App) recordAIUsage(caller ai.Caller, kind, provider, model string, usag
 		row.InputTokens, row.OutputTokens, row.Estimated, row.Characters = usage.InputTokens, usage.OutputTokens, usage.Estimated, chars
 		row.CostMicros = pricing.costMicros(kind, model, usage.InputTokens, usage.OutputTokens, chars)
 	}
+	observeAICall(&row, elapsed)
 	if a.DB.Create(&row).Error == nil {
 		a.checkAIAlerts(&row)
 	}

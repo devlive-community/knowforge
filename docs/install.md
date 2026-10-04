@@ -15,6 +15,7 @@ KnowForge 编译为**单个二进制文件**，内嵌 Next.js SSR 与 Node.js 24
 - [配置项参考](#配置项参考)
 - [数据库切换](#数据库切换)
 - [备份与恢复](#备份与恢复)
+- [运行指标（Prometheus）](#运行指标prometheus)
 - [生产部署（systemd + Nginx + TLS）](#生产部署systemd--nginx--tls)
 - [多实例部署](#多实例部署)
 - [升级](#升级)
@@ -198,6 +199,40 @@ data/
 3. 完成后用备份中的账号登录。
 
 备份不能来自比当前更新的版本。插件运行时（如 PDF 导出所用的浏览器）不在备份中，恢复后在「插件」中重新安装即可。
+
+---
+
+## 运行指标（Prometheus）
+
+管理后台「系统设置 · 运行指标」开启后，`GET /metrics` 以 Prometheus 文本格式输出运行指标，抓取时需在请求头携带访问令牌（开启时生成，只显示一次，可重新生成；未开启时返回 404）：
+
+```yaml
+scrape_configs:
+  - job_name: knowforge
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      credentials: <访问令牌>
+    static_configs:
+      - targets: ['kb.example.com']
+```
+
+主要指标：
+
+| 指标 | 说明 |
+| --- | --- |
+| `knowforge_http_requests_total{method,route,status}` | 请求数（路由为路径模板，如 `/api/v1/books/:id`；页面请求为 `web`） |
+| `knowforge_http_request_duration_seconds` | 请求耗时直方图（不含事件流） |
+| `knowforge_http_requests_in_flight` | 正在处理的请求数 |
+| `knowforge_sse_connections{route}` | 打开中的事件流连接数 |
+| `knowforge_ai_calls_total{feature,kind,model,status}` / `knowforge_ai_tokens_total{kind,direction}` / `knowforge_ai_cost_total{currency}` / `knowforge_ai_call_duration_seconds` | 模型调用次数、tokens、估算费用与耗时 |
+| `knowforge_jobs{type,status}` / `knowforge_jobs_oldest_waiting_seconds` | 后台任务积压（不含已成功的）与最早一个待执行任务的等待时长 |
+| `knowforge_cluster_instances` | 在线实例数 |
+| `knowforge_db_connections{state}` / `knowforge_db_wait_total` / `knowforge_db_wait_seconds_total` | 数据库连接池 |
+| `knowforge_users` / `knowforge_books` / `knowforge_documents` | 数据总量（每分钟更新） |
+| `knowforge_build_info{version,go_version}`、`go_goroutines`、`go_memstats_*` | 版本与运行时 |
+
+多实例部署时请逐个实例抓取：请求、事件流与模型调用是各实例自己的计数；任务积压、在线实例与数据总量来自数据库，各实例相同。
 
 ---
 

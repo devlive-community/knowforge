@@ -3,7 +3,7 @@ import AdminLayout from '@/components/AdminLayout'
 import { SegmentedTabs } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 
-export type SettingsTab = 'site' | 'footer' | 'registration' | 'captcha' | 'login-security' | 'rate-limits' | 'entitlements' | 'content' | 'storage' | 'mail' | 'oauth' | 'translation' | 'ai' | 'logs' | 'custom-html' | 'backup'
+export type SettingsTab = 'site' | 'footer' | 'registration' | 'captcha' | 'login-security' | 'rate-limits' | 'entitlements' | 'content' | 'storage' | 'mail' | 'oauth' | 'translation' | 'ai' | 'logs' | 'custom-html' | 'backup' | 'metrics'
 
 interface SettingsLayoutProps {
   active: SettingsTab
@@ -32,6 +32,7 @@ export default function SettingsLayout({ active, description, children }: Settin
     { key: 'ai', labelKey: 'admin.settings.ai', href: '/admin/settings/ai' },
     { key: 'oauth', labelKey: 'admin.settings.oauth', href: '/admin/settings/oauth' },
     { key: 'logs', labelKey: 'admin.settings.logs', href: '/admin/settings/logs' },
+    { key: 'metrics', labelKey: 'admin.settings.metricsTab', href: '/admin/settings/metrics' },
   ]
 
   return (

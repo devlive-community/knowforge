@@ -92,6 +92,9 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'admin.settings.backup.schedule.': ['off', 'daily', 'weekly'],
     'admin.settings.backup.weekday.': ['0', '1', '2', '3', '4', '5', '6'],
     'install.restore.stage.': ['migrate', 'database', 'files'],
+    # 运行指标：指标说明 t(`admin.settings.metrics.metric.${key}`)
+    'admin.settings.metrics.metric.': ['httpRequests', 'httpDuration', 'httpInFlight', 'sseConnections', 'aiCalls', 'aiTokens', 'aiCost', 'aiDuration',
+                                       'jobs', 'jobsWaiting', 'instances', 'dbConnections', 'totals', 'buildInfo'],
     # 模板：t(`templates.kind.${kind}`)、t(`templates.manage.empty.${scope}.${kind}`)
     'templates.kind.': ['chapter', 'book'],
     'templates.manage.empty.': ['mine.chapter', 'mine.book', 'official.chapter', 'official.book'],

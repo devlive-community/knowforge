@@ -258,6 +258,10 @@ Authorization: Bearer kf_pat_…
 | GET | `/storage/migration` | 存储迁移概况：`{target_driver, pending, by_driver{driver:n}, running, state}`；`pending` 为不在当前存储中的文件数（含本地上传目录中没有文件记录但仍被引用的早期文件），`state` 为最近一次迁移的进度 `{job_id,status,from_drivers,target_driver,total,done,failed,errors[]}` | 管理员 + `site:update` |
 | POST | `/storage/migration` | `{delete_old}` 把已有文件迁移到当前存储（后台任务，返回 `202` 与 `task`，进度在「我的任务」）：读回原文件 → 上传到当前存储 → 替换核心与插件登记的列中出现的旧地址 → 更新文件记录 →（`delete_old` 时）删除原文件；删除原文件需要二次认证（开启时）；已有迁移进行中返回 409 | 管理员 + `site:update` |
 
+| GET | `/metrics/settings` | 运行指标设置 `{enabled, token_set, token_hint, path}`（不返回令牌） | 管理员 + `site:update` |
+| PUT | `/metrics/settings` | `{enabled}`；首次开启时生成访问令牌并在响应中返回 `token`（只返回这一次） | 管理员 + `site:update` |
+| POST | `/metrics/token` | 重新生成访问令牌（旧令牌立即失效），响应中返回 `token` | 管理员 + `site:update` |
+| GET | `/metrics/preview` | 本实例当前的指标文本（与 `/metrics` 相同，无需令牌） | 管理员 + `site:update` |
 | GET | `/backups?page=&page_size=` | 备份列表（新的在前）`{items, total, page, page_size, settings, running, server_time, server_zone, server_offset, db_type, data_dir}`；备份项 `{id,name,kind(manual\|scheduled),status(running\|done\|failed),include_files,size,tables,rows,files,stage,done,total,error,app_version,created_at,finished_at}` | 管理员 + `system:backup` |
 | POST | `/backups` | `{include_files}` 立即备份（后台任务，返回 `202` 与 `backup`、`task`，进度在「我的任务」）；已有备份进行中返回 409 | 管理员 + `system:backup` |
 | PUT | `/backups/settings` | 自动备份 `{schedule(off\|daily\|weekly), hour(0-23，服务器时区), weekday(0-6，周日为 0), keep(1-100), include_files}`；自动备份只保留最近 `keep` 份 | 管理员 + `system:backup` |
@@ -266,6 +270,8 @@ Authorization: Bearer kf_pat_…
 | POST | `/setup/restore` | 安装向导从备份恢复（仅未安装时）：multipart `file`（备份 zip）+ `database`（数据库配置 JSON，须为空库）。校验失败返回 JSON 错误；开始写入后以事件流推送 `start{app_version,created_at,site_name,db_type,tables,files}`、`progress{stage(migrate\|database\|files),done,total}`、`done{tables,rows,files,skipped[]}` 或 `error{message}`；完成后为已安装状态并沿用备份中的站点密钥 | 无（仅未安装） |
 
 备份文件格式（`format: 1`）：`manifest.json`（`{format, app_version, created_at, db_type, site_name, secret, include_files, files, tables:[{name, rows, binary[]}]}`）、`db/<表名>.jsonl`（每行一条记录，时间为 RFC 3339，二进制列为 base64）与 `files/uploads/…`。恢复时按外键依赖顺序写入，只写入当前版本中存在的表与列；备份的版本不能比当前新。
+
+运行指标抓取：`GET /metrics`（根路径，不在 `/api/v1` 下）以 Prometheus 文本格式（0.0.4）输出，需请求头 `Authorization: Bearer <访问令牌>`；未开启返回 404，令牌错误返回 401。指标列表见 [安装文档 · 运行指标](install.md#运行指标prometheus)。
 
 > 凭据存于站点配置（`oauth_github_*` 键）；state 防 CSRF 为内存态（10 分钟 TTL），适配当前单实例部署架构。
 
