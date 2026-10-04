@@ -29,7 +29,9 @@ func sampleImage() image.Image {
 
 func TestTransformImage(t *testing.T) {
 	red, blue := color.NRGBA{255, 0, 0, 255}, color.NRGBA{0, 0, 255, 255}
-	at := func(img image.Image, x, y int) color.NRGBA { return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA) }
+	at := func(img image.Image, x, y int) color.NRGBA {
+		return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+	}
 	out, ok := transformImage(sampleImage(), imageEditRequest{Rotate: 90})
 	if !ok || out.Bounds().Dx() != 1 || out.Bounds().Dy() != 2 || at(out, 0, 0) != red || at(out, 0, 1) != blue {
 		t.Fatalf("顺时针 90° 后应为上红下蓝: %v", out.Bounds())
