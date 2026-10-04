@@ -18,15 +18,16 @@ interface Options {
   dirty: boolean
   onDocSaved: (ev: DocSavedEvent) => void
   onTreeChanged: () => void
+  onComments?: (docId: number) => void
 }
 
 // useWriterCollab 连接本书的写作台事件流：登记在线、同步自己正在编辑的章节与是否有未保存修改，
 // 接收他人的在线状态、章节保存与目录变化（自己发起的操作由连接 ID 识别后忽略）。
-export function useWriterCollab({ bookId, docId, dirty, onDocSaved, onTreeChanged }: Options): { connId: string; others: Presence[] } {
+export function useWriterCollab({ bookId, docId, dirty, onDocSaved, onTreeChanged, onComments }: Options): { connId: string; others: Presence[] } {
   const [connId, setConnId] = useState('')
   const [presence, setPresence] = useState<Presence[]>([])
-  const handlers = useRef({ onDocSaved, onTreeChanged })
-  handlers.current = { onDocSaved, onTreeChanged }
+  const handlers = useRef({ onDocSaved, onTreeChanged, onComments })
+  handlers.current = { onDocSaved, onTreeChanged, onComments }
   const connRef = useRef('')
   const docRef = useRef(docId)
   docRef.current = docId
@@ -47,6 +48,10 @@ export function useWriterCollab({ bookId, docId, dirty, onDocSaved, onTreeChange
       es.addEventListener('doc.saved', (e) => {
         const d = parse(e as MessageEvent) as DocSavedEvent | null
         if (d && d.origin !== connRef.current) handlers.current.onDocSaved(d)
+      })
+      es.addEventListener('comments', (e) => {
+        const d = parse(e as MessageEvent)
+        if (d && d.origin !== connRef.current) handlers.current.onComments?.(d.doc_id)
       })
       es.addEventListener('tree', (e) => {
         const d = parse(e as MessageEvent)

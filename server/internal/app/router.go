@@ -255,6 +255,13 @@ func (a *App) Router() *gin.Engine {
 		// 写作台协作事件流：凭短时事件流凭证（?ticket=）连接，须能编辑该书
 		api.GET("/books/:id/collab/stream", a.WriterCollabStream)
 		api.POST("/books/:id/collab/presence", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.UpdateWriterPresence)
+		// 写作批注：只有能编辑该书的人可见（归属校验在 handler 内）
+		api.GET("/documents/:id/writer-comments", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.ListWriterComments)
+		api.POST("/documents/:id/writer-comments", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.CreateWriterComment)
+		api.GET("/books/:id/writer-comments/counts", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.WriterCommentCounts)
+		api.PUT("/writer-comments/:id", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.UpdateWriterComment)
+		api.DELETE("/writer-comments/:id", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.DeleteWriterComment)
+		api.POST("/writer-comments/:id/resolve", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.ResolveWriterComment)
 		// 备份下载：凭管理员换取的短时下载凭证（URL 中的 ticket）访问，不需要登录请求头
 		api.GET("/backups/:id/download", a.DownloadBackup)
 

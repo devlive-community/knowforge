@@ -36,7 +36,7 @@ func (a *App) deleteUserCompletely(uid uint) error {
 			for _, m := range []any{
 				&models.BookCollaborator{}, &models.Reaction{}, &models.ReadingProgress{}, &models.ReadChapter{},
 				&models.ReadingAnnotation{}, &models.BookAnalyticsDaily{}, &models.BookExportSetting{},
-				&models.DocumentRevision{}, &models.Document{},
+				&models.WriterComment{}, &models.DocumentRevision{}, &models.Document{},
 			} {
 				if err := tx.Unscoped().Where("book_id IN ?", bookIDs).Delete(m).Error; err != nil {
 					return err
@@ -60,7 +60,7 @@ func (a *App) deleteUserCompletely(uid uint) error {
 			&models.UserNotificationPref{}, &models.TwoFactorBackupCode{}, &models.EmailVerificationToken{},
 			&models.Comment{}, &models.Reaction{}, &models.ReadingProgress{}, &models.ReadChapter{},
 			&models.ReadingAnnotation{}, &models.UserExportSetting{}, &models.UserReadingGoal{},
-			&models.ReadingDailyTime{}, &models.UserThemeSetting{},
+			&models.ReadingDailyTime{}, &models.UserThemeSetting{}, &models.WriterComment{},
 		}, plugincore.UserDataModels()...) {
 			// 插件独占表（如成就）在插件未启用时不存在，跳过其清理
 			if !tx.Migrator().HasTable(m) {

@@ -242,6 +242,26 @@ type EmailVerificationToken struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// WriterComment 写作批注：协作者在写作台对章节正文的批注与讨论，只有能编辑该书的人可见（不出现在阅读页）。
+// 顶级批注锚定一段原文（Quote 及前后文与大致位置，正文修改后按此重新定位）；回复的 ParentID 指向顶级批注。
+type WriterComment struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	BookID      uint       `gorm:"index;not null" json:"book_id"`
+	DocumentID  uint       `gorm:"index;not null" json:"document_id"`
+	UserID      uint       `gorm:"index;not null" json:"user_id"`
+	ParentID    *uint      `gorm:"index" json:"parent_id"`
+	Quote       string     `gorm:"type:text" json:"quote"`
+	Prefix      string     `gorm:"size:255" json:"prefix"`
+	Suffix      string     `gorm:"size:255" json:"suffix"`
+	QuoteOffset int        `gorm:"default:0" json:"quote_offset"`
+	Content     string     `gorm:"type:text;not null" json:"content"`
+	Resolved    bool       `gorm:"index;default:false" json:"resolved"`
+	ResolvedBy  uint       `gorm:"default:0" json:"resolved_by"`
+	ResolvedAt  *time.Time `json:"resolved_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
 // WriterPresence 写作台在线状态：每个打开的写作台事件流一条（连接断开时删除，SeenAt 由服务端心跳刷新，过期即视为离开）。
 type WriterPresence struct {
 	ConnID    string    `gorm:"primaryKey;size:32" json:"conn_id"`
@@ -935,6 +955,7 @@ func CoreModels() []any {
 		&AIAlert{},
 		&SystemBackup{},
 		&WriterPresence{},
+		&WriterComment{},
 		// 成就相关表由「成就」插件在启用时建表（首次启用才创建），不在核心 AutoMigrate 里。
 	}
 }

@@ -25,6 +25,8 @@ import { aiWriterEnabled } from '@/lib/ai-writer'
 import TemplatePicker from '@/components/templates/TemplatePicker'
 import { CollabAvatar, CollabAvatars, ConflictDialog, SameChapterBanner, useWriterCollab, type ConflictState, type DocSavedEvent, type Presence } from '@/components/writer/collab'
 import { merge3, mergeTitle, resolveMerge, type ConflictChoice } from '@/lib/merge'
+import CommentsDrawer, { type CommentsTab } from '@/components/writer/CommentsDrawer'
+import { buildAnchor, type TextAnchor } from '@/lib/anchor'
 import { browserTimeZone, templatesEnabled, type TemplateSummary } from '@/lib/templates'
 import { displayName } from '@/lib/users'
 
@@ -148,6 +150,11 @@ export default function Writer({ user }: WriterProps) {
   // AI 写作助手（插件）：抽屉状态由 URL 承载（?ai=assist|history）
   const aiOn = aiWriterEnabled(site)
   const aiTab: AIWriterTab | null = !aiOn ? null : router.query.ai === 'history' ? 'history' : router.query.ai === 'assist' ? 'assist' : null
+  // 写作批注抽屉（?comments=open|resolved），与 AI 写作助手抽屉互斥
+  const commentsTab: CommentsTab | null = router.query.comments === 'resolved' ? 'resolved' : router.query.comments === 'open' ? 'open' : null
+  const [pendingComment, setPendingComment] = useState<TextAnchor | null>(null)
+  const [commentsReload, setCommentsReload] = useState(0)
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   // 模板（插件）：章节模板插入到光标处，也可把当前章节存为模板
   const templatesOn = templatesEnabled(site)
   const [templateOpen, setTemplateOpen] = useState(false)
@@ -535,6 +542,10 @@ export default function Writer({ user }: WriterProps) {
     bookId: book?.id ?? null, docId: current?.id ?? null, dirty: formDirty,
     onDocSaved: (ev) => { void onRemoteDocSaved(ev) },
     onTreeChanged: () => { if (book) void loadTree(book) },
+    onComments: (docId) => {
+      void loadCommentCounts()
+      if (docId === current?.id) setCommentsReload((n) => n + 1)
+    },
   })
   const sameChapterOthers = collab.others.filter((p) => current && p.doc_id === current.id)
   const presenceByDoc = useMemo(() => {
@@ -873,12 +884,33 @@ export default function Writer({ user }: WriterProps) {
   // navigateAI 打开/切换/关闭 AI 写作助手抽屉（写入 URL，保留其余参数）。
   function navigateAI(tab: AIWriterTab | null) {
     const query = { ...router.query }
-    if (tab) query.ai = tab
+    if (tab) { query.ai = tab; delete query.comments }
     else delete query.ai
     const el = textareaRef.current
     if (el) setAISelectionLength(el.selectionEnd - el.selectionStart)
     void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
   }
+  function navigateComments(tab: CommentsTab | null) {
+    const query = { ...router.query }
+    if (tab) { query.comments = tab; delete query.ai }
+    else { delete query.comments; setPendingComment(null) }
+    void router.replace({ pathname: router.pathname, query }, undefined, { shallow: true })
+  }
+  // addComment 以选中的正文为锚点新建批注（没有选中时打开批注抽屉并提示）
+  function addComment() {
+    const el = textareaRef.current
+    if (!current) return
+    if (el && el.selectionEnd > el.selectionStart) setPendingComment(buildAnchor(el.value, el.selectionStart, el.selectionEnd))
+    else showToast({ message: t('writer.comments.selectFirst'), tone: 'info' })
+    navigateComments('open')
+  }
+  const loadCommentCounts = useCallback(async () => {
+    if (!book) return
+    try {
+      setCommentCounts((await api<{ counts: Record<string, number> }>(`/books/${book.id}/writer-comments/counts`)).counts || {})
+    } catch { /* 忽略 */ }
+  }, [book])
+  useEffect(() => { void loadCommentCounts() }, [loadCommentCounts])
   const [aiSelectionLength, setAISelectionLength] = useState(0)
   const aiEditor: WriterEditorBridge = {
     read: () => {
@@ -1417,6 +1449,8 @@ export default function Writer({ user }: WriterProps) {
   function onEditorKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     const el = textareaRef.current
     if (!el) return
+    // ⌘/Ctrl + Alt + M：为选中的文字添加批注
+    if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === 'm' || e.key === 'M' || e.code === 'KeyM')) { e.preventDefault(); addComment(); return }
     if (slash.open && menuCount > 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSlash((s) => ({ ...s, index: Math.min(s.index + 1, menuCount - 1) })); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSlash((s) => ({ ...s, index: Math.max(0, s.index - 1) })); return }
@@ -1547,7 +1581,7 @@ export default function Writer({ user }: WriterProps) {
   const filteredTree = search.trim() ? filterTree(tree, search.trim()) : tree
 
   return (
-    <div className={`flex h-screen flex-col bg-warm ${aiTab ? 'lg:pr-96 2xl:pr-[28rem]' : ''}`}>
+    <div className={`flex h-screen flex-col bg-warm ${aiTab || commentsTab ? 'lg:pr-96 2xl:pr-[28rem]' : ''}`}>
       <Seo siteName={siteName} title={titleText} noindex />
       {conflict && (
         <ConflictDialog state={conflict} onResolve={resolveConflict}
@@ -1562,6 +1596,12 @@ export default function Writer({ user }: WriterProps) {
               <i className="fa-regular fa-floppy-disk" aria-hidden="true" /> {t('templates.writer.saveCurrent')}
             </Button>
           )} />
+      )}
+      {commentsTab && (
+        <CommentsDrawer bookId={book.id} docId={current?.id ?? null} tab={commentsTab} onNavigate={navigateComments}
+          pending={pendingComment} onClearPending={() => setPendingComment(null)} content={content}
+          onSelect={(start, end) => selectRange(start, end)} reloadKey={commentsReload} onChanged={() => void loadCommentCounts()}
+          currentUserId={user?.id ?? 0} canManage={!!user && (book.user_id === user.id || user.role === 'admin')} />
       )}
       {aiTab && (
         <AIWriterDrawer bookId={book.id} docId={current?.id ?? null} tab={aiTab} onNavigate={navigateAI}
@@ -1672,7 +1712,7 @@ export default function Writer({ user }: WriterProps) {
                 {filteredTree.length === 0 ? (
                   <EmptyState>{search ? t('writer.noMatch') : t('writer.noChapters')}</EmptyState>
                 ) : (
-                  <TreeItems items={filteredTree} search={search.trim()} expanded={expanded} setExpanded={setExpanded} presence={presenceByDoc}
+                  <TreeItems items={filteredTree} search={search.trim()} expanded={expanded} setExpanded={setExpanded} presence={presenceByDoc} commentCounts={commentCounts}
                     currentId={current?.id ?? creatingUnder ?? undefined} chapterPrefix={chapterPrefix}
                     onSelect={selectDoc} onMove={move} onDelete={removeDoc}
                     menuFor={chapterMenu?.doc.id ?? null} onOpenMenu={openChapterMenu} onCloseMenu={closeChapterMenu}
@@ -1841,6 +1881,11 @@ export default function Writer({ user }: WriterProps) {
                   <ToolbarDivider />
                   <ToolbarButton title={t('writer.tb.uploadImage')} onClick={() => fileInputRef.current?.click()}><UploadIcon className="h-4 w-4" /></ToolbarButton>
                   <ToolbarButton title={t('writer.tb.imageLink')} onClick={insertImage}><ImageIcon className="h-4 w-4" /></ToolbarButton>
+                  {current && (
+                    <ToolbarButton title={t('writer.tb.comment')} onClick={addComment}>
+                      <i className={`fa-regular fa-comment-dots text-[15px] ${commentsTab ? 'text-primary-600' : ''}`} aria-hidden="true" />
+                    </ToolbarButton>
+                  )}
                   {templatesOn && (
                     <ToolbarButton title={t('writer.tb.template')} onClick={() => setTemplateOpen(true)}>
                       <i className="fa-regular fa-clone text-[15px]" aria-hidden="true" />
@@ -2004,6 +2049,7 @@ export default function Writer({ user }: WriterProps) {
                 [t('writer.sc.save'), '⌘/Ctrl + S'],
                 [t('writer.sc.format'), '⌘/Ctrl + B / I / K'],
                 [t('writer.sc.find'), '⌘/Ctrl + F'],
+                [t('writer.sc.comment'), '⌘/Ctrl + Alt + M'],
                 [t('writer.sc.dupLine'), '⌘/Ctrl + Shift + D'],
                 [t('writer.sc.moveLine'), 'Alt + ↑ / ↓'],
                 [t('writer.sc.slashMenu'), t('writer.sc.slashMenuKey')],
@@ -2693,6 +2739,7 @@ interface TreeProps {
   onDropItem: (doc: Document) => void
   onDragEndItem: () => void
   presence?: Map<number, Presence[]> // 其他协作者正在编辑的章节
+  commentCounts?: Record<string, number> // 各章节未解决的批注数
 }
 
 // TreeItems 章节树：文件夹/文件图标、展开折叠、搜索过滤、行内菜单、同级拖拽排序
@@ -2762,6 +2809,11 @@ function TreeItem(props: TreeProps & { item: Document; depth: number }) {
           className="flex flex-1 items-center gap-1.5 py-2 pl-1 pr-1 text-left">
           <DocTreeIcon icon={item.icon} hasChildren={hasChildren} colorClass={active ? 'text-primary-500' : 'text-slate-400'} />
           <span className={`whitespace-nowrap ${active ? 'font-medium text-primary-700' : 'text-slate-700'}`}>{chapterPrefix}{item.title}</span>
+          {!!props.commentCounts?.[item.id] && (
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 text-[10px] font-medium text-amber-700" data-testid="tree-comments">
+              <i className="fa-regular fa-comment" aria-hidden="true" />{props.commentCounts[item.id]}
+            </span>
+          )}
           {!!props.presence?.get(item.id)?.length && (
             <span className="ml-1 flex -space-x-1" data-testid="tree-presence">
               {props.presence.get(item.id)!.slice(0, 3).map((p) => <CollabAvatar key={p.conn_id} user={p.user} size="sm" ring={p.dirty} />)}

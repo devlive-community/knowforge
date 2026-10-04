@@ -374,6 +374,11 @@ Authorization: Bearer kf_pat_…
 | DELETE | `/documents/:id` | 将文档及其子树作为同一批次移入 30 天回收站 | `document:delete` |
 | GET | `/books/:id/collab/stream?ticket=&doc_id=` | 写作台协作事件流（短时事件流凭证，须能编辑该书）：建立即登记在线，推送 `hello{conn_id, presence[]}`、`presence{presence[]}`、`doc.saved{doc_id,title,content_hash,by,at,origin}`、`tree{origin}`；`presence` 项为 `{conn_id,user{id,username,display_name,avatar},doc_id,dirty,since}`；断开即离开 | 能编辑该书 |
 | POST | `/books/:id/collab/presence` | `{conn_id, doc_id, dirty}` 更新自己连接的在线状态（所在章节、是否有未保存修改） | `document:update` |
+| GET | `/documents/:id/writer-comments?status=open\|resolved\|all` | 写作批注（只有能编辑该书的人可见）：讨论串 `items[{id,user,quote,prefix,suffix,quote_offset,content,resolved,resolved_at,created_at,updated_at,replies[]}]` 与 `open`、`resolved` 数量；默认未解决 | `document:update` + 能编辑该书 |
+| POST | `/documents/:id/writer-comments` | 新建批注 `{content, quote, prefix, suffix, quote_offset}`（锚定选中的原文）或回复 `{content, parent_id}`；通知书籍作者与讨论中的其他人（站内通知「协作」类），并向写作台事件流推送 `comments{doc_id, origin}` | 同上 |
+| GET | `/books/:id/writer-comments/counts` | 各章节未解决的批注数 `{counts:{<doc_id>: n}}` | 同上 |
+| PUT / DELETE | `/writer-comments/:id` | 修改自己的批注 `{content}` / 删除（自己的，书籍所有者与管理员可删任何批注；删除顶级批注连同回复） | 同上 |
+| POST | `/writer-comments/:id/resolve` | `{resolved}` 标记讨论已解决或重新打开（仅顶级批注） | 同上 |
 | POST | `/books/:id/documents/batch-status` | 批量改状态 `{ids[], status}`（含子章节级联，行为与单个修改一致），响应为事件流：`start{total}`、每个章节 `item{result{id,ok,status,held,error}, done, total}`、`done{total,done,failed}`；校验失败在推送前以 JSON 返回 | `document:update` |
 | POST | `/books/:id/documents/batch-delete` | 批量移入回收站 `{ids[]}`（含子章节），事件流同上，已随父章节删除的记 `skipped`；需二次认证（开启时） | `document:delete` |
 | POST | `/documents/:id/view` | 章节浏览计数 +1，并同步累加所属书籍的 `view_count` 及按日分析聚合；可选 JSON `{referrer}`；不可见返回 404 | `document:read` |
