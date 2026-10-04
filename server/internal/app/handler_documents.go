@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var docStatuses = map[string]bool{"draft": true, "published": true, "archived": true}
@@ -89,6 +91,8 @@ type documentPayload struct {
 	AllowComments  *bool           `json:"allow_comments"`
 	CreateRevision *bool           `json:"create_revision"`
 	RevisionReason *string         `json:"revision_reason"`
+	// BaseHash 写作台打开章节时的 content_hash；传入时若期间他人已保存过标题或正文，返回 409（DOC_CONFLICT）与最新内容
+	BaseHash *string `json:"base_hash"`
 }
 
 // validExternalURL 校验外链章节地址：仅允许 http/https 绝对地址。
@@ -303,7 +307,8 @@ func (a *App) CreateDocument(c *gin.Context) {
 		}
 	}
 	a.emitActivity(u.ID, "document.created", "document", strconv.FormatUint(uint64(doc.ID), 10), fmt.Sprintf("document.created:%d", doc.ID))
-	ok(c, doc)
+	a.publishTreeChanged(c, book.ID)
+	ok(c, withContentHash(&doc))
 }
 
 // findDocument 查找文档及其所属书籍
@@ -348,7 +353,7 @@ func (a *App) GetDocument(c *gin.Context) {
 		return
 	}
 	a.applyContentGate(currentUser(c), book, doc)
-	ok(c, doc)
+	ok(c, withContentHash(doc))
 }
 
 // IncrementDocumentView POST /documents/:id/view 章节浏览 +1，并同步累加所属书籍的总浏览数
@@ -407,7 +412,7 @@ func (a *App) GetDocumentBySlug(c *gin.Context) {
 		return
 	}
 	a.applyContentGate(currentUser(c), book, &doc)
-	ok(c, doc)
+	ok(c, withContentHash(&doc))
 }
 
 // UpdateDocument PUT /documents/:id
@@ -423,6 +428,7 @@ func (a *App) UpdateDocument(c *gin.Context) {
 	}
 	oldStatus := doc.Status // 用于判定「首次发布」以通知关注者
 	oldTitle, oldContent := doc.Title, doc.Content
+	oldParent, oldSort, oldSlug := parentKey(doc.ParentID), doc.SortOrder, doc.Slug // 目录是否变化（通知其他写作台刷新）
 
 	var req documentPayload
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -525,6 +531,16 @@ func (a *App) UpdateDocument(c *gin.Context) {
 	}
 	var cascaded []uint // 级联发布的后代章节，事务后逐个审查
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
+		// 冲突保护：在事务中锁定并重读当前内容（SQLite 的写事务本身已串行），与写作台打开时的摘要比对
+		if req.BaseHash != nil && *req.BaseHash != "" && (req.Title != nil || req.Content != nil) {
+			var fresh models.Document
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "title", "content").First(&fresh, doc.ID).Error; err != nil {
+				return err
+			}
+			if documentHash(fresh.Title, fresh.Content) != *req.BaseHash {
+				return errDocConflict
+			}
+		}
 		if err := tx.Save(doc).Error; err != nil {
 			return err
 		}
@@ -559,6 +575,10 @@ func (a *App) UpdateDocument(c *gin.Context) {
 		}
 		return nil
 	}); err != nil {
+		if errors.Is(err, errDocConflict) {
+			a.respondDocConflict(c, doc.ID)
+			return
+		}
 		fail(c, http.StatusInternalServerError, "保存失败: "+err.Error())
 		return
 	}
@@ -573,11 +593,15 @@ func (a *App) UpdateDocument(c *gin.Context) {
 	if publishedChapter && oldStatus != "published" {
 		plugincore.FireChapterPublished(a, book, doc)
 	}
-	// 标题或正文有修改：由插件订阅（如章节导读在内容变化后更新）
+	// 标题或正文有修改：由插件订阅（如章节导读在内容变化后更新），并通知同书的其他写作台
 	if doc.Title != oldTitle || doc.Content != oldContent {
 		plugincore.FireChapterContentChanged(a, book, doc)
+		a.publishDocSaved(c, book.ID, doc)
 	}
-	ok(c, doc)
+	if doc.Title != oldTitle || parentKey(doc.ParentID) != oldParent || doc.SortOrder != oldSort || doc.Slug != oldSlug || doc.Status != oldStatus {
+		a.publishTreeChanged(c, book.ID)
+	}
+	ok(c, withContentHash(doc))
 }
 
 // subtreeDocIDs 收集 rootID 的全部后代章节 id（不含 root 本身），用于状态级联。
@@ -636,5 +660,6 @@ func (a *App) DeleteDocument(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "删除失败: "+err.Error())
 		return
 	}
+	a.publishTreeChanged(c, doc.BookID)
 	ok(c, gin.H{"message": "已移入回收站", "count": count, "expires_at": expires})
 }

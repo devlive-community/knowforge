@@ -128,6 +128,7 @@ export interface Document {
   created_at: string
   updated_at: string
   children?: Document[]
+  content_hash?: string // 标题与正文的摘要（写作台保存时回传，用于发现他人在此期间的修改）
 }
 
 export type DocumentRevisionReason = 'create' | 'save' | 'publish' | 'pre_restore' | 'restore'

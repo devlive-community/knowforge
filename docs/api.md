@@ -369,9 +369,11 @@ Authorization: Bearer kf_pat_…
 | POST | `/books/:id/copy` | 复制可读书籍的元数据 + 章节到当前用户名下的**私有草稿**新书。JSON `{title?, mode:full\|custom, doc_ids?}`：`full` 按原结构与顺序复制全部章节；`custom` 仅复制 `doc_ids`（有序，即复制后顺序），父章节同在所选集合内则保留父子、否则升为顶层。返回 `{book, copied_documents}` | `book:create` |
 | POST | `/books/:id/documents` | 创建文档（title 必填；slug 留空自动生成；parent_id 归属校验；成功后生成初始版本） | `document:create` |
 | GET | `/books/:id/documents/slug/:slug` | 按 slug 查文档（含正文） | `document:read` |
-| GET | `/documents/:id` | 文档详情（含正文） | `document:read` |
-| PUT | `/documents/:id` | 更新（title/content/parent_id/sort_order/status/slug；防环校验）；改 `status` 时传 `cascade_status: true` 可把新状态一并应用到整棵子章节树；手动保存传 `create_revision: true` 与 `revision_reason: save|publish` 生成不可变版本 | `document:update` |
+| GET | `/documents/:id` | 文档详情（含正文与 `content_hash`：标题与正文的摘要） | `document:read` |
+| PUT | `/documents/:id` | 更新（title/content/parent_id/sort_order/status/slug；防环校验）；改 `status` 时传 `cascade_status: true` 可把新状态一并应用到整棵子章节树；手动保存传 `create_revision: true` 与 `revision_reason: save|publish` 生成不可变版本；可传 `base_hash`（打开章节时的 `content_hash`），期间他人保存过标题或正文时返回 `409`，`code: DOC_CONFLICT`，`data: {document（含 content_hash）, saved_by, saved_at}`，不写入；请求头 `X-Collab-Conn` 为写作台连接 ID | `document:update` |
 | DELETE | `/documents/:id` | 将文档及其子树作为同一批次移入 30 天回收站 | `document:delete` |
+| GET | `/books/:id/collab/stream?ticket=&doc_id=` | 写作台协作事件流（短时事件流凭证，须能编辑该书）：建立即登记在线，推送 `hello{conn_id, presence[]}`、`presence{presence[]}`、`doc.saved{doc_id,title,content_hash,by,at,origin}`、`tree{origin}`；`presence` 项为 `{conn_id,user{id,username,display_name,avatar},doc_id,dirty,since}`；断开即离开 | 能编辑该书 |
+| POST | `/books/:id/collab/presence` | `{conn_id, doc_id, dirty}` 更新自己连接的在线状态（所在章节、是否有未保存修改） | `document:update` |
 | POST | `/books/:id/documents/batch-status` | 批量改状态 `{ids[], status}`（含子章节级联，行为与单个修改一致），响应为事件流：`start{total}`、每个章节 `item{result{id,ok,status,held,error}, done, total}`、`done{total,done,failed}`；校验失败在推送前以 JSON 返回 | `document:update` |
 | POST | `/books/:id/documents/batch-delete` | 批量移入回收站 `{ids[]}`（含子章节），事件流同上，已随父章节删除的记 `skipped`；需二次认证（开启时） | `document:delete` |
 | POST | `/documents/:id/view` | 章节浏览计数 +1，并同步累加所属书籍的 `view_count` 及按日分析聚合；可选 JSON `{referrer}`；不可见返回 404 | `document:read` |

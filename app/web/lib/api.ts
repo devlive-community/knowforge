@@ -48,8 +48,15 @@ export async function runStepUp(): Promise<boolean> {
 }
 
 // requestHeaders 与 api() 一致的请求头：界面语言、登录令牌，有请求体时带 JSON 类型。
+// 附加到每个请求的请求头（如写作台的协作连接 ID，服务端据此让发起者忽略自己操作产生的事件）
+const extraHeaders: Record<string, string> = {}
+export function setRequestHeader(name: string, value: string | null): void {
+  if (value) extraHeaders[name] = value
+  else delete extraHeaders[name]
+}
+
 export function requestHeaders(withBody: boolean, token?: string | null): Record<string, string> {
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { ...extraHeaders }
   if (typeof document !== 'undefined') {
     const locale = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('knowforge_locale='))?.split('=')[1]
     if (locale) { try { headers['X-KnowForge-Locale'] = decodeURIComponent(locale) } catch { /* invalid cookie */ } }
@@ -59,6 +66,9 @@ export function requestHeaders(withBody: boolean, token?: string | null): Record
   if (t) headers.Authorization = `Bearer ${t}`
   return headers
 }
+
+// ApiError 接口错误：status 为 HTTP 状态码（网络错误时没有），code 与 data 为服务端返回的错误代码与附带数据。
+export type ApiError = Error & { status?: number; code?: string; data?: any }
 
 export async function api<T = any>(
   path: string,
@@ -97,9 +107,10 @@ export async function api<T = any>(
   }
 
   if (!res.ok || payload.success === false) {
-    const err = new Error(payload.message || `请求失败 (${res.status})`) as Error & { status?: number; code?: string }
+    const err = new Error(payload.message || `请求失败 (${res.status})`) as ApiError
     err.status = res.status
     err.code = payload.code
+    err.data = payload.data
     throw err
   }
   return payload.data as T

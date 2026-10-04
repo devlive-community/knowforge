@@ -156,6 +156,7 @@ func (a *App) BatchDocumentStatus(c *gin.Context) {
 	if !ok {
 		return
 	}
+	defer a.publishTreeChanged(c, book.ID) // 处理完后通知其他写作台刷新目录
 	streamBatch(c, req.IDs, func(id uint) batchItemResult {
 		var doc models.Document
 		if a.DB.Where("id = ? AND book_id = ?", id, book.ID).First(&doc).Error != nil {
@@ -186,6 +187,7 @@ func (a *App) BatchDeleteDocuments(c *gin.Context) {
 	if !ok {
 		return
 	}
+	defer a.publishTreeChanged(c, book.ID) // 处理完后通知其他写作台刷新目录
 	streamBatch(c, req.IDs, func(id uint) batchItemResult {
 		var doc models.Document
 		if a.DB.Unscoped().Where("id = ? AND book_id = ?", id, book.ID).First(&doc).Error != nil {

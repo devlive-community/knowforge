@@ -95,6 +95,8 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     # 运行指标：指标说明 t(`admin.settings.metrics.metric.${key}`)
     'admin.settings.metrics.metric.': ['httpRequests', 'httpDuration', 'httpInFlight', 'sseConnections', 'aiCalls', 'aiTokens', 'aiCost', 'aiDuration',
                                        'jobs', 'jobsWaiting', 'instances', 'dbConnections', 'totals', 'buildInfo'],
+    # 协作写作：冲突块的选择 t(`writer.collab.choice.${choice}`)
+    'writer.collab.choice.': ['mine', 'theirs', 'both'],
     # 模板：t(`templates.kind.${kind}`)、t(`templates.manage.empty.${scope}.${kind}`)
     'templates.kind.': ['chapter', 'book'],
     'templates.manage.empty.': ['mine.chapter', 'mine.book', 'official.chapter', 'official.book'],

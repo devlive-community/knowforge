@@ -37,7 +37,7 @@ const backupFormat = 1
 var backupExcludedTables = map[string]bool{
 	"captcha_challenges": true, "o_auth_states": true, "login_challenges": true, "rate_limit_counters": true,
 	"two_factor_step_ups": true, "login_lockouts": true, "background_jobs": true, "system_backups": true,
-	"email_verification_tokens": true, "password_reset_tokens": true,
+	"email_verification_tokens": true, "password_reset_tokens": true, "writer_presences": true,
 }
 
 type backupManifest struct {

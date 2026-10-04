@@ -242,6 +242,19 @@ type EmailVerificationToken struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// WriterPresence 写作台在线状态：每个打开的写作台事件流一条（连接断开时删除，SeenAt 由服务端心跳刷新，过期即视为离开）。
+type WriterPresence struct {
+	ConnID    string    `gorm:"primaryKey;size:32" json:"conn_id"`
+	BookID    uint      `gorm:"index;not null" json:"book_id"`
+	UserID    uint      `gorm:"index;not null" json:"user_id"`
+	DocID     uint      `json:"doc_id"`
+	Dirty     bool      `json:"dirty"` // 当前章节有未保存的修改
+	SeenAt    time.Time `gorm:"index" json:"seen_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (WriterPresence) TableName() string { return "writer_presences" }
+
 // SystemBackup 站点备份记录：备份文件为 zip（manifest.json + 各表数据 + 可选的本地上传文件），保存在数据目录 backups/ 下。
 // 备份含站点密钥、密码哈希与各类接口密钥，不上传到用于公开访问的对象存储。
 type SystemBackup struct {
@@ -823,6 +836,8 @@ type Document struct {
 	PublishHeld string `gorm:"-" json:"publish_held,omitempty"`
 	// Paywall 非持久化：读者无权阅读全文（如付费内容未解锁）时由内容门禁给出的付费墙信息，此时 Content 为试读内容
 	Paywall map[string]any `gorm:"-" json:"paywall,omitempty"`
+	// ContentHash 非持久化：标题与正文的摘要，写作台保存时回传，用于发现他人在此期间的修改（见 DocumentHash）
+	ContentHash string `gorm:"-" json:"content_hash,omitempty"`
 }
 
 // UserFile 用户上传到站点存储的文件（上传接口、Markdown 导入的图片、外链图片本地化），用于统计个人存储用量与删除。
@@ -919,6 +934,7 @@ func CoreModels() []any {
 		&AIUsageLog{},
 		&AIAlert{},
 		&SystemBackup{},
+		&WriterPresence{},
 		// 成就相关表由「成就」插件在启用时建表（首次启用才创建），不在核心 AutoMigrate 里。
 	}
 }

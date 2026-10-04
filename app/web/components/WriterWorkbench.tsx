@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, ReactNode } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
-import { api, formatDate, API_BASE, getToken } from '@/lib/api'
+import { api, formatDate, API_BASE, getToken, type ApiError } from '@/lib/api'
 import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { renderMarkdown, bindMarkdownInteractivity, headingPlainText, wikiDocsFromTree } from '@/lib/markdown'
@@ -23,6 +23,8 @@ import { entitlementAllowed } from '@/lib/entitlements'
 import AIWriterDrawer, { type AIWriterTab, type WriterEditorBridge } from '@/components/ai-writer/AIWriterDrawer'
 import { aiWriterEnabled } from '@/lib/ai-writer'
 import TemplatePicker from '@/components/templates/TemplatePicker'
+import { CollabAvatar, CollabAvatars, ConflictDialog, SameChapterBanner, useWriterCollab, type ConflictState, type DocSavedEvent, type Presence } from '@/components/writer/collab'
+import { merge3, mergeTitle, resolveMerge, type ConflictChoice } from '@/lib/merge'
 import { browserTimeZone, templatesEnabled, type TemplateSummary } from '@/lib/templates'
 import { displayName } from '@/lib/users'
 
@@ -132,6 +134,9 @@ function metaPreviewHtml(meta: DocMeta, t: (key: string) => string): string {
     `<div class="mb-1.5 font-semibold text-slate-500">${esc(t('writer.meta.previewTitle'))}</div><dl class="m-0 space-y-1">${rows.join('')}</dl></div>`
 }
 
+// MergeOutcome 保存冲突的处理结果：合并后的内容（按他人版本的摘要重新保存）、改用他人版本，或取消（null）
+type MergeOutcome = { kind: 'merged'; title: string; content: string; hash: string } | { kind: 'theirs'; document: Document } | null
+
 // Writer：书籍与章节编辑器（三栏工作台布局）
 export default function Writer({ user }: WriterProps) {
   const { confirmAction, requestInput, showToast } = useFeedback()
@@ -222,6 +227,12 @@ export default function Writer({ user }: WriterProps) {
   const [collecting, setCollecting] = useState(false)
   const [collectIncludeSource, setCollectIncludeSource] = useState(false) // 采集网页插入正文时是否附带「来源」脚注（默认关闭，可配置）
   const snapshot = useRef('') // 已保存/已加载表单的快照，用于脏状态判断
+  // 协作：打开（或上次保存）时的标题、正文与摘要，作为保存冲突时三方合并的基准
+  const baseRef = useRef<{ docId: number; hash: string; title: string; content: string } | null>(null)
+  const dirtyRef = useRef(false)
+  const formKeyRef = useRef('')
+  const [remoteSave, setRemoteSave] = useState<DocSavedEvent | null>(null) // 编辑期间他人保存了当前章节
+  const [conflict, setConflict] = useState<(ConflictState & { title: string | null; theirs: Document; resolve: (r: MergeOutcome) => void }) | null>(null)
   const loadedDocId = useRef<number | null>(null) // 当前表单对应的文档，防止切换章节时误触发自动保存
   const saveRef = useRef<(opts?: { status?: DocumentStatus }) => Promise<boolean | undefined>>(async () => undefined)
   const didInitExpand = useRef(false)
@@ -423,6 +434,11 @@ export default function Writer({ user }: WriterProps) {
   useEffect(() => {
     if (!flatDocs.length && !docSlug) { resetForm(); return }
     const doc = docSlug ? flatDocs.find((d) => d.slug === docSlug) : null
+    if (doc && doc.id === loadedDocId.current && dirtyRef.current) {
+      // 目录刷新（如协作者新建了章节）时当前章节有未保存的修改：不重新加载，避免覆盖正在编辑的内容
+      setCurrent((c) => (c && c.id === doc.id ? { ...doc, content_hash: c.content_hash } : doc))
+      return
+    }
     if (doc) {
       // active 守卫：切换章节/采集新章节会重跑本 effect，避免上一个仍在途的请求乱序返回后覆盖当前章节内容
       let active = true
@@ -432,18 +448,7 @@ export default function Writer({ user }: WriterProps) {
       setDraftRecovery(null)
       api<Document>(`/documents/${doc.id}`).then((full) => {
         if (!active) return
-        setTitle(full.title)
-        setContent(full.content || '')
-        setStatus(full.status)
-        setParentId(full.parent_id ? String(full.parent_id) : '')
-        setSortOrder(full.sort_order)
-        setAllowComments(full.allow_comments !== false)
-        setSlug(full.slug || '')
-        setExternalUrl(full.external_url || '')
-        setExternalNewTab(full.external_new_tab !== false)
-        snapshot.current = JSON.stringify([full.title, full.content || '', full.status, full.parent_id ? String(full.parent_id) : '', full.sort_order, full.allow_comments !== false, full.slug || '', full.external_url || '', full.external_new_tab !== false])
-        loadedDocId.current = full.id
-        setSaveState('saved')
+        applyLoadedDoc(full)
         // 本地草稿恢复：若上次离开时有未保存内容且与服务端不同，提示恢复
         try {
           const raw = localStorage.getItem(draftKey(full.id))
@@ -461,6 +466,82 @@ export default function Writer({ user }: WriterProps) {
       resetForm()
     }
   }, [docSlug, flatDocs]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // applyLoadedDoc 用服务端的章节内容填充表单，并记为已保存与合并基准
+  function applyLoadedDoc(full: Document) {
+    setTitle(full.title)
+    setContent(full.content || '')
+    setStatus(full.status)
+    setParentId(full.parent_id ? String(full.parent_id) : '')
+    setSortOrder(full.sort_order)
+    setAllowComments(full.allow_comments !== false)
+    setSlug(full.slug || '')
+    setExternalUrl(full.external_url || '')
+    setExternalNewTab(full.external_new_tab !== false)
+    snapshot.current = JSON.stringify([full.title, full.content || '', full.status, full.parent_id ? String(full.parent_id) : '', full.sort_order, full.allow_comments !== false, full.slug || '', full.external_url || '', full.external_new_tab !== false])
+    loadedDocId.current = full.id
+    baseRef.current = { docId: full.id, hash: full.content_hash || '', title: full.title, content: full.content || '' }
+    setRemoteSave(null)
+    setSaveState('saved')
+  }
+
+  // mergeWithLatest 保存冲突：以打开时的内容为基准，把自己的修改与他人已保存的版本三方合并；
+  // 不冲突时自动合并，冲突时打开对话框由作者逐块选择。
+  async function mergeWithLatest(mine: { title: string; content: string }, data: { document: Document; saved_by?: Presence['user']; saved_at?: string }): Promise<MergeOutcome> {
+    const base = baseRef.current
+    const theirs = data.document
+    if (!base || !theirs) return null
+    const name = data.saved_by ? (data.saved_by.display_name || data.saved_by.username) : t('writer.collab.someone')
+    const mergedTitle = mergeTitle(base.title, mine.title, theirs.title)
+    const result = merge3(base.content, mine.content, theirs.content || '')
+    if (result.conflicts === 0 && mergedTitle !== null) {
+      showToast({ message: t('writer.collab.autoMerged', { name }), tone: 'success' })
+      return { kind: 'merged', title: mergedTitle, content: resolveMerge(result), hash: theirs.content_hash || '' }
+    }
+    return new Promise((resolve) => setConflict({
+      result, titles: mergedTitle === null ? { base: base.title, mine: mine.title, theirs: theirs.title } : null,
+      title: mergedTitle, savedBy: data.saved_by, savedAt: data.saved_at, theirs, resolve,
+    }))
+  }
+
+  function resolveConflict(choices: ConflictChoice[], titleChoice: 'mine' | 'theirs') {
+    if (!conflict) return
+    const title = conflict.titles ? (titleChoice === 'mine' ? conflict.titles.mine : conflict.titles.theirs) : (conflict.title || '')
+    conflict.resolve({ kind: 'merged', title, content: resolveMerge(conflict.result, choices), hash: conflict.theirs.content_hash || '' })
+    setConflict(null)
+  }
+
+  // 他人保存了当前章节：没有未保存修改时直接载入新内容；有修改时提示，保存时自动合并
+  async function onRemoteDocSaved(ev: DocSavedEvent) {
+    if (ev.doc_id !== loadedDocId.current || baseRef.current?.hash === ev.content_hash) return
+    if (dirtyRef.current) {
+      setRemoteSave(ev)
+      return
+    }
+    try {
+      const full = await api<Document>(`/documents/${ev.doc_id}`)
+      if (loadedDocId.current !== full.id || dirtyRef.current) return
+      applyLoadedDoc(full)
+      showToast({ message: t('writer.collab.reloaded', { name: ev.by.display_name || ev.by.username }), tone: 'success' })
+    } catch { /* 忽略：保存时仍会做冲突检查 */ }
+  }
+
+  // 是否有未保存的修改：直接比较表单与已保存快照（保存进行中继续输入的内容也算未保存）
+  const formKey = JSON.stringify([title, content, status, parentId, sortOrder, allowComments, slug, externalUrl, externalNewTab])
+  const formDirty = loadedDocId.current !== null && formKey !== snapshot.current
+  dirtyRef.current = formDirty
+  formKeyRef.current = formKey
+  const collab = useWriterCollab({
+    bookId: book?.id ?? null, docId: current?.id ?? null, dirty: formDirty,
+    onDocSaved: (ev) => { void onRemoteDocSaved(ev) },
+    onTreeChanged: () => { if (book) void loadTree(book) },
+  })
+  const sameChapterOthers = collab.others.filter((p) => current && p.doc_id === current.id)
+  const presenceByDoc = useMemo(() => {
+    const map = new Map<number, Presence[]>()
+    for (const p of collab.others) if (p.doc_id) map.set(p.doc_id, [...(map.get(p.doc_id) || []), p])
+    return map
+  }, [collab.others])
 
   // 保存：opts.status 允许“发布”一次性覆盖状态
   const save = useCallback(async (opts?: { status?: DocumentStatus }) => {
@@ -495,7 +576,33 @@ export default function Writer({ user }: WriterProps) {
     const startedAt = Date.now()
     try {
       if (current) {
-        const updated = await api<Document>(`/documents/${current.id}`, { method: 'PUT', body: payload })
+        // 冲突保护：带上打开时的摘要；期间他人保存过则三方合并后按最新摘要重新保存
+        const base = baseRef.current && baseRef.current.docId === current.id ? baseRef.current : null
+        let body: Record<string, unknown> = { ...payload, ...(base?.hash ? { base_hash: base.hash } : {}) }
+        let updated: Document
+        let merged = false
+        try {
+          updated = await api<Document>(`/documents/${current.id}`, { method: 'PUT', body })
+        } catch (e) {
+          const err = e as ApiError
+          if (err.code !== 'DOC_CONFLICT' || !base) throw e
+          const outcome = await mergeWithLatest({ title: payload.title, content: payload.content }, err.data)
+          if (!outcome) { setSaveState('dirty'); return false }
+          if (outcome.kind === 'theirs') {
+            applyLoadedDoc(outcome.document)
+            setCurrent(outcome.document)
+            return false
+          }
+          body = { ...body, title: outcome.title, content: outcome.content, base_hash: outcome.hash }
+          updated = await api<Document>(`/documents/${current.id}`, { method: 'PUT', body })
+          merged = true
+        }
+        if (merged) {
+          setTitle(updated.title)
+          setContent(updated.content || '')
+        }
+        baseRef.current = { docId: updated.id, hash: updated.content_hash || '', title: updated.title, content: updated.content || '' }
+        setRemoteSave(null)
         setSlug(updated.slug || '')
         snapshot.current = JSON.stringify([updated.title, updated.content || '', updated.status, updated.parent_id ? String(updated.parent_id) : '', updated.sort_order, updated.allow_comments !== false, updated.slug || '', updated.external_url || '', updated.external_new_tab !== false])
         loadedDocId.current = updated.id
@@ -523,7 +630,8 @@ export default function Writer({ user }: WriterProps) {
       }
       const elapsed = Date.now() - startedAt
       if (elapsed < 500) await new Promise((r) => setTimeout(r, 500 - elapsed)) // 让“保存中”至少可见片刻
-      setSaveState('saved')
+      // 保存期间若又有输入，保存完成后仍是未保存状态
+      setSaveState(formKeyRef.current === snapshot.current ? 'saved' : 'dirty')
       return true
     } catch (e) {
       setSaveState('dirty')
@@ -1441,6 +1549,11 @@ export default function Writer({ user }: WriterProps) {
   return (
     <div className={`flex h-screen flex-col bg-warm ${aiTab ? 'lg:pr-96 2xl:pr-[28rem]' : ''}`}>
       <Seo siteName={siteName} title={titleText} noindex />
+      {conflict && (
+        <ConflictDialog state={conflict} onResolve={resolveConflict}
+          onUseTheirs={() => { conflict.resolve({ kind: 'theirs', document: conflict.theirs }); setConflict(null) }}
+          onCancel={() => { conflict.resolve(null); setConflict(null) }} />
+      )}
       {templatesOn && (
         <TemplatePicker open={templateOpen} kind="chapter" onClose={() => setTemplateOpen(false)} onUse={insertTemplate} reloadKey={templateReload}
           useLabel={t('templates.writer.insert')}
@@ -1473,6 +1586,7 @@ export default function Writer({ user }: WriterProps) {
           {saveState === 'saving' && <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-primary-500" /> <span className="text-primary-600">{t('writer.savingState')}</span></>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <CollabAvatars others={collab.others} docTitle={(id) => flatDocs.find((d) => d.id === id)?.title || ''} />
           {site.help_doc_url && (
             <Button variant="ghost" title={t('writer.mdHelp')} onClick={() => window.open(site.help_doc_url, '_blank', 'noopener,noreferrer')}>
               <InfoCircleIcon className="h-4 w-4" /> <span className="hidden md:inline">{t('writer.help')}</span>
@@ -1558,7 +1672,7 @@ export default function Writer({ user }: WriterProps) {
                 {filteredTree.length === 0 ? (
                   <EmptyState>{search ? t('writer.noMatch') : t('writer.noChapters')}</EmptyState>
                 ) : (
-                  <TreeItems items={filteredTree} search={search.trim()} expanded={expanded} setExpanded={setExpanded}
+                  <TreeItems items={filteredTree} search={search.trim()} expanded={expanded} setExpanded={setExpanded} presence={presenceByDoc}
                     currentId={current?.id ?? creatingUnder ?? undefined} chapterPrefix={chapterPrefix}
                     onSelect={selectDoc} onMove={move} onDelete={removeDoc}
                     menuFor={chapterMenu?.doc.id ?? null} onOpenMenu={openChapterMenu} onCloseMenu={closeChapterMenu}
@@ -1635,6 +1749,8 @@ export default function Writer({ user }: WriterProps) {
             <input
               className="w-full shrink-0 border-0 bg-transparent p-0 text-3xl font-bold text-ink placeholder:text-slate-300 focus:outline-none focus:ring-0"
               placeholder={t('writer.chapterTitlePlaceholder')} value={title} onChange={(e) => setTitle(e.target.value)} />
+
+            {current && <SameChapterBanner others={sameChapterOthers} remoteSave={remoteSave} />}
 
             {draftRecovery && (
               <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
@@ -2576,6 +2692,7 @@ interface TreeProps {
   onDragOverItem: (doc: Document, pos: 'before' | 'inside' | 'after') => void
   onDropItem: (doc: Document) => void
   onDragEndItem: () => void
+  presence?: Map<number, Presence[]> // 其他协作者正在编辑的章节
 }
 
 // TreeItems 章节树：文件夹/文件图标、展开折叠、搜索过滤、行内菜单、同级拖拽排序
@@ -2645,6 +2762,11 @@ function TreeItem(props: TreeProps & { item: Document; depth: number }) {
           className="flex flex-1 items-center gap-1.5 py-2 pl-1 pr-1 text-left">
           <DocTreeIcon icon={item.icon} hasChildren={hasChildren} colorClass={active ? 'text-primary-500' : 'text-slate-400'} />
           <span className={`whitespace-nowrap ${active ? 'font-medium text-primary-700' : 'text-slate-700'}`}>{chapterPrefix}{item.title}</span>
+          {!!props.presence?.get(item.id)?.length && (
+            <span className="ml-1 flex -space-x-1" data-testid="tree-presence">
+              {props.presence.get(item.id)!.slice(0, 3).map((p) => <CollabAvatar key={p.conn_id} user={p.user} size="sm" ring={p.dirty} />)}
+            </span>
+          )}
         </button>
         <span className="mr-1 hidden shrink-0 items-center group-hover:flex">
           {dragEnabled ? (

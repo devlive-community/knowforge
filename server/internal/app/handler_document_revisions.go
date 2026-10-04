@@ -260,7 +260,9 @@ func (a *App) RestoreDocumentRevision(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "恢复版本失败")
 		return
 	}
-	ok(c, restored)
+	a.publishDocSaved(c, book.ID, &restored)
+	a.publishTreeChanged(c, book.ID)
+	ok(c, withContentHash(&restored))
 }
 
 // errRevisionHidden 恢复的版本超出保留范围。

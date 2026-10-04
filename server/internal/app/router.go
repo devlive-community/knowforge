@@ -252,6 +252,9 @@ func (a *App) Router() *gin.Engine {
 		}
 		api.POST("/stream-tickets", a.RequireAuth(), a.IssueStreamTicket)
 		api.GET("/notifications/stream", a.SSENotifications)
+		// 写作台协作事件流：凭短时事件流凭证（?ticket=）连接，须能编辑该书
+		api.GET("/books/:id/collab/stream", a.WriterCollabStream)
+		api.POST("/books/:id/collab/presence", a.RequireAuth(), a.RequirePermission(authz.DocumentUpdate), a.UpdateWriterPresence)
 		// 备份下载：凭管理员换取的短时下载凭证（URL 中的 ticket）访问，不需要登录请求头
 		api.GET("/backups/:id/download", a.DownloadBackup)
 
