@@ -25,6 +25,8 @@ import Backlinks from '@/components/Backlinks'
 import { backlinksEnabled } from '@/lib/backlinks'
 import { chapterGuideEnabled } from '@/lib/chapter-guide'
 import { qaEnabled, citationHref, type QACitation } from '@/lib/qa'
+import { readAloudEnabled } from '@/lib/read-aloud'
+import ReadAloud from '@/components/read-aloud/ReadAloud'
 import ReportButton from '@/components/ReportButton'
 import BookTranslations from '@/components/BookTranslations'
 import BookVersions from '@/components/BookVersions'
@@ -551,6 +553,10 @@ export default function Reader({ site, siteUrl, user, book, doc, html, tree, acc
                     <span>· {t('reader.updatedAt', { date: formatDate(doc.updated_at).slice(0, 10) })}</span>
                     <span>· {t('reader.readingMin', { n: readingMin })}</span>
                     <span>· {t('reader.readCount', { n: formatNumber(docViews) })}</span>
+                    {readAloudEnabled(site) && !doc.paywall && (
+                      <ReadAloud key={doc.id} docId={doc.id} title={doc.title} contentRef={contentRef} loggedIn={!!user}
+                        nextHref={next && !neighborExtURL(next) && !lockedSet.has(next.id) ? `/book/reader/${encodeURIComponent(book.slug)}/${next.slug}?listen=1` : null} />
+                    )}
                     {canEdit && (
                       <Link href={`/book/writer/${encodeURIComponent(book.slug)}/${encodeURIComponent(doc.slug)}`}
                         className="flex items-center gap-1 text-primary-600 transition-colors hover:text-primary-700">

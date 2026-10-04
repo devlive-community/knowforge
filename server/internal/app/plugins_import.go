@@ -21,6 +21,7 @@ import (
 	_ "knowforge/server/internal/plugins/payment"
 	_ "knowforge/server/internal/plugins/pdfexport"
 	_ "knowforge/server/internal/plugins/qa"
+	_ "knowforge/server/internal/plugins/readaloud"
 	_ "knowforge/server/internal/plugins/tags"
 	_ "knowforge/server/internal/plugins/templates"
 	_ "knowforge/server/internal/plugins/watermark"

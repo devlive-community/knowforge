@@ -23,7 +23,7 @@ interface Summary {
 
 interface LogItem {
   log: {
-    id: number; user_id: number; feature: string; trace_id: string; ref_type: string; ref_id: number; kind: 'chat' | 'embed' | 'translate'; model: string
+    id: number; user_id: number; feature: string; trace_id: string; ref_type: string; ref_id: number; kind: 'chat' | 'embed' | 'translate' | 'tts'; model: string
     input_tokens: number; output_tokens: number; characters: number; estimated: boolean; cost_micros: number; currency: string
     duration_ms: number; status: 'ok' | 'error'; error: string; created_at: string
   }
@@ -32,7 +32,7 @@ interface LogItem {
 }
 
 const PERIODS = ['7', '30', '90']
-const KIND_LABEL: Record<LogItem['log']['kind'], string> = { chat: 'admin.aiUsage.kindChat', embed: 'admin.aiUsage.kindEmbed', translate: 'admin.aiUsage.kindTranslate' }
+const KIND_LABEL: Record<LogItem['log']['kind'], string> = { chat: 'admin.aiUsage.kindChat', embed: 'admin.aiUsage.kindEmbed', translate: 'admin.aiUsage.kindTranslate', tts: 'admin.aiUsage.kindTts' }
 
 // 管理后台 · AI 用量：站点 AI 服务的调用次数、tokens 与估算费用（按功能/模型/用户），以及调用明细
 export default function AdminAIUsage() {
@@ -287,7 +287,7 @@ function UsageLogs({ features, days }: { features: string[]; days: string }) {
                   </td>
                   <td className="py-2 pr-3 text-slate-500">{l.model || '-'}<span className="ml-1 text-xs text-slate-400">· {t(KIND_LABEL[l.kind])}</span></td>
                   <td className="whitespace-nowrap py-2 pr-3 text-right tabular-nums text-slate-700">
-                    {l.kind === 'translate' ? t('admin.aiUsage.chars', { n: formatTokens(l.characters) }) : <>{formatTokens(l.input_tokens)} / {formatTokens(l.output_tokens)}</>}
+                    {l.kind === 'translate' || l.kind === 'tts' ? t('admin.aiUsage.chars', { n: formatTokens(l.characters) }) : <>{formatTokens(l.input_tokens)} / {formatTokens(l.output_tokens)}</>}
                     {l.estimated && <Tooltip content={t('admin.aiUsage.estimatedHint')}><span className="ml-1 text-xs text-amber-600">≈</span></Tooltip>}
                     {l.kind === 'chat' && l.characters > 0 && <div className="text-xs text-slate-400">{t('admin.aiUsage.chars', { n: formatTokens(l.characters) })}</div>}
                   </td>

@@ -1,7 +1,10 @@
-// 端到端测试用的假 OpenAI 兼容服务：对话按系统提示返回固定内容（支持流式与工具调用），嵌入按关键词计数构造向量。
+// 端到端测试用的假 OpenAI 兼容服务：对话按系统提示返回固定内容（支持流式与工具调用），嵌入按关键词计数构造向量，
+// 语音合成返回一段 0.3 秒的提示音（MP3）。
 import http from 'node:http'
 
 const PORT = Number(process.env.E2E_AI_PORT || 6990)
+// 0.3 秒 440Hz 提示音（ffmpeg 生成的 MP3）
+const TONE = Buffer.from('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', 'base64')
 const words = ['的', '是', '缓存', '插件', '书', 'a', 'e', 'the']
 
 function answer(req) {
@@ -36,6 +39,11 @@ const server = http.createServer((req, res) => {
   req.on('data', (c) => { body += c })
   req.on('end', () => {
     const payload = body ? JSON.parse(body) : {}
+    if (req.url.endsWith('/audio/speech')) {
+      res.setHeader('Content-Type', 'audio/mpeg')
+      res.end(TONE)
+      return
+    }
     if (req.url.endsWith('/embeddings')) {
       const input = Array.isArray(payload.input) ? payload.input : [payload.input || '']
       const data = input.map((t, index) => ({ index, embedding: [...words.map((w) => t.split(w).length - 1), 0.1] }))

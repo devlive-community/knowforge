@@ -13,11 +13,15 @@ interface AIConfig {
   model: string
   embed_base_url: string
   embed_model: string
+  tts_base_url: string
+  tts_model: string
+  tts_voices: string
   price_currency: string
   price_input: string
   price_output: string
   price_embed: string
   price_translate: string
+  price_tts: string
   alert_daily_cost: string
   alert_user_daily_tokens: string
   alert_trace_tokens: string
@@ -25,19 +29,21 @@ interface AIConfig {
   show_user_cost: string // 空或 true 为展示
   api_key_set: boolean
   embed_api_key_set: boolean
+  tts_api_key_set: boolean
   source: 'ai' | 'translation' | 'none'
   chat_available: boolean
   embed_available: boolean
+  tts_available: boolean
 }
 
-type TestKind = 'chat' | 'embed'
+type TestKind = 'chat' | 'embed' | 'tts'
 
 const DEFAULTS: Record<string, { base: string; model: string }> = {
   openai: { base: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   anthropic: { base: 'https://api.anthropic.com', model: 'claude-sonnet-5' },
 }
 
-// 系统设置 · AI 服务：站点级的大模型（对话 + 向量嵌入）配置，供问答等插件使用；密钥只写不读
+// 系统设置 · AI 服务：站点级的大模型（对话 + 向量嵌入 + 语音合成）配置，供问答等插件使用；密钥只写不读
 export default function SettingsAI() {
   const { user } = useApp()
   const isAdmin = user?.role === 'admin'
@@ -45,6 +51,7 @@ export default function SettingsAI() {
   const [cfg, setCfg] = useState<AIConfig | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [embedKey, setEmbedKey] = useState('')
+  const [ttsKey, setTtsKey] = useState('')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<TestKind | null>(null)
@@ -55,7 +62,7 @@ export default function SettingsAI() {
     api<AIConfig>('/admin/ai').then(setCfg).catch((e) => setMessage((e as Error).message))
   }, [isAdmin])
 
-  async function save(clear?: 'api_key' | 'embed_api_key') {
+  async function save(clear?: 'api_key' | 'embed_api_key' | 'tts_api_key') {
     if (!cfg) return
     setSaving(true)
     setMessage('')
@@ -63,14 +70,17 @@ export default function SettingsAI() {
       const body: Record<string, string> = {
         provider: cfg.provider, base_url: cfg.base_url, model: cfg.model,
         embed_base_url: cfg.embed_base_url, embed_model: cfg.embed_model,
+        tts_base_url: cfg.tts_base_url, tts_model: cfg.tts_model, tts_voices: cfg.tts_voices, price_tts: cfg.price_tts,
         price_currency: cfg.price_currency, price_input: cfg.price_input, price_output: cfg.price_output, price_embed: cfg.price_embed, price_translate: cfg.price_translate,
         alert_daily_cost: cfg.alert_daily_cost, alert_user_daily_tokens: cfg.alert_user_daily_tokens, alert_trace_tokens: cfg.alert_trace_tokens,
         usage_retention_days: cfg.usage_retention_days, show_user_cost: cfg.show_user_cost === 'false' ? 'false' : 'true',
         api_key: clear === 'api_key' ? '-' : apiKey, embed_api_key: clear === 'embed_api_key' ? '-' : embedKey,
+        tts_api_key: clear === 'tts_api_key' ? '-' : ttsKey,
       }
       setCfg(await api<AIConfig>('/admin/ai', { method: 'PUT', body }))
       setApiKey('')
       setEmbedKey('')
+      setTtsKey('')
       setMessage(t('admin.settings.ai.saved'))
     } catch (e) {
       setMessage((e as Error).message)
@@ -82,10 +92,12 @@ export default function SettingsAI() {
   async function test(kind: TestKind) {
     setTesting(kind)
     try {
-      const d = await api<{ reply?: string; dimensions?: number; elapsed_ms: number }>('/admin/ai/test', { method: 'POST', body: { kind } })
+      const d = await api<{ reply?: string; dimensions?: number; bytes?: number; elapsed_ms: number }>('/admin/ai/test', { method: 'POST', body: { kind } })
       const text = kind === 'chat'
         ? t('admin.settings.ai.testChatOk', { reply: d.reply || '-', ms: d.elapsed_ms })
-        : t('admin.settings.ai.testEmbedOk', { dimensions: d.dimensions ?? 0, ms: d.elapsed_ms })
+        : kind === 'tts'
+          ? t('admin.settings.ai.testTtsOk', { kb: Math.max(1, Math.round((d.bytes ?? 0) / 1024)), ms: d.elapsed_ms })
+          : t('admin.settings.ai.testEmbedOk', { dimensions: d.dimensions ?? 0, ms: d.elapsed_ms })
       setTestResult((r) => ({ ...r, [kind]: { ok: true, text } }))
     } catch (e) {
       setTestResult((r) => ({ ...r, [kind]: { ok: false, text: (e as Error).message } }))
@@ -105,6 +117,7 @@ export default function SettingsAI() {
             <span className="text-slate-500">{t('admin.settings.ai.status')}</span>
             <Badge tone={cfg.chat_available ? 'emerald' : 'slate'}>{t(cfg.chat_available ? 'admin.settings.ai.chatOn' : 'admin.settings.ai.chatOff')}</Badge>
             <Badge tone={cfg.embed_available ? 'emerald' : 'slate'}>{t(cfg.embed_available ? 'admin.settings.ai.embedOn' : 'admin.settings.ai.embedOff')}</Badge>
+            <Badge tone={cfg.tts_available ? 'emerald' : 'slate'}>{t(cfg.tts_available ? 'admin.settings.ai.ttsOn' : 'admin.settings.ai.ttsOff')}</Badge>
             {cfg.source === 'translation' && <Badge tone="amber">{t('admin.settings.ai.sourceTranslation')}</Badge>}
           </div>
 
@@ -154,6 +167,29 @@ export default function SettingsAI() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" data-testid="ai-tts">
+            <h2 className="text-base font-semibold text-slate-900">{t('admin.settings.ai.ttsTitle')}</h2>
+            <p className="mt-1 text-sm text-slate-500">{t('admin.settings.ai.ttsDescription')}</p>
+            <div className="mt-4 space-y-4">
+              <Field label={t('admin.settings.ai.ttsModel')} hint={t('admin.settings.ai.ttsModelHint')}>
+                <Input value={cfg.tts_model} onChange={(e) => set({ tts_model: e.target.value })} placeholder="gpt-4o-mini-tts" />
+              </Field>
+              <Field label={t('admin.settings.ai.ttsVoices')} hint={t('admin.settings.ai.ttsVoicesHint')}>
+                <Input value={cfg.tts_voices} onChange={(e) => set({ tts_voices: e.target.value })} placeholder="alloy, echo, fable, onyx, nova, shimmer" />
+              </Field>
+              <Field label={t('admin.settings.ai.ttsBaseUrl')} hint={t('admin.settings.ai.ttsBaseUrlHint')}>
+                <Input value={cfg.tts_base_url} onChange={(e) => set({ tts_base_url: e.target.value })} placeholder="https://api.openai.com/v1" />
+              </Field>
+              <Field label={t('admin.settings.ai.ttsApiKey')} hint={t('admin.settings.ai.ttsApiKeyHint')}>
+                <div className="flex gap-2">
+                  <Input type="password" autoComplete="new-password" value={ttsKey} onChange={(e) => setTtsKey(e.target.value)}
+                    placeholder={cfg.tts_api_key_set ? t('admin.settings.ai.secretSet') : t('admin.settings.ai.secretEmpty')} />
+                  {cfg.tts_api_key_set && <Button variant="outline" disabled={saving} onClick={() => save('tts_api_key')}>{t('admin.settings.ai.clearSecret')}</Button>}
+                </div>
+              </Field>
+            </div>
+          </div>
+
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-semibold text-slate-900">{t('admin.settings.ai.pricingTitle')}</h2>
@@ -175,6 +211,9 @@ export default function SettingsAI() {
               </Field>
               <Field label={t('admin.settings.ai.priceTranslate')} hint={t('admin.settings.ai.priceTranslateHint')}>
                 <Input type="number" min={0} step="0.01" value={cfg.price_translate} onChange={(e) => set({ price_translate: e.target.value })} placeholder="0" />
+              </Field>
+              <Field label={t('admin.settings.ai.priceTts')} hint={t('admin.settings.ai.priceTtsHint')}>
+                <Input type="number" min={0} step="0.01" value={cfg.price_tts} onChange={(e) => set({ price_tts: e.target.value })} placeholder="0" />
               </Field>
             </div>
             <div className="mt-4 max-w-xs">
@@ -216,9 +255,10 @@ export default function SettingsAI() {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" loading={testing === 'chat'} disabled={testing !== null || !cfg.chat_available} onClick={() => test('chat')}>{t('admin.settings.ai.testChat')}</Button>
             <Button variant="outline" loading={testing === 'embed'} disabled={testing !== null || !cfg.embed_available} onClick={() => test('embed')}>{t('admin.settings.ai.testEmbed')}</Button>
+            <Button variant="outline" loading={testing === 'tts'} disabled={testing !== null || !cfg.tts_available} onClick={() => test('tts')}>{t('admin.settings.ai.testTts')}</Button>
             <Button loading={saving} onClick={() => save()}>{t('admin.settings.ai.save')}</Button>
           </div>
-          {(['chat', 'embed'] as TestKind[]).map((kind) => testResult[kind] && (
+          {(['chat', 'embed', 'tts'] as TestKind[]).map((kind) => testResult[kind] && (
             <div key={kind} className={`rounded-lg px-4 py-3 text-sm ${testResult[kind]!.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
               {testResult[kind]!.text}
             </div>

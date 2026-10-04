@@ -797,6 +797,22 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | GET | `/chapter-guides/books/:id/stream?ticket=` | SSE：`guide`（章节导读，删除时 summary 为空且无状态）、`overview`（删除时为 null）；连接建立时推 `ready`，25 秒心跳 | 同上 |
 | GET/PUT | `/admin/chapter-guides/settings` | `{cost_bearer: author\|site, ai_available}` | 管理员 + `chapterguide:manage` |
 
+## AI 朗读（「AI 朗读」插件，默认关闭）
+
+读者在阅读页用 AI 语音收听章节，逐段播放并高亮当前段落，可调语速、切换音色，读完自动进入下一章（跳转到 `?listen=1` 的下一章并自动开始）。合成经核心「AI 服务」的语音合成（OpenAI 兼容 `/audio/speech`，`/admin/ai` 的 `tts_*` 配置）。
+
+- **段落**：阅读页按实际排版切分（段落、标题、列表项、引用、表格单元格等；代码、公式、图表不读），超过 400 字的段落按句切分，逐段请求。
+- **校验**：服务端只合成出自该章节标题或正文的文字（只比较字母与数字，忽略排版标记、链接地址、HTML 标签等不显示的部分），单段最多 800 字；读者须能阅读该章节（已发布，作者与协作者可听草稿），付费内容门禁未解锁时 403。
+- **缓存**：相同模型、音色与文字的音频缓存在数据目录 `plugin-data/read-aloud-cache/`（不经对象存储、不进入备份），命中时不调用模型；总大小超过上限（默认 2048 MB，0 为不缓存）时删除最久未收听的音频。
+- **用量与权益**：每次实际合成记一条 AI 用量（kind `tts`，功能 `readaloud.speech`，按字符数，费用按 `price_tts` 估算），不计 tokens。每月朗读字数为权益 `readaloud.monthly_chars`（基础 20000），同一段文字当月重复收听不重复计数，超出返回 429。
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/read-aloud/status` | `{available, voices[], default_voice, used, limit(-1 不限)}`；未配置语音合成时只返回 `{available: false}` | 登录 + `readaloud:use` |
+| POST | `/read-aloud/docs/:id/speech` | `{text, voice}` → `audio/mpeg`；未知音色回退为默认音色；响应头 `X-Quota-Used` / `X-Quota-Limit` 为计入本段后的本月用量。文字不属于本章 400，超出额度 429，未配置语音合成 503 | 同上 |
+| GET/PUT | `/admin/read-aloud/settings` | `{cache_max_mb, cache_files, cache_bytes, speech_model, voices}`；PUT `{cache_max_mb}`（超出新上限的缓存立即清理） | 管理员 + `readaloud:manage` |
+| DELETE | `/admin/read-aloud/cache` | 清空音频缓存，返回同上 | 同上 |
+
 ## AI 写作助手（「AI 写作助手」插件，默认关闭）
 
 写作台中对选中的文字续写、改写、润色、扩写、精简，为章节生成大纲或摘要，或按作者的自定义要求处理。模型经核心「AI 服务」（`/admin/ai`）以流式接口调用，插件不接触密钥；只有能编辑该书内容的用户（作者、协作者、管理员）可用。
@@ -964,8 +980,8 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | GET | `/admin/configs` | 列出全部系统配置键值对（key/value/description/reserved/updated_at） | `config:manage` |
 | PUT | `/admin/configs` | 新增或更新配置 `{key,value,description}`；key 限字母数字与 `. _ : -`，≤50 字符 | `config:manage` |
 | DELETE | `/admin/configs/:key` | 删除配置键；系统关键项（site_name/site_description/version/installation_date）禁止删除 | `config:manage` |
-| GET/PUT | `/admin/ai` | AI 服务（大模型）配置：`provider` openai\|anthropic、`base_url`、`api_key`、`model`，向量嵌入 `embed_base_url`、`embed_api_key`、`embed_model`（OpenAI 兼容）。GET 密钥只返回 `api_key_set`/`embed_api_key_set`，另返回 `source`（ai\|translation\|none，未单独配置时沿用翻译服务的 OpenAI/Claude 配置）、`chat_available`、`embed_available`；另有费用估算单价 `price_currency`（三位代码，默认 USD）、`price_input`、`price_output`、`price_embed`（每百万 tokens）、`price_translate`（Google 翻译，每百万字符）。PUT 只保存传入字段，密钥传空串不修改、传 `-` 清除。供插件经 `Core.AIChat/AIEmbed` 使用 | `site:update` |
-| POST | `/admin/ai/test` | `{kind: chat\|embed}` 用当前配置发一次最小请求：返回 `{reply, elapsed_ms}` 或 `{dimensions, elapsed_ms}`，失败 502 | `site:update` |
+| GET/PUT | `/admin/ai` | AI 服务（大模型）配置：`provider` openai\|anthropic、`base_url`、`api_key`、`model`，向量嵌入 `embed_base_url`、`embed_api_key`、`embed_model`（OpenAI 兼容），语音合成 `tts_base_url`、`tts_api_key`、`tts_model`、`tts_voices`（OpenAI 兼容 `/audio/speech`，地址与密钥留空时沿用 OpenAI 兼容的对话配置；音色逗号分隔，第一个为默认）。GET 密钥只返回 `api_key_set`/`embed_api_key_set`/`tts_api_key_set`，另返回 `source`（ai\|translation\|none，未单独配置时沿用翻译服务的 OpenAI/Claude 配置）、`chat_available`、`embed_available`、`tts_available`；另有费用估算单价 `price_currency`（三位代码，默认 USD）、`price_input`、`price_output`、`price_embed`（每百万 tokens）、`price_translate`（Google 翻译，每百万字符）、`price_tts`（语音合成，每百万字符）。PUT 只保存传入字段，密钥传空串不修改、传 `-` 清除。供插件经 `Core.AIChat/AIEmbed/AISpeech` 使用 | `site:update` |
+| POST | `/admin/ai/test` | `{kind: chat\|embed\|tts}` 用当前配置发一次最小请求：返回 `{reply, elapsed_ms}`、`{dimensions, elapsed_ms}` 或 `{bytes, content_type, elapsed_ms}`，失败 502 | `site:update` |
 | GET / PUT | `/admin/ai/model-prices` | 按模型单价 `items[{model, input, output}]`（每百万 tokens；模型名不区分大小写，可用 `*` 通配，精确匹配优先、其次最具体的通配；向量模型只按 `input` 计；未设置的模型用默认单价 `price_input/price_output/price_embed`）。GET 另返回 `seen[{model, kind, calls, matched}]`（最近 90 天调用过的模型及当前按哪条单价计，`matched` 为空即默认单价）与 `currency`；PUT 整体替换（最多 200 个） |
 | POST | `/admin/ai/model-prices/recalculate` | `{days: 1-90}` 按当前单价重算最近若干天成功调用的估算费用，返回 `{updated}` |
 | GET | `/admin/ai/usage?days=7\|30\|90` | AI 用量统计（逐次调用记录聚合）：`total{calls, errors, input_tokens, output_tokens, cost_micros}`、按日 `daily[]`、`by_feature[]`、`by_model[]`、`top_users[]`、全部功能键 `features[]`、`currency`。站点内所有模型调用（经 `Core.AIChat/AIEmbed` 的 AI 服务调用与翻译服务，测试 `TestModelCallsAreMetered` 禁止绕过）都记录调用方（`ai.WithCaller` 标注的用户/功能/关联对象，0 为系统）、模型、tokens（服务未返回时按文本估算并标记 `estimated`）、耗时与按调用时单价估算的费用（`cost_micros` 为货币单位百万分之一）；删除账号时记录保留但解除关联 | `site:update` |

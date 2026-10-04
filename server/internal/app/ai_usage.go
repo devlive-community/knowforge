@@ -46,6 +46,7 @@ func init() {
 type aiPricing struct {
 	Currency                        string
 	Input, Output, Embed, Translate float64 // Translate 为每百万字符
+	TTS                             float64 // 语音合成，每百万字符
 	Models                          []aiModelPrice
 }
 
@@ -62,13 +63,16 @@ func (a *App) aiPricing() aiPricing {
 		cur = "USD"
 	}
 	return aiPricing{Currency: cur, Input: num("ai_price_input"), Output: num("ai_price_output"), Embed: num("ai_price_embed"),
-		Translate: num("ai_price_translate"), Models: a.aiModelPrices()}
+		Translate: num("ai_price_translate"), TTS: num("ai_price_tts"), Models: a.aiModelPrices()}
 }
 
 // costMicros 估算费用（货币单位的百万分之一）：tokens × 每百万单价 / 1e6 × 1e6。模型单独设置了单价时按模型单价计。
 func (p aiPricing) costMicros(kind, model string, inputTokens, outputTokens, chars int64) int64 {
 	if kind == "translate" {
 		return int64(math.Round(float64(chars) * p.Translate))
+	}
+	if kind == "tts" {
+		return int64(math.Round(float64(chars) * p.TTS))
 	}
 	input, output, embed := p.Input, p.Output, p.Embed
 	if mp, ok := matchModelPrice(p.Models, model); ok {

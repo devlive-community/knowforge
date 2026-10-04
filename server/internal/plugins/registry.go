@@ -43,6 +43,7 @@ const (
 	KeyBacklinks        = "backlinks"
 	KeyBookLists        = "book-lists"
 	KeyTemplates        = "templates"
+	KeyReadAloud        = "read-aloud"
 )
 
 // Meta 一个插件的声明式元数据（不含依赖 app 的行为）。

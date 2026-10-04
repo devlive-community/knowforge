@@ -14,7 +14,7 @@ import { useUrlPage } from '@/lib/use-url-page'
 interface CallView {
   id: number
   feature: string
-  kind: 'chat' | 'embed' | 'translate'
+  kind: 'chat' | 'embed' | 'translate' | 'tts'
   model: string
   input_tokens: number
   output_tokens: number
@@ -224,7 +224,7 @@ function TraceItem({ trace: tr, currency, defaultOpen }: { trace: TraceView; cur
               <span className="text-slate-500">{c.model || '-'}</span>
               <span className="text-slate-400">{formatDate(c.created_at)}</span>
               <span className="ml-auto flex items-center gap-x-3 tabular-nums text-slate-600">
-                {c.kind === 'translate'
+                {c.kind === 'translate' || c.kind === 'tts'
                   ? <span>{t('aiUsage.mine.chars', { n: c.characters.toLocaleString() })}</span>
                   : <span>{c.estimated ? '≈' : ''}{t('aiUsage.mine.tokensInOut', { input: formatTokens(c.input_tokens), output: formatTokens(c.output_tokens) })}</span>}
                 <span>{secs(c.duration_ms)}</span>

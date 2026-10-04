@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -123,5 +124,28 @@ func TestEstimateTokensAndCaller(t *testing.T) {
 	}
 	if (Usage{InputTokens: 1, OutputTokens: 2}).Add(Usage{InputTokens: 3, Estimated: true}) != (Usage{InputTokens: 4, OutputTokens: 2, Estimated: true}) {
 		t.Fatal("用量累加错误")
+	}
+}
+
+func TestSpeechFallsBackToChatEndpoint(t *testing.T) {
+	var gotPath, gotAuth, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.Header().Set("Content-Type", "audio/mpeg")
+		_, _ = w.Write([]byte("ID3-fake"))
+	}))
+	defer srv.Close()
+	cfg := Config{Provider: ProviderOpenAI, BaseURL: srv.URL + "/v1", APIKey: "k", SpeechModel: "tts-1"}
+	if !cfg.SpeechAvailable() || (Config{Provider: ProviderAnthropic, APIKey: "k", SpeechModel: "tts-1"}).SpeechAvailable() || (Config{APIKey: "k"}).SpeechAvailable() {
+		t.Fatal("语音合成可用性判定不对")
+	}
+	res, err := Speech(context.Background(), cfg, SpeechRequest{Text: "你好", Voice: "alloy"})
+	if err != nil || string(res.Audio) != "ID3-fake" || res.ContentType != "audio/mpeg" {
+		t.Fatalf("合成结果不对: %+v %v", res, err)
+	}
+	if gotPath != "/v1/audio/speech" || gotAuth != "Bearer k" || !strings.Contains(gotBody, `"voice":"alloy"`) || !strings.Contains(gotBody, `"model":"tts-1"`) {
+		t.Fatalf("请求不对: %s %s %s", gotPath, gotAuth, gotBody)
 	}
 }

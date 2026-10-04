@@ -36,6 +36,10 @@ type Config struct {
 	EmbedBaseURL string
 	EmbedAPIKey  string
 	EmbedModel   string
+	// 语音合成服务（OpenAI 兼容 /audio/speech）；BaseURL/APIKey 留空时沿用对话服务（仅当对话服务也是 OpenAI 兼容时）
+	SpeechBaseURL string
+	SpeechAPIKey  string
+	SpeechModel   string
 }
 
 // ChatAvailable 是否已配置对话服务。

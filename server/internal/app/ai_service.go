@@ -30,11 +30,16 @@ var aiSettingKeys = []struct {
 	{"embed_base_url", "ai_embed_base_url", "AI 服务：向量嵌入接口地址（OpenAI 兼容）", false},
 	{"embed_api_key", "ai_embed_api_key", "AI 服务：向量嵌入接口密钥", true},
 	{"embed_model", "ai_embed_model", "AI 服务：向量嵌入模型", false},
+	{"tts_base_url", "ai_tts_base_url", "AI 服务：语音合成接口地址（OpenAI 兼容）", false},
+	{"tts_api_key", "ai_tts_api_key", "AI 服务：语音合成接口密钥", true},
+	{"tts_model", "ai_tts_model", "AI 服务：语音合成模型", false},
+	{"tts_voices", "ai_tts_voices", "AI 服务：可选的朗读音色（逗号分隔，第一个为默认）", false},
 	{"price_currency", "ai_price_currency", "AI 服务：计费货币（估算费用用）", false},
 	{"price_input", "ai_price_input", "AI 服务：对话输入单价（每百万 tokens）", false},
 	{"price_output", "ai_price_output", "AI 服务：对话输出单价（每百万 tokens）", false},
 	{"price_embed", "ai_price_embed", "AI 服务：向量嵌入单价（每百万 tokens）", false},
 	{"price_translate", "ai_price_translate", "AI 服务：机器翻译单价（每百万字符，Google 翻译）", false},
+	{"price_tts", "ai_price_tts", "AI 服务：语音合成单价（每百万字符）", false},
 	{"alert_daily_cost", cfgAlertDailyCost, "AI 用量预警：全站当日估算费用阈值（0 为关闭）", false},
 	{"alert_user_daily_tokens", cfgAlertUserDailyTokens, "AI 用量预警：单个用户当日 tokens 阈值（0 为关闭）", false},
 	{"alert_trace_tokens", cfgAlertTraceTokens, "AI 用量预警：单条调用链 tokens 阈值（0 为关闭）", false},
@@ -48,6 +53,7 @@ func (a *App) aiConfig() (ai.Config, string) {
 	cfg := ai.Config{
 		Provider: get("ai_provider"), BaseURL: get("ai_base_url"), APIKey: get("ai_api_key"), Model: get("ai_model"),
 		EmbedBaseURL: get("ai_embed_base_url"), EmbedAPIKey: get("ai_embed_api_key"), EmbedModel: get("ai_embed_model"),
+		SpeechBaseURL: get("ai_tts_base_url"), SpeechAPIKey: get("ai_tts_api_key"), SpeechModel: get("ai_tts_model"),
 	}
 	if cfg.Provider != ai.ProviderAnthropic {
 		cfg.Provider = ai.ProviderOpenAI
@@ -134,6 +140,36 @@ func (a *App) AIEmbed(ctx context.Context, texts []string) ([][]float32, ai.Usag
 	return vecs, usage, err
 }
 
+// defaultTTSVoices 未设置音色时的默认列表（OpenAI 语音合成内置音色）。
+var defaultTTSVoices = []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
+
+// AISpeechInfo 语音合成的模型与可选音色（第一个为默认）；未配置语音合成时 model 为空。
+func (a *App) AISpeechInfo() (model string, voices []string) {
+	cfg, _ := a.aiConfig()
+	if !cfg.SpeechAvailable() {
+		return "", nil
+	}
+	for _, v := range strings.Split(a.getSetting("ai_tts_voices"), ",") {
+		if v = strings.TrimSpace(v); v != "" && len(v) <= 64 {
+			voices = append(voices, v)
+		}
+	}
+	if len(voices) == 0 {
+		voices = defaultTTSVoices
+	}
+	return cfg.SpeechModel, voices
+}
+
+// AISpeech 语音合成：按字符数记入用量（kind=tts，不计 tokens，因此不受每月 AI tokens 额度限制，
+// 额度由调用方的功能权益控制，如「每月朗读字数」）。
+func (a *App) AISpeech(ctx context.Context, req ai.SpeechRequest) (ai.SpeechResult, error) {
+	cfg, _ := a.aiConfig()
+	started := time.Now()
+	res, err := ai.Speech(ctx, cfg, req)
+	a.recordAIUsage(ai.CallerFrom(ctx), "tts", ai.ProviderOpenAI, cfg.SpeechModel, ai.Usage{}, int64(len([]rune(req.Text))), time.Since(started), err)
+	return res, err
+}
+
 func (a *App) AICheckQuota(ctx context.Context) error { return a.checkAIQuota(ai.CallerFrom(ctx)) }
 
 func (a *App) AIStatus() (chat, embed bool) {
@@ -161,6 +197,7 @@ func (a *App) AdminGetAI(c *gin.Context) {
 	out["source"] = source
 	out["chat_available"] = cfg.ChatAvailable()
 	out["embed_available"] = cfg.EmbedAvailable()
+	out["tts_available"] = cfg.SpeechAvailable()
 	ok(c, out)
 }
 
@@ -190,7 +227,7 @@ func (a *App) AdminUpdateAI(c *gin.Context) {
 			fail(c, http.StatusBadRequest, "接口类型必须为 openai 或 anthropic")
 			return
 		}
-		if (s.field == "base_url" || s.field == "embed_base_url") && v != "" && !strings.HasPrefix(v, "http://") && !strings.HasPrefix(v, "https://") {
+		if (s.field == "base_url" || s.field == "embed_base_url" || s.field == "tts_base_url") && v != "" && !strings.HasPrefix(v, "http://") && !strings.HasPrefix(v, "https://") {
 			fail(c, http.StatusBadRequest, "接口地址需以 http:// 或 https:// 开头")
 			return
 		}
@@ -239,7 +276,7 @@ func (a *App) AdminUpdateAI(c *gin.Context) {
 	a.AdminGetAI(c)
 }
 
-// AdminTestAI POST /admin/ai/test {kind: chat|embed} 用当前配置发一次最小请求，验证连通性。
+// AdminTestAI POST /admin/ai/test {kind: chat|embed|tts} 用当前配置发一次最小请求，验证连通性。
 func (a *App) AdminTestAI(c *gin.Context) {
 	var req struct {
 		Kind string `json:"kind"`
@@ -247,6 +284,20 @@ func (a *App) AdminTestAI(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	ctx := ai.WithCaller(c.Request.Context(), ai.Caller{UserID: currentUser(c).ID, Feature: "admin.test"})
 	started := time.Now()
+	if req.Kind == "tts" {
+		model, voices := a.AISpeechInfo()
+		if model == "" {
+			fail(c, http.StatusBadRequest, "尚未配置语音合成服务")
+			return
+		}
+		res, err := a.AISpeech(ctx, ai.SpeechRequest{Text: "KnowForge", Voice: voices[0]})
+		if err != nil {
+			fail(c, http.StatusBadGateway, err.Error())
+			return
+		}
+		ok(c, gin.H{"bytes": len(res.Audio), "content_type": res.ContentType, "elapsed_ms": time.Since(started).Milliseconds()})
+		return
+	}
 	if req.Kind == "embed" {
 		vecs, _, err := a.AIEmbed(ctx, []string{"KnowForge"})
 		if err != nil {

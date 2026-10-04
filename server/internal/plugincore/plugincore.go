@@ -92,6 +92,10 @@ type Core interface {
 	// AIChatStream 同 AIChat，并流式回调生成的文本片段（onDelta 在调用方的 goroutine 中同步调用）。
 	AIChatStream(ctx context.Context, req ai.ChatRequest, onDelta func(text string)) (ai.ChatResponse, error)
 	AIStatus() (chat, embed bool)
+	// AISpeech 调用站点「AI 服务」中的语音合成（OpenAI 兼容），按字符数记录用量（调用方见 ai.WithCaller）；
+	// AISpeechInfo 返回语音合成模型与可选音色（第一个为默认），未配置时 model 为空。
+	AISpeech(ctx context.Context, req ai.SpeechRequest) (ai.SpeechResult, error)
+	AISpeechInfo() (model string, voices []string)
 	// AITranslateStream 同 AIChatStream，并按原文字符数 chars 记入翻译用量（调用方功能须为 translate.*，计入每月翻译字数权益）。
 	AITranslateStream(ctx context.Context, req ai.ChatRequest, chars int64, onDelta func(text string)) (ai.ChatResponse, error)
 	// TranslateCharsLeft 用户本月剩余翻译字数（-1 为不限）。
@@ -114,6 +118,8 @@ type Core interface {
 	ResolveExportStyle(style string, book *models.Book, u *models.User) models.UserExportSetting
 	ResolveExportFooter(book *models.Book, u *models.User) string
 	RecordBookExport(u *models.User, book *models.Book, format string)
+	// PrivateDataDir 数据目录下供插件存放私有文件（如缓存）的子目录（已创建）；不经对象存储、不对外公开，不进入备份。
+	PrivateDataDir(name string) (string, error)
 	// WebPort 内嵌 Web 运行时的本地端口（未运行为 0），供无头浏览器访问打印页。
 	WebPort() int
 }

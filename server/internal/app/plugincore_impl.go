@@ -1,12 +1,16 @@
 package app
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"knowforge/server/internal/authz"
+	"knowforge/server/internal/config"
 	"knowforge/server/internal/jobqueue"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
@@ -31,6 +35,15 @@ func (a *App) AttachChapterCounts(books []models.Book)         { a.attachChapter
 func (a *App) DecorateBookList(books []models.Book)            { a.decorateBookList(books) }
 func (a *App) PubliclyReadableBookStatuses() []string          { return publiclyReadableBookStatuses }
 func (a *App) RateLimitReaction() gin.HandlerFunc              { return a.RateLimit(reactionRateLimit) }
+
+// PrivateDataDir 插件私有目录：<数据目录>/plugin-data/<name>。
+func (a *App) PrivateDataDir(name string) (string, error) {
+	if name == "" || strings.ContainsAny(name, `/\.`) {
+		return "", fmt.Errorf("无效的目录名: %q", name)
+	}
+	dir := filepath.Join(config.DataDir(), "plugin-data", name)
+	return dir, os.MkdirAll(dir, 0o755)
+}
 
 func (a *App) RequirePermissionMiddleware(perm authz.Permission) gin.HandlerFunc {
 	return a.RequirePermission(perm)
