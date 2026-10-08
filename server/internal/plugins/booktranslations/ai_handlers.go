@@ -354,8 +354,13 @@ func (b *behavior) CreateJob(c *gin.Context) {
 	if job.Mode == modeFull {
 		// 新建译本：私有草稿书，沿用原书配置；与原书同一翻译分组（原书未分组时以其访问路径作为分组标识）
 		if strings.TrimSpace(book.TransGroup) == "" {
+			previousGroup := book.TransGroup
 			book.TransGroup = truncate(book.Slug, 64)
-			db.Model(&models.Book{}).Where("id = ?", book.ID).Update("trans_group", book.TransGroup)
+			if err := db.Model(&models.Book{}).Where("id = ?", book.ID).Update("trans_group", book.TransGroup).Error; err != nil {
+				b.core.Fail(c, http.StatusInternalServerError, "更新翻译分组失败")
+				return
+			}
+			b.core.NotifyIndexableVariantGroupsChanged(previousGroup, book.TransGroup)
 		}
 		title := job.BookTitle
 		if title == "" {

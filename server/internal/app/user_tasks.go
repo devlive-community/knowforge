@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -127,6 +129,13 @@ func (a *App) coreUserTask(job *models.BackgroundJob) (plugincore.UserTask, bool
 // onBackgroundJobChange 核心后台任务状态变化时推送给发起人。
 func (a *App) onBackgroundJobChange(job models.BackgroundJob) {
 	if job.OwnerID == 0 {
+		if job.Type == sitemapJobType && job.Status == jobqueue.StatusSucceeded && a.getSetting("sitemap_request_revision") != a.getSetting("sitemap_built_revision") {
+			if queue := a.jobQueue(); queue != nil {
+				if _, err := queue.Enqueue(context.Background(), sitemapJobType, struct{}{}, 3); err != nil {
+					log.Printf("[sitemap] enqueue follow-up refresh failed: %v", err)
+				}
+			}
+		}
 		return
 	}
 	if t, ok := a.coreUserTask(&job); ok {

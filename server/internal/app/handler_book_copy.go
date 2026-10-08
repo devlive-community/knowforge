@@ -137,8 +137,8 @@ func (a *App) CopyBook(c *gin.Context) {
 func (a *App) copyBookShell(u *models.User, src *models.Book, title, slug string, slugEditable bool) (models.Book, error) {
 	newBook := models.Book{
 		Title: title, UserID: u.ID, Status: "draft", IsPublic: false, Slug: slug,
-		SlugEditable:  slugEditable,
-		Description:   src.Description, CoverImage: src.CoverImage,
+		SlugEditable: slugEditable,
+		Description:  src.Description, CoverImage: src.CoverImage,
 		LoginRequired: src.LoginRequired,
 		OrderCol:      src.OrderCol, OrderDir: src.OrderDir, ChapterPrefix: src.ChapterPrefix,
 		ChildStatusFollowParent: src.ChildStatusFollowParent,
@@ -250,6 +250,7 @@ func (a *App) CopyDocuments(c *gin.Context) {
 	// 按「源文档顺序」(sort_order,id) 遍历建档，保证复制后顺序与原书一致；完整复制内容与各项配置
 	// （含图标、外链、评论开关、状态），做到与原章节一致。第二遍重建父子。
 	idMap := make(map[uint]uint, len(copySet))
+	createdDocs := make([]models.Document, 0, len(copySet))
 	copied := 0
 	for i := range srcDocs {
 		d := &srcDocs[i]
@@ -277,6 +278,7 @@ func (a *App) CopyDocuments(c *gin.Context) {
 			return
 		}
 		idMap[d.ID] = nd.ID
+		createdDocs = append(createdDocs, nd)
 		copied++
 	}
 	for i := range srcDocs {
@@ -288,18 +290,29 @@ func (a *App) CopyDocuments(c *gin.Context) {
 			a.DB.Model(&models.Document{}).Where("id = ?", idMap[d.ID]).Update("parent_id", idMap[*d.ParentID])
 		}
 	}
+	for i := range createdDocs {
+		a.notifyDocumentIndexableChange(nil, &target, nil, &createdDocs[i])
+	}
 
 	// 移动：复制成功后从源书删除选中的章节（含子树）
 	moved := false
 	if req.Move && copied > 0 {
 		ids := make([]uint, 0, len(copySet))
-		for id := range copySet {
-			ids = append(ids, id)
+		movedURLs := make([]string, 0, len(copySet))
+		for _, d := range srcDocs {
+			if !copySet[d.ID] {
+				continue
+			}
+			ids = append(ids, d.ID)
+			if address := a.indexableDocumentURL(src, &d); address != "" {
+				movedURLs = append(movedURLs, address)
+			}
 		}
 		if err := a.DB.Where("book_id = ? AND id IN ?", src.ID, ids).Delete(&models.Document{}).Error; err != nil {
 			fail(c, http.StatusInternalServerError, "移动时删除源章节失败: "+err.Error())
 			return
 		}
+		a.emitIndexableURLs(movedURLs...)
 		moved = true
 	}
 

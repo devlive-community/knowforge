@@ -392,6 +392,9 @@ func (cc *behavior) createImportedWebDocument(book *models.Book, u *models.User,
 	})
 	if err == nil {
 		doc.PublishHeld = cc.core.GuardDocumentPublish(book, &doc, u.ID) // 事务外审查（直接发布时）
+		if doc.PublishHeld == "" && doc.Status == "published" {
+			cc.core.NotifyIndexableDocumentChange(nil, book, nil, &doc)
+		}
 	}
 	return doc, err
 }

@@ -399,7 +399,9 @@ func (m *markdownImporter) importTree(book *models.Book, u *models.User, root *m
 	})
 	if err == nil {
 		for _, doc := range toPublish {
-			m.a.tryPublishDocument(book, doc, u.ID)
+			if m.a.tryPublishDocument(book, doc, u.ID) == "" && doc.Status == "published" {
+				m.a.notifyDocumentIndexableChange(nil, book, nil, doc)
+			}
 		}
 	}
 	return created, err

@@ -64,6 +64,11 @@ type Core interface {
 	// 内容采集插件所需（引擎/worker/端点搬入子包后经此访问核心）
 	CanEditBookContent(u *models.User, b *models.Book) bool
 	GetSetting(key string) string
+	// IndexNow hooks: plugins can announce public sitemap URL changes for content created outside core HTTP handlers.
+	NotifyIndexableURLs(urls ...string)
+	NotifyIndexableBookChange(before, after *models.Book)
+	NotifyIndexableDocumentChange(oldBook, newBook *models.Book, before, after *models.Document)
+	NotifyIndexableVariantGroupsChanged(groups ...string)
 	UniqueChildSlug(bookID uint, parentID *uint, base string, excludeID uint) string
 	InstalledChromePath() string
 	CreateContentImportBook(u *models.User, title, description string, chapters []ImportedChapter) (models.Book, error)
@@ -224,6 +229,27 @@ func DecorateBooks(core Core, books []*models.Book) {
 	}
 	for _, h := range booksDecorators {
 		h(core, books)
+	}
+}
+
+// —— SEO：核心通知插件已变化的公开页面 URL（例如 IndexNow 插件）。——
+
+type PublicURLsChangedHook func(core Core, urls []string)
+
+var publicURLsChangedHooks []PublicURLsChangedHook
+
+// OnPublicURLsChanged 订阅可索引页面 URL 变化。
+func OnPublicURLsChanged(h PublicURLsChangedHook) {
+	publicURLsChangedHooks = append(publicURLsChangedHooks, h)
+}
+
+// FirePublicURLsChanged 由核心在公开书籍或已发布章节 URL 新增、修改、下线后调用。
+func FirePublicURLsChanged(core Core, urls []string) {
+	if len(urls) == 0 {
+		return
+	}
+	for _, h := range publicURLsChangedHooks {
+		h(core, urls)
 	}
 }
 

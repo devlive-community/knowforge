@@ -26,11 +26,11 @@ type mailConfigUpdate struct {
 func (a *App) AdminGetMail(c *gin.Context) {
 	port, _ := strconv.Atoi(a.getSetting("smtp_port"))
 	ok(c, gin.H{
-		"driver":   a.getSetting("mail_driver"),
-		"host":     a.getSetting("smtp_host"),
-		"port":     port,
-		"username": a.getSetting("smtp_username"),
-		"password": a.getSetting("smtp_password"),
+		"driver":                a.getSetting("mail_driver"),
+		"host":                  a.getSetting("smtp_host"),
+		"port":                  port,
+		"username":              a.getSetting("smtp_username"),
+		"password":              a.getSetting("smtp_password"),
 		"from":                  a.getSetting("smtp_from"),
 		"site_url":              a.getSetting("site_url"),
 		"notifications_enabled": a.getSetting("mail_notifications_enabled") == "true",
@@ -98,12 +98,20 @@ func (a *App) AdminSaveMail(c *gin.Context) {
 	}
 	if req.SiteURL != nil {
 		fields = append(fields, "site_url")
+		previousSiteURL := a.getSetting("site_url")
 		if err := a.setSetting("site_url", *req.SiteURL, "站点访问地址（用于邮件链接与 sitemap 生成）"); err != nil {
 			fail(c, http.StatusInternalServerError, "保存失败: "+err.Error())
 			return
 		}
-		// 站点地址变更后立即重建 sitemap，不等下一每日周期
-		a.enqueueSitemapGenerate()
+		if previousSiteURL != *req.SiteURL {
+			// 地址变更后用新主机重新排队当前全部公开 URL，并立即重建 Sitemap。
+			urls := a.indexableSiteURLs()
+			if len(urls) > 0 {
+				a.emitIndexableURLs(urls...)
+			} else {
+				a.enqueueSitemapGenerate()
+			}
+		}
 	}
 	if req.NotificationsEnabled != nil {
 		fields = append(fields, "notifications_enabled")

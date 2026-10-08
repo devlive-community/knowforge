@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -15,7 +16,16 @@ import (
 // deleteUserCompletely 彻底删除用户及其全部数据（书籍、章节、版本、书内互动/进度/评论，以及用户自身的个人数据）。
 // 供自助注销的冷静期到期清理与「冷静期为 0」的即时删除复用。
 func (a *App) deleteUserCompletely(uid uint) error {
-	return a.DB.Transaction(func(tx *gorm.DB) error {
+	var indexableURLs []string
+	books := []models.Book{}
+	if err := a.DB.Where("user_id = ?", uid).Find(&books).Error; err != nil {
+		log.Printf("[account-deletion] collect indexable URLs failed: %v", err)
+	} else {
+		for i := range books {
+			indexableURLs = append(indexableURLs, a.indexableBookURLs(&books[i])...)
+		}
+	}
+	err := a.DB.Transaction(func(tx *gorm.DB) error {
 		var bookIDs []uint
 		tx.Model(&models.Book{}).Where("user_id = ?", uid).Pluck("id", &bookIDs)
 		var docIDs []uint
@@ -78,6 +88,11 @@ func (a *App) deleteUserCompletely(uid uint) error {
 		// 3. 用户本身
 		return tx.Unscoped().Delete(&models.User{}, uid).Error
 	})
+	if err != nil {
+		return err
+	}
+	a.emitIndexableURLs(indexableURLs...)
+	return nil
 }
 
 // isLastActiveAdmin 该用户是否为最后一位启用中的管理员（防止注销后无人可管）。

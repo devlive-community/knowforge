@@ -213,6 +213,26 @@ func (a *App) AdminResolveContentReport(c *gin.Context) {
 	if req.Resolution == "takedown" {
 		finalStatus = "resolved"
 	}
+	var indexableURLs []string
+	if req.Resolution == "takedown" {
+		switch report.TargetType {
+		case "book":
+			var book models.Book
+			if a.DB.First(&book, report.TargetID).Error == nil {
+				indexableURLs = a.indexableBookURLs(&book)
+			}
+		case "document":
+			var doc models.Document
+			if a.DB.First(&doc, report.TargetID).Error == nil {
+				var book models.Book
+				if a.DB.First(&book, doc.BookID).Error == nil {
+					if address := a.indexableDocumentURL(&book, &doc); address != "" {
+						indexableURLs = append(indexableURLs, address)
+					}
+				}
+			}
+		}
+	}
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		claimed := tx.Model(&models.ContentReport{}).Where("id = ? AND status = ?", report.ID, "pending").Updates(map[string]any{
 			"status": finalStatus, "resolution": req.Resolution, "resolution_note": req.Note,
@@ -241,6 +261,9 @@ func (a *App) AdminResolveContentReport(c *gin.Context) {
 		return
 	}
 	// 插件登记的内容在事务之外下架（插件经自己的连接写库，SQLite 单写者下不能嵌套在事务内）；失败则撤回处理结果
+	if req.Resolution == "takedown" && len(indexableURLs) > 0 {
+		a.emitIndexableURLs(indexableURLs...)
+	}
 	if req.Resolution == "takedown" && !reportTargetTypes[report.TargetType] {
 		err := errors.New("未登记的举报类型")
 		if uc, found := plugincore.UserContentFor(report.TargetType); found {

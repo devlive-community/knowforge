@@ -167,10 +167,12 @@ func (a *App) localizeBookImages(ctx context.Context, book *models.Book, u *mode
 		if !changed || content == doc.Content {
 			continue
 		}
+		oldDoc := *doc
 		doc.Content = content
 		if err := a.DB.Model(&models.Document{}).Where("id = ?", doc.ID).Updates(map[string]any{"content": content, "updated_at": time.Now()}).Error; err != nil {
 			return res, err
 		}
+		a.notifyDocumentIndexableChange(book, book, &oldDoc, doc)
 		revision := newDocumentRevision(doc, u.ID, "save")
 		_ = a.DB.Create(&revision).Error
 		res.DocsChanged++

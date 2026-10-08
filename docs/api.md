@@ -285,6 +285,17 @@ Authorization: Bearer kf_pat_…
 | PUT | `/site` | 更新站点配置：`site_name`、`site_description`、`site_logo`、`site_favicon`（浏览器标签图标 URL）、`site_keywords`（SEO 关键词）、`site_footer_text`（页脚介绍）、`site_beian`（ICP 备案号）、`help_doc_url`（写作台帮助文档链接）、`terms_url`（用户协议链接）、`privacy_url`（隐私政策链接，三者通常指向某本书的某个章节 reader 链接），以及全站公告 `announcement_enabled`/`announcement_text`/`announcement_tone`(info\|warning)。图片经 `/upload` 上传，遵循当前存储驱动（local\|qiniu） | `site:update` |
 | GET | `/stats` | 公开站点统计；书籍、章节、标签和浏览量仅统计公开且处于可阅读状态（进行中/已发布/已完成）的内容 | `stats:read` |
 
+## IndexNow（内置插件，默认关闭）
+
+启用 IndexNow 插件并在后台站点设置中生成密钥后，系统把 Sitemap 中公开书籍及已发布章节的新增、更新和下线 URL 写入持久化队列，批量通知 IndexNow 服务。站点地址须为根域名 HTTPS URL；站点主机变更时会以新主机地址重新排队当前公开 URL。IndexNow 接收通知不代表搜索引擎保证收录；现有 Sitemap 继续作为发现入口，作者主页不在首期范围内。
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/indexnow/key` | 返回当前公开验证密钥 `{key}`，仅插件启用且密钥已生成时可用；Web 同时提供根路径 `/{key}.txt` 验证文件 | 匿名；IndexNow 插件启用 |
+| GET | `/admin/indexnow` | 状态 `{enabled,site_url_valid,key_configured,key_file_url,pending,failed,last_submitted_at}`；不返回密钥本身 | 管理员 + `site:update` |
+| POST | `/admin/indexnow/key` | `{rotate:boolean}` 生成或轮换密钥；轮换需显式传 `rotate:true`。响应只含 `{key_configured,key_file_url}`，密钥通过站点根路径验证文件提供 | 管理员 + `site:update` |
+| POST | `/admin/indexnow/retry` | 将达到自动重试上限的失败 URL 重置并重新排队，返回 `{queued,urls}` | 管理员 + `site:update` |
+
 ## 发现（公开）
 
 | 方法 | 路径 | 说明 | 语义权限 |

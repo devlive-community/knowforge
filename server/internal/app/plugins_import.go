@@ -15,6 +15,7 @@ import (
 	_ "knowforge/server/internal/plugins/embed"
 	_ "knowforge/server/internal/plugins/feeds"
 	_ "knowforge/server/internal/plugins/growth"
+	_ "knowforge/server/internal/plugins/indexnow"
 	_ "knowforge/server/internal/plugins/membership"
 	_ "knowforge/server/internal/plugins/moderation"
 	_ "knowforge/server/internal/plugins/paidcontent"

@@ -169,6 +169,8 @@ func (a *App) RestoreTrashedBook(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "恢复书籍失败")
 		return
 	}
+	book.DeletedAt.Valid = false
+	a.emitIndexableURLs(a.indexableBookURLs(&book)...)
 	ok(c, gin.H{"message": "书籍已恢复", "id": book.ID, "slug": book.Slug})
 }
 
@@ -230,6 +232,8 @@ func (a *App) RestoreTrashedDocument(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "恢复章节失败")
 		return
 	}
+	doc.DeletedAt.Valid = false
+	a.emitIndexableURLs(a.indexableDocumentSubtreeURLs(book, doc)...)
 	ok(c, gin.H{"message": "章节已恢复", "id": doc.ID, "book_slug": book.Slug})
 }
 

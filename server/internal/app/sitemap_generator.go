@@ -54,9 +54,16 @@ func xmlEscape(s string) string {
 // runSitemapGenerate 后台任务：全量重建 sitemap index 与分片。
 // 可见性与游客一致：公开书籍（is_public + 状态可读 + 非仅登录可读）及其已发布章节。
 func (a *App) runSitemapGenerate(ctx context.Context, _ json.RawMessage) error {
+	requestRevision := a.getSetting("sitemap_request_revision")
 	siteURL := strings.TrimRight(strings.TrimSpace(a.getSetting("site_url")), "/")
 	if siteURL == "" {
-		// 未配置站点地址，无法生成绝对 URL；等管理员在站点设置中配置后下一周期生成
+		// 未配置站点地址时没有可用 sitemap；把当前请求标记为已处理，避免后台任务循环重排。
+		// 管理员稍后保存 site_url 时会创建新的请求标记并立即重建。
+		if requestRevision != "" {
+			if err := a.setSetting("sitemap_built_revision", requestRevision, "最近完成的 Sitemap 刷新标记"); err != nil {
+				return fmt.Errorf("保存 sitemap 刷新状态失败: %w", err)
+			}
+		}
 		return nil
 	}
 
@@ -127,6 +134,11 @@ func (a *App) runSitemapGenerate(ctx context.Context, _ json.RawMessage) error {
 	sb.WriteString("</sitemapindex>\n")
 	if err := os.WriteFile(filepath.Join(dir, sitemapIndexFile), []byte(sb.String()), 0o644); err != nil {
 		return fmt.Errorf("写入 sitemap index 失败: %w", err)
+	}
+	if requestRevision != "" {
+		if err := a.setSetting("sitemap_built_revision", requestRevision, "最近完成的 Sitemap 刷新标记"); err != nil {
+			return fmt.Errorf("保存 sitemap 刷新状态失败: %w", err)
+		}
 	}
 	return nil
 }
@@ -218,14 +230,5 @@ func lastmodOf(updated, created time.Time) string {
 	return ""
 }
 
-// enqueueSitemapGenerate 请求立即排队一次 sitemap 生成（管理员更新站点地址后调用）
-func (a *App) enqueueSitemapGenerate() {
-	queue := a.jobQueue()
-	if queue == nil {
-		return
-	}
-	if _, err := queue.Enqueue(context.Background(), sitemapJobType, struct{}{}, 3); err != nil {
-		// 入队失败不影响保存结果，等待下一每日周期
-		return
-	}
-}
+// enqueueSitemapGenerate 请求尽快重建 sitemap（站点地址或公开内容变化后调用）。
+func (a *App) enqueueSitemapGenerate() { a.enqueueSitemapGenerateSoon() }

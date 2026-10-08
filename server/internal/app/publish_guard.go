@@ -61,6 +61,7 @@ func (a *App) guardBookVisible(book *models.Book, actorID uint) string {
 		a.DB.Model(&models.Book{}).Where("id = ?", book.ID).Update("is_public", false)
 		return v.Message
 	}
+	a.notifyBookIndexableChange(nil, book)
 	return ""
 }
 
@@ -76,8 +77,14 @@ func (a *App) ApplyModeration(kind string, id uint, approve bool, requested map[
 		if err := a.DB.First(&book, doc.BookID).Error; err != nil {
 			return fmt.Errorf("书籍不存在")
 		}
+		oldBook, oldDoc := book, doc
 		if !approve {
-			return a.DB.Model(&models.Document{}).Where("id = ?", doc.ID).Update("status", "draft").Error
+			if err := a.DB.Model(&models.Document{}).Where("id = ?", doc.ID).Update("status", "draft").Error; err != nil {
+				return err
+			}
+			doc.Status = "draft"
+			a.notifyDocumentIndexableChange(&oldBook, &book, &oldDoc, &doc)
+			return nil
 		}
 		oldStatus := doc.Status
 		if err := a.DB.Model(&models.Document{}).Where("id = ?", doc.ID).Update("status", "published").Error; err != nil {
@@ -85,26 +92,41 @@ func (a *App) ApplyModeration(kind string, id uint, approve bool, requested map[
 		}
 		doc.Status = "published"
 		if book.Status == "draft" { // 与编辑器发布一致：草稿书有章节发布后提升为「连载中」
-			a.DB.Model(&models.Book{}).Where("id = ?", book.ID).Update("status", "in_progress")
+			if err := a.DB.Model(&models.Book{}).Where("id = ?", book.ID).Update("status", "in_progress").Error; err != nil {
+				return err
+			}
 			book.Status = "in_progress"
 		}
 		if oldStatus != "published" {
 			plugincore.FireChapterPublished(a, &book, &doc)
 		}
+		a.notifyDocumentIndexableChange(&oldBook, &book, &oldDoc, &doc)
 		return nil
 	case plugincore.PublishBook:
 		var book models.Book
 		if err := a.DB.First(&book, id).Error; err != nil {
 			return fmt.Errorf("书籍不存在")
 		}
+		oldBook := book
 		if !approve {
-			return a.DB.Model(&models.Book{}).Where("id = ?", book.ID).Update("is_public", false).Error
+			if err := a.DB.Model(&models.Book{}).Where("id = ?", book.ID).Update("is_public", false).Error; err != nil {
+				return err
+			}
+			book.IsPublic = false
+			a.notifyBookIndexableChange(&oldBook, &book)
+			return nil
 		}
 		updates := map[string]any{"is_public": requested["is_public"] != "false"}
 		if s := requested["status"]; bookStatuses[s] {
 			updates["status"] = s
+			book.Status = s
 		}
-		return a.DB.Model(&models.Book{}).Where("id = ?", book.ID).Updates(updates).Error
+		book.IsPublic = updates["is_public"].(bool)
+		if err := a.DB.Model(&models.Book{}).Where("id = ?", book.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		a.notifyBookIndexableChange(&oldBook, &book)
+		return nil
 	}
 	// 插件登记的用户内容（如问答的提问、回答）：由登记者落地
 	if uc, found := plugincore.UserContentFor(kind); found {

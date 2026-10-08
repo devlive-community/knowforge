@@ -159,6 +159,10 @@ func (a *App) ReimportPDFBook(c *gin.Context) {
 }
 
 func (a *App) applyPDFReimport(book *models.Book, u *models.User, upload uploadedPDF, mode string) (pdfImportResult, error) {
+	var removedURLs []string
+	if mode == "replace" {
+		removedURLs = a.indexableBookURLs(book)
+	}
 	chapters := splitPDFChapters(upload.Result.Markdown, book.Title)
 	if len(chapters) == 0 || len(chapters) > maxImportedChapters {
 		return pdfImportResult{}, errors.New("没有可导入的章节或章节数量过多")
@@ -215,6 +219,9 @@ func (a *App) applyPDFReimport(book *models.Book, u *models.User, upload uploade
 	})
 	if err != nil {
 		return pdfImportResult{}, err
+	}
+	if mode == "replace" {
+		a.emitIndexableURLs(removedURLs...)
 	}
 
 	message := fmt.Sprintf("已追加 %d 个草稿章节", len(chapters))

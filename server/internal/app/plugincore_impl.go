@@ -59,9 +59,19 @@ func (a *App) RandomSlug(prefix string) string    { return randomSlug(prefix) }
 func (a *App) CanEditBookContent(u *models.User, b *models.Book) bool {
 	return a.canEditBookContent(u, b)
 }
-func (a *App) GetSetting(key string) string { return a.getSetting(key) }
-func (a *App) InstalledChromePath() string  { return a.installedChromePath() }
-func (a *App) JobQueue() *jobqueue.Queue    { return a.jobQueue() }
+func (a *App) GetSetting(key string) string       { return a.getSetting(key) }
+func (a *App) NotifyIndexableURLs(urls ...string) { a.emitIndexableURLs(urls...) }
+func (a *App) NotifyIndexableBookChange(before, after *models.Book) {
+	a.notifyBookIndexableChange(before, after)
+}
+func (a *App) NotifyIndexableDocumentChange(oldBook, newBook *models.Book, before, after *models.Document) {
+	a.notifyDocumentIndexableChange(oldBook, newBook, before, after)
+}
+func (a *App) NotifyIndexableVariantGroupsChanged(groups ...string) {
+	a.emitIndexableURLs(a.indexableVariantGroupURLs(groups...)...)
+}
+func (a *App) InstalledChromePath() string { return a.installedChromePath() }
+func (a *App) JobQueue() *jobqueue.Queue   { return a.jobQueue() }
 func (a *App) UniqueChildSlug(bookID uint, parentID *uint, base string, excludeID uint) string {
 	return a.uniqueChildSlug(bookID, parentID, base, excludeID)
 }

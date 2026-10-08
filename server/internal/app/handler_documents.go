@@ -306,6 +306,7 @@ func (a *App) CreateDocument(c *gin.Context) {
 			plugincore.FireChapterPublished(a, book, &doc)
 		}
 	}
+	a.notifyDocumentIndexableChange(nil, book, nil, &doc)
 	a.emitActivity(u.ID, "document.created", "document", strconv.FormatUint(uint64(doc.ID), 10), fmt.Sprintf("document.created:%d", doc.ID))
 	a.publishTreeChanged(c, book.ID)
 	a.recordActivity(book.ID, doc.ID, u.ID, "doc.created", map[string]any{"title": doc.Title})
@@ -427,6 +428,8 @@ func (a *App) UpdateDocument(c *gin.Context) {
 		fail(c, http.StatusForbidden, "无权操作该文档")
 		return
 	}
+	oldBook := *book
+	oldDoc := *doc
 	oldStatus := doc.Status // 用于判定「首次发布」以通知关注者
 	oldTitle, oldContent := doc.Title, doc.Content
 	oldParent, oldSort, oldSlug := parentKey(doc.ParentID), doc.SortOrder, doc.Slug // 目录是否变化（通知其他写作台刷新）
@@ -531,6 +534,7 @@ func (a *App) UpdateDocument(c *gin.Context) {
 		}
 	}
 	var cascaded []uint // 级联发布的后代章节，事务后逐个审查
+	var cascadeBefore []models.Document
 	if err := a.DB.Transaction(func(tx *gorm.DB) error {
 		// 冲突保护：在事务中锁定并重读当前内容（SQLite 的写事务本身已串行），与写作台打开时的摘要比对
 		if req.BaseHash != nil && *req.BaseHash != "" && (req.Title != nil || req.Content != nil) {
@@ -548,6 +552,11 @@ func (a *App) UpdateDocument(c *gin.Context) {
 		// 级联：把该章节整棵子树的状态一并更新
 		if cascadeStatus != "" {
 			descendants := subtreeDocIDs(tx, doc.ID)
+			if len(descendants) > 0 {
+				if err := tx.Where("id IN ?", descendants).Find(&cascadeBefore).Error; err != nil {
+					return err
+				}
+			}
 			if cascadeStatus == "published" {
 				tx.Model(&models.Document{}).Where("id IN ? AND status <> ?", descendants, "published").Pluck("id", &cascaded)
 			}
@@ -593,6 +602,16 @@ func (a *App) UpdateDocument(c *gin.Context) {
 	// 章节首次发布（草稿→已发布）：由插件订阅（书籍关注通知关注者、成长等级给作者发经验）
 	if publishedChapter && oldStatus != "published" {
 		plugincore.FireChapterPublished(a, book, doc)
+	}
+	bookVisibilityChanged := indexableBook(&oldBook) != indexableBook(book)
+	a.notifyDocumentIndexableChange(&oldBook, book, &oldDoc, doc)
+	if !bookVisibilityChanged {
+		for _, before := range cascadeBefore {
+			var after models.Document
+			if a.DB.First(&after, before.ID).Error == nil {
+				a.notifyDocumentIndexableChange(&oldBook, book, &before, &after)
+			}
+		}
 	}
 	// 标题或正文有修改：由插件订阅（如章节导读在内容变化后更新），并通知同书的其他写作台
 	if doc.Title != oldTitle || doc.Content != oldContent {

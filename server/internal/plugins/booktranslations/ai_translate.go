@@ -344,7 +344,18 @@ func (r *runner) outline(ctx context.Context) error {
 		if i < metaN {
 			updates["description"] = truncate(translated[i], 1000)
 		}
-		r.db().Model(&models.Book{}).Where("id = ?", r.dst.ID).Updates(updates)
+		if len(updates) > 0 {
+			oldBook := *r.dst
+			if r.db().Model(&models.Book{}).Where("id = ?", r.dst.ID).Updates(updates).Error == nil {
+				if title, ok := updates["title"].(string); ok {
+					r.dst.Title = title
+				}
+				if description, ok := updates["description"].(string); ok {
+					r.dst.Description = description
+				}
+				r.b.core.NotifyIndexableBookChange(&oldBook, r.dst)
+			}
+		}
 	}
 	mapping := r.targetMapping()
 	for i := range items {
@@ -508,6 +519,8 @@ func (r *runner) chapter(ctx context.Context, it *TranslateItem) error {
 		r.failItem(it, "译本章节已删除")
 		return nil
 	}
+	oldDst := dst
+	oldBook := *r.dst
 	hash := sourceHash(&src)
 	r.db().Model(it).Updates(map[string]any{"status": itemRunning, "error": ""})
 	r.publishItem(it.ID)
@@ -576,6 +589,7 @@ func (r *runner) chapter(ctx context.Context, it *TranslateItem) error {
 	if dst.Status == "published" {
 		r.b.core.GuardDocumentPublish(r.dst, &dst, r.user.ID)
 	}
+	r.b.core.NotifyIndexableDocumentChange(&oldBook, r.dst, &oldDst, &dst)
 	r.db().Model(&TranslatedDoc{}).Where("target_book_id = ? AND source_doc_id = ?", r.dst.ID, src.ID).
 		Updates(map[string]any{"target_doc_id": dst.ID, "source_hash": hash})
 	note := ""

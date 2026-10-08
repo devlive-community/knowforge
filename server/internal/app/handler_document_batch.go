@@ -33,6 +33,8 @@ type batchItemResult struct {
 // changeDocumentStatus 修改章节状态（可级联整棵子树），与 PUT /documents/:id 只改状态时的行为一致：
 // 发布守卫审查（拦截则保持未发布）、级联子章节、草稿书籍随章节发布提升为连载中、首次发布触发发布钩子。
 func (a *App) changeDocumentStatus(actor *models.User, book *models.Book, doc *models.Document, status string, cascade bool) (string, error) {
+	oldBook := *book
+	oldDoc := *doc
 	oldStatus := doc.Status
 	doc.Status = status
 	publishedChapter := status == "published"
@@ -52,12 +54,18 @@ func (a *App) changeDocumentStatus(actor *models.User, book *models.Book, doc *m
 		}
 	}
 	var cascaded []uint
+	var cascadeBefore []models.Document
 	err := a.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&models.Document{}).Where("id = ?", doc.ID).Update("status", doc.Status).Error; err != nil {
 			return err
 		}
 		if cascadeStatus != "" {
 			descendants := subtreeDocIDs(tx, doc.ID)
+			if len(descendants) > 0 {
+				if err := tx.Where("id IN ?", descendants).Find(&cascadeBefore).Error; err != nil {
+					return err
+				}
+			}
 			if cascadeStatus == "published" {
 				tx.Model(&models.Document{}).Where("id IN ? AND status <> ?", descendants, "published").Pluck("id", &cascaded)
 			}
@@ -85,6 +93,16 @@ func (a *App) changeDocumentStatus(actor *models.User, book *models.Book, doc *m
 			a.GuardDocumentPublish(book, &child, actor.ID)
 		}
 	}
+	bookVisibilityChanged := indexableBook(&oldBook) != indexableBook(book)
+	a.notifyDocumentIndexableChange(&oldBook, book, &oldDoc, doc)
+	if !bookVisibilityChanged {
+		for _, before := range cascadeBefore {
+			var after models.Document
+			if a.DB.First(&after, before.ID).Error == nil {
+				a.notifyDocumentIndexableChange(&oldBook, book, &before, &after)
+			}
+		}
+	}
 	if publishedChapter && oldStatus != "published" {
 		plugincore.FireChapterPublished(a, book, doc)
 	}
@@ -94,10 +112,18 @@ func (a *App) changeDocumentStatus(actor *models.User, book *models.Book, doc *m
 // trashDocumentSubtree 把章节及其整棵子树移入回收站（同一批次，便于整体恢复），返回移入的章节数与保留截止时间。
 func (a *App) trashDocumentSubtree(actor *models.User, doc *models.Document) (int, time.Time, error) {
 	ids := append([]uint{doc.ID}, subtreeDocIDs(a.DB, doc.ID)...)
+	var indexableURLs []string
+	var book models.Book
+	if a.DB.First(&book, doc.BookID).Error == nil {
+		indexableURLs = a.indexableDocumentSubtreeURLs(&book, doc)
+	}
 	now := currentTime()
 	err := a.DB.Model(&models.Document{}).Where("id IN ?", ids).Updates(map[string]any{
 		"deleted_at": now, "deleted_by": actor.ID, "trash_group": randomSlug("trash"),
 	}).Error
+	if err == nil {
+		a.emitIndexableURLs(indexableURLs...)
+	}
 	return len(ids), now.Add(trashRetention), err
 }
 

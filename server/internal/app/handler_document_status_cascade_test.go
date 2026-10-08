@@ -55,9 +55,12 @@ func TestDocumentStatusCascadeAndFollowParent(t *testing.T) {
 	}, "")
 	token := installed["data"].(map[string]any)["token"].(string)
 
-	// 书籍开启「子章节状态跟随父章节」
+	if err := a.setSetting("site_url", "https://books.example", "test site URL"); err != nil {
+		t.Fatal(err)
+	}
+	// 书籍开启「子章节状态跟随父章节」并公开，验证级联状态变化会刷新可索引 URL。
 	_, bookResp := req(http.MethodPost, "/api/v1/books", map[string]any{
-		"title": "书", "status": "published", "child_status_follow_parent": true,
+		"title": "书", "status": "published", "is_public": true, "child_status_follow_parent": true,
 	}, token)
 	bookID := int(bookResp["data"].(map[string]any)["id"].(float64))
 	docID := func(m map[string]any) int { return int(m["data"].(map[string]any)["id"].(float64)) }
@@ -85,6 +88,7 @@ func TestDocumentStatusCascadeAndFollowParent(t *testing.T) {
 	if got := docStatus(child2); got != "draft" {
 		t.Fatalf("显式 draft 不应被覆盖，实际 %s", got)
 	}
+	revisionBeforeCascade := a.getSetting("sitemap_request_revision")
 
 	// 级联：父章节改为 draft 且 cascade_status=true → 子章节一并变 draft
 	req(http.MethodPut, fmt.Sprintf("/api/v1/documents/%d", parentID), map[string]any{
@@ -93,6 +97,9 @@ func TestDocumentStatusCascadeAndFollowParent(t *testing.T) {
 	_, reloaded := req(http.MethodGet, fmt.Sprintf("/api/v1/documents/%d", childID), nil, token)
 	if got := docStatus(reloaded); got != "draft" {
 		t.Fatalf("级联后子章节应为 draft，实际 %s", got)
+	}
+	if got := a.getSetting("sitemap_request_revision"); got == "" || got == revisionBeforeCascade {
+		t.Fatal("级联下线已发布章节后必须请求 Sitemap 刷新")
 	}
 
 	// 不级联：父章节改回 published 但 cascade_status 缺省 → 子章节保持 draft

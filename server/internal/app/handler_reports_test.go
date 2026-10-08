@@ -50,6 +50,9 @@ func TestContentReportModerationFlow(t *testing.T) {
 		"title": "Reported Book", "status": "published", "is_public": true,
 	}, adminToken)
 	bookID := int(bookResponse["data"].(map[string]any)["id"].(float64))
+	if err := a.setSetting("site_url", "https://books.example", "test site URL"); err != nil {
+		t.Fatal(err)
+	}
 
 	_, register := request(http.MethodPost, "/api/v1/auth/register", map[string]any{
 		"username": "reporter", "email": "reporter@test.local", "password": "secret123",
@@ -92,6 +95,9 @@ func TestContentReportModerationFlow(t *testing.T) {
 	}, adminToken)
 	if status != http.StatusOK || resolved["data"].(map[string]any)["status"] != "resolved" {
 		t.Fatalf("下架处理失败: %d %v", status, resolved)
+	}
+	if a.getSetting("sitemap_request_revision") == "" {
+		t.Fatal("举报下架公开书籍后必须请求 Sitemap 刷新")
 	}
 	status, _ = request(http.MethodPut, fmt.Sprintf("/api/v1/admin/reports/%d", reportID), map[string]any{
 		"resolution": "reject",

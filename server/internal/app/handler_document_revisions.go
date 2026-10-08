@@ -218,6 +218,8 @@ func (a *App) RestoreDocumentRevision(c *gin.Context) {
 		return
 	}
 	u := currentUser(c)
+	oldDoc := *doc
+	oldBook := *book
 
 	var restored models.Document
 	err = a.DB.Transaction(func(tx *gorm.DB) error {
@@ -260,6 +262,7 @@ func (a *App) RestoreDocumentRevision(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "恢复版本失败")
 		return
 	}
+	a.notifyDocumentIndexableChange(&oldBook, book, &oldDoc, &restored)
 	a.publishDocSaved(c, book.ID, &restored)
 	a.publishTreeChanged(c, book.ID)
 	a.recordActivity(book.ID, restored.ID, currentUser(c).ID, "doc.restored", map[string]any{"title": restored.Title})

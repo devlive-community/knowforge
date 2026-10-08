@@ -62,9 +62,9 @@ func TestAccountDeletionFlow(t *testing.T) {
 		return d["token"].(string), uint(d["user"].(map[string]any)["id"].(float64))
 	}
 	mkBook := func(token string) {
-		_, b := req(http.MethodPost, "/api/v1/books", map[string]any{"title": "书", "status": "published"}, token)
+		_, b := req(http.MethodPost, "/api/v1/books", map[string]any{"title": "书", "status": "published", "is_public": true}, token)
 		id := int(b["data"].(map[string]any)["id"].(float64))
-		req(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents", id), map[string]any{"title": "章", "content": "正文"}, token)
+		req(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents", id), map[string]any{"title": "章", "content": "正文", "status": "published"}, token)
 	}
 
 	// 1. 冷静期 7 天：申请 → 进入冷静期；错误密码被拒
@@ -89,6 +89,7 @@ func TestAccountDeletionFlow(t *testing.T) {
 
 	// 2. 冷静期 0：确认即删除，用户与其书籍一并清除
 	_ = a.setSetting(cfgAcctDelCooldown, "0", "")
+	_ = a.setSetting("site_url", "https://books.example", "test site URL")
 	s, _ = req(http.MethodPost, "/api/v1/auth/account/deletion", map[string]any{"password": "secret123"}, token)
 	if s != http.StatusOK {
 		t.Fatalf("冷静期 0 时应立即删除: %d", s)
@@ -98,6 +99,9 @@ func TestAccountDeletionFlow(t *testing.T) {
 	a.DB.Model(&models.Book{}).Where("user_id = ?", uid).Count(&bc)
 	if uc != 0 || bc != 0 {
 		t.Fatalf("即时删除后用户与书籍应清空 uc=%d bc=%d", uc, bc)
+	}
+	if a.getSetting("sitemap_request_revision") == "" {
+		t.Fatal("删除用户公开书籍后必须请求 Sitemap 刷新")
 	}
 
 	// 3. 冷静期到期自动清理

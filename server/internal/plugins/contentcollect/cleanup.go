@@ -52,7 +52,11 @@ func (cc *behavior) CleanupBookInternalLinks(c *gin.Context) {
 		for i := range all {
 			d := &all[i]
 			if nc := rewriteInternalLinks(d.Content, urlToSlug, book.Slug); nc != d.Content {
+				oldDoc := *d
 				if db.Model(&models.Document{}).Where("id = ?", d.ID).Update("content", nc).Error == nil {
+					after := oldDoc
+					after.Content = nc
+					cc.core.NotifyIndexableDocumentChange(book, book, &oldDoc, &after)
 					changed++
 				}
 			}

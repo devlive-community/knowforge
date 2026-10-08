@@ -507,6 +507,7 @@ func (a *App) CreateBook(c *gin.Context) {
 		}
 	}
 	a.emitActivity(u.ID, "book.created", "book", strconv.FormatUint(uint64(book.ID), 10), fmt.Sprintf("book.created:%d", book.ID))
+	a.notifyBookIndexableChange(nil, &book)
 	ok(c, book)
 }
 
@@ -552,6 +553,7 @@ func (a *App) UpdateBook(c *gin.Context) {
 		fail(c, http.StatusForbidden, "无权操作该书籍")
 		return
 	}
+	oldBook := *book
 	oldStatus, oldPublic := book.Status, book.IsPublic
 	oldTitle, oldDescription := book.Title, book.Description
 
@@ -702,6 +704,12 @@ func (a *App) UpdateBook(c *gin.Context) {
 		})
 	}
 	a.emitActivity(book.UserID, "book.updated", "book", strconv.FormatUint(uint64(book.ID), 10), fmt.Sprintf("book.updated:%d:%d", book.ID, book.UpdatedAt.UnixNano()))
+	a.notifyBookIndexableChange(&oldBook, book)
+	if len(extFields) > 0 && indexableBook(&oldBook) && indexableBook(book) {
+		if base := a.indexableSiteBase(); base != "" {
+			a.emitIndexableURLs(base + "/book/detail/" + escapedPathSegment(book.Slug))
+		}
+	}
 	ok(c, book)
 }
 
@@ -719,6 +727,7 @@ func (a *App) DeleteBook(c *gin.Context) {
 		fail(c, http.StatusForbidden, "无权操作该书籍")
 		return
 	}
+	indexableURLs := a.indexableBookURLs(book)
 	now := currentTime()
 	group := randomSlug("trash")
 	u := currentUser(c)
@@ -735,6 +744,7 @@ func (a *App) DeleteBook(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "删除失败: "+err.Error())
 		return
 	}
+	a.emitIndexableURLs(indexableURLs...)
 	ok(c, gin.H{"message": "已移入回收站", "expires_at": now.Add(trashRetention)})
 }
 

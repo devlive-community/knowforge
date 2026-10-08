@@ -250,7 +250,12 @@ func (cc *behavior) rewriteCrawledInternalLinks(book *models.Book, urlToDoc map[
 	for i := range docs {
 		d := &docs[i]
 		if nc := rewriteInternalLinks(d.Content, urlToSlug, book.Slug); nc != d.Content {
-			cc.core.Gorm().Model(&models.Document{}).Where("id = ?", d.ID).Update("content", nc)
+			oldDoc := *d
+			if cc.core.Gorm().Model(&models.Document{}).Where("id = ?", d.ID).Update("content", nc).Error == nil {
+				after := oldDoc
+				after.Content = nc
+				cc.core.NotifyIndexableDocumentChange(book, book, &oldDoc, &after)
+			}
 		}
 	}
 }
@@ -634,7 +639,9 @@ func (cc *behavior) crawlCreateDocument(book *models.Book, userID uint, title, c
 	if err := cc.core.Gorm().Create(&doc).Error; err != nil {
 		return nil, err
 	}
-	cc.core.GuardDocumentPublish(book, &doc, userID) // 按书籍默认状态直接发布时交发布守卫（如内容审核）审查
+	if cc.core.GuardDocumentPublish(book, &doc, userID) == "" && doc.Status == "published" {
+		cc.core.NotifyIndexableDocumentChange(nil, book, nil, &doc)
+	}
 	return &doc, nil
 }
 
