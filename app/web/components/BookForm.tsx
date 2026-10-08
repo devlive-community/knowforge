@@ -250,11 +250,11 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
                   <span className="text-xs text-slate-400">{t('bookForm.orPaste')}</span>
                   <span className="h-px flex-1 bg-slate-100" />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <Input value={/^https?:\/\//.test(coverImage) ? coverImage : ''} onChange={(e) => setCoverImage(e.target.value)}
-                    placeholder="https://example.com/cover.jpg" />
+                    className="min-w-0 flex-1" placeholder="https://example.com/cover.jpg" />
                   {coverImage && (
-                    <Button variant="outline" type="button" onClick={() => setCoverImage('')} className="shrink-0">{t('bookForm.removeCover')}</Button>
+                    <Button variant="outline" type="button" onClick={() => setCoverImage('')} className="shrink-0 whitespace-nowrap">{t('bookForm.removeCover')}</Button>
                   )}
                 </div>
               </div>

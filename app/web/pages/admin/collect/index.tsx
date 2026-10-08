@@ -150,9 +150,9 @@ function Inner() {
           <section className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="font-semibold text-slate-900">{t('admin.collect.testTitle')}</h2>
             <p className="mt-1 text-xs text-slate-500">{t('admin.collect.testHint')}</p>
-            <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); void runTest() }}>
-              <Input className="flex-1" value={testURL} onChange={(e) => setTestURL(e.target.value)} placeholder="https://" />
-              <Button type="submit" variant="outline" loading={testing} disabled={!testURL.trim()}>{t('admin.collect.test')}</Button>
+            <form className="mt-3 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); void runTest() }}>
+              <Input className="min-w-0 flex-1" value={testURL} onChange={(e) => setTestURL(e.target.value)} placeholder="https://" />
+              <Button type="submit" variant="outline" className="shrink-0 whitespace-nowrap" loading={testing} disabled={!testURL.trim()}>{t('admin.collect.test')}</Button>
             </form>
             {preview && (
               <div className="mt-3">

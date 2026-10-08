@@ -56,7 +56,7 @@ export default function CaptchaField({ scene, onChange, refreshSignal = 0 }: {
         <Input
           value={answer}
           onChange={(e) => { setAnswer(e.target.value); onChange({ id: data.id || '', answer: e.target.value, required: true }) }}
-          placeholder={t('auth.captcha.placeholder')} autoComplete="off" className="flex-1" aria-label={t('auth.captcha.label')}
+          placeholder={t('auth.captcha.placeholder')} autoComplete="off" className="min-w-0 flex-1" aria-label={t('auth.captcha.label')}
         />
         <Tooltip content={t('auth.captcha.refresh')}>
           <button type="button" onClick={load} aria-label={t('auth.captcha.refresh')}

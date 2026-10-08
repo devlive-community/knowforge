@@ -135,10 +135,10 @@ export default function SettingsAI() {
                 <Input value={cfg.base_url} onChange={(e) => set({ base_url: e.target.value })} placeholder={hint?.base} />
               </Field>
               <Field label="API Key" hint={t('admin.settings.ai.apiKeyHint')}>
-                <div className="flex gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Input type="password" autoComplete="new-password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-                    placeholder={cfg.api_key_set ? t('admin.settings.ai.secretSet') : t('admin.settings.ai.secretEmpty')} />
-                  {cfg.api_key_set && <Button variant="outline" disabled={saving} onClick={() => save('api_key')}>{t('admin.settings.ai.clearSecret')}</Button>}
+                    className="min-w-0 flex-1" placeholder={cfg.api_key_set ? t('admin.settings.ai.secretSet') : t('admin.settings.ai.secretEmpty')} />
+                  {cfg.api_key_set && <Button variant="outline" className="shrink-0 whitespace-nowrap" loading={saving} disabled={saving} onClick={() => save('api_key')}>{t('admin.settings.ai.clearSecret')}</Button>}
                 </div>
               </Field>
               <Field label={t('admin.settings.ai.model')} hint={t('admin.settings.ai.modelHint', { default: hint?.model || '' })}>
@@ -158,10 +158,10 @@ export default function SettingsAI() {
                 <Input value={cfg.embed_base_url} onChange={(e) => set({ embed_base_url: e.target.value })} placeholder="https://api.openai.com/v1" />
               </Field>
               <Field label={t('admin.settings.ai.embedApiKey')} hint={t('admin.settings.ai.embedApiKeyHint')}>
-                <div className="flex gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Input type="password" autoComplete="new-password" value={embedKey} onChange={(e) => setEmbedKey(e.target.value)}
-                    placeholder={cfg.embed_api_key_set ? t('admin.settings.ai.secretSet') : t('admin.settings.ai.secretEmpty')} />
-                  {cfg.embed_api_key_set && <Button variant="outline" disabled={saving} onClick={() => save('embed_api_key')}>{t('admin.settings.ai.clearSecret')}</Button>}
+                    className="min-w-0 flex-1" placeholder={cfg.embed_api_key_set ? t('admin.settings.ai.secretSet') : t('admin.settings.ai.secretEmpty')} />
+                  {cfg.embed_api_key_set && <Button variant="outline" className="shrink-0 whitespace-nowrap" loading={saving} disabled={saving} onClick={() => save('embed_api_key')}>{t('admin.settings.ai.clearSecret')}</Button>}
                 </div>
               </Field>
             </div>
@@ -181,10 +181,10 @@ export default function SettingsAI() {
                 <Input value={cfg.tts_base_url} onChange={(e) => set({ tts_base_url: e.target.value })} placeholder="https://api.openai.com/v1" />
               </Field>
               <Field label={t('admin.settings.ai.ttsApiKey')} hint={t('admin.settings.ai.ttsApiKeyHint')}>
-                <div className="flex gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Input type="password" autoComplete="new-password" value={ttsKey} onChange={(e) => setTtsKey(e.target.value)}
-                    placeholder={cfg.tts_api_key_set ? t('admin.settings.ai.secretSet') : t('admin.settings.ai.secretEmpty')} />
-                  {cfg.tts_api_key_set && <Button variant="outline" disabled={saving} onClick={() => save('tts_api_key')}>{t('admin.settings.ai.clearSecret')}</Button>}
+                    className="min-w-0 flex-1" placeholder={cfg.tts_api_key_set ? t('admin.settings.ai.secretSet') : t('admin.settings.ai.secretEmpty')} />
+                  {cfg.tts_api_key_set && <Button variant="outline" className="shrink-0 whitespace-nowrap" loading={saving} disabled={saving} onClick={() => save('tts_api_key')}>{t('admin.settings.ai.clearSecret')}</Button>}
                 </div>
               </Field>
             </div>

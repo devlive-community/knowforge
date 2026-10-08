@@ -83,9 +83,9 @@ function Inner() {
               <div className="font-medium text-slate-900">{t('admin.readAloud.cacheTitle')}</div>
               <p className="mt-1 text-sm text-slate-500">{t('admin.readAloud.cacheHint')}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600" data-testid="read-aloud-cache">
-              <span>{t('admin.readAloud.cacheUsage', { files: data.cache_files.toLocaleString(), mb: formatMB(data.cache_bytes) })}</span>
-              <Button size="sm" variant="outline" className="ml-auto" loading={clearing} disabled={data.cache_files === 0} onClick={() => void clearCache()}>
+            <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600" data-testid="read-aloud-cache">
+              <span className="min-w-0 flex-1">{t('admin.readAloud.cacheUsage', { files: data.cache_files.toLocaleString(), mb: formatMB(data.cache_bytes) })}</span>
+              <Button size="sm" variant="outline" className="shrink-0 whitespace-nowrap" loading={clearing} disabled={data.cache_files === 0} onClick={() => void clearCache()}>
                 {t('admin.readAloud.clear')}
               </Button>
             </div>

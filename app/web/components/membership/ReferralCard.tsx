@@ -52,8 +52,8 @@ export default function ReferralCard() {
       {data.enabled && (
         <div className="mt-4">
           {link ? (
-            <div className="flex max-w-xl gap-2">
-              <Input value={link} readOnly aria-label={t('membership.referral.link')} />
+            <div className="flex max-w-xl items-center gap-2">
+              <Input className="min-w-0 flex-1" value={link} readOnly aria-label={t('membership.referral.link')} />
               <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => void copy()}><i className="fa-regular fa-copy" aria-hidden="true" />{t('membership.referral.copyLink')}</Button>
             </div>
           ) : (

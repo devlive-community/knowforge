@@ -199,9 +199,9 @@ function GuideEditor({ row, onClose, onSaved }: { row: GuideChapter; onClose: ()
           <label className="mb-1.5 block text-sm font-medium text-slate-700">{t('chapterGuide.reader.points')}</label>
           <div className="space-y-2">
             {points.map((p, i) => (
-              <div key={i} className="flex gap-2">
-                <Input value={p} maxLength={300} onChange={(e) => setPoints(points.map((x, j) => (j === i ? e.target.value : x)))} />
-                <Button size="sm" variant="ghost" aria-label={t('chapterGuide.manage.removePoint')} onClick={() => setPoints(points.filter((_, j) => j !== i))}>
+              <div key={i} className="flex items-center gap-2">
+                <Input className="min-w-0 flex-1" value={p} maxLength={300} onChange={(e) => setPoints(points.map((x, j) => (j === i ? e.target.value : x)))} />
+                <Button size="sm" variant="ghost" className="shrink-0" aria-label={t('chapterGuide.manage.removePoint')} onClick={() => setPoints(points.filter((_, j) => j !== i))}>
                   <i className="fa-solid fa-xmark" aria-hidden="true" />
                 </Button>
               </div>

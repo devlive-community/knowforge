@@ -296,8 +296,8 @@ function CreatedTokenModal({ token, onClose }: { token: string; onClose: () => v
   return (
     <Modal open onClose={onClose} title={t('account.tokens.createdTitle')} footer={<Button onClick={onClose}>{t('account.tokens.done')}</Button>}>
       <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{t('account.tokens.showOnce')}</p>
-      <div className="mt-3 flex gap-2">
-        <Input value={token} readOnly aria-label={t('account.tokens.title')} className="font-mono text-xs" />
+      <div className="mt-3 flex items-center gap-2">
+        <Input value={token} readOnly aria-label={t('account.tokens.title')} className="min-w-0 flex-1 font-mono text-xs" />
         <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => void copy()}><i className="fa-regular fa-copy" aria-hidden="true" />{t('account.tokens.copy')}</Button>
       </div>
     </Modal>

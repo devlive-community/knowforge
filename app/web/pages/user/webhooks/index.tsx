@@ -221,8 +221,8 @@ function SecretModal({ secret, onClose }: { secret: string; onClose: () => void 
   return (
     <Modal open onClose={onClose} title={t('webhooks.secretTitle')} footer={<Button onClick={onClose}>{t('account.tokens.done')}</Button>}>
       <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{t('webhooks.secretOnce')}</p>
-      <div className="mt-3 flex gap-2">
-        <Input value={secret} readOnly aria-label={t('webhooks.secretTitle')} className="font-mono text-xs" />
+      <div className="mt-3 flex items-center gap-2">
+        <Input value={secret} readOnly aria-label={t('webhooks.secretTitle')} className="min-w-0 flex-1 font-mono text-xs" />
         <Button variant="outline" className="shrink-0 whitespace-nowrap" onClick={() => void copy()}><i className="fa-regular fa-copy" aria-hidden="true" />{t('account.tokens.copy')}</Button>
       </div>
     </Modal>

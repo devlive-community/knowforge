@@ -253,12 +253,12 @@ function NewTranslation({ bookId, bookTitle, overview, disabled, base, onChanged
           <div className="mt-2 space-y-2">
             {terms.map((term, i) => (
               <div key={i} className="flex items-center gap-2">
-                <Input value={term.source} maxLength={200} placeholder={t('bookSettings.aiTranslate.termSource')}
+                <Input className="min-w-0 flex-1" value={term.source} maxLength={200} placeholder={t('bookSettings.aiTranslate.termSource')}
                   onChange={(e) => setTerms(terms.map((x, j) => (j === i ? { ...x, source: e.target.value } : x)))} />
                 <i className="fa-solid fa-arrow-right text-xs text-slate-300" aria-hidden="true" />
-                <Input value={term.target} maxLength={200} placeholder={t('bookSettings.aiTranslate.termTarget', { lang: label })}
+                <Input className="min-w-0 flex-1" value={term.target} maxLength={200} placeholder={t('bookSettings.aiTranslate.termTarget', { lang: label })}
                   onChange={(e) => setTerms(terms.map((x, j) => (j === i ? { ...x, target: e.target.value } : x)))} />
-                <Button size="sm" variant="ghost" aria-label={t('bookSettings.aiTranslate.removeTerm')} onClick={() => setTerms(terms.filter((_, j) => j !== i))}>
+                <Button size="sm" variant="ghost" className="shrink-0" aria-label={t('bookSettings.aiTranslate.removeTerm')} onClick={() => setTerms(terms.filter((_, j) => j !== i))}>
                   <i className="fa-solid fa-xmark" aria-hidden="true" />
                 </Button>
               </div>

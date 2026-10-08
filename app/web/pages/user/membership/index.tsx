@@ -61,8 +61,8 @@ function RedeemCard({ onRedeemed }: { onRedeemed: () => void }) {
     <Card className="mt-4 p-5">
       <div className="text-sm font-semibold text-slate-900"><i className="fa-solid fa-ticket mr-1.5 text-amber-500" aria-hidden="true" />{t('membership.redeem.title')}</div>
       <p className="mt-1 text-xs text-slate-500">{t('membership.redeem.hint')}</p>
-      <div className="mt-3 flex max-w-md gap-2">
-        <Input value={code} maxLength={64} placeholder="XXXX-XXXX-XXXX-XXXX" onChange={(e) => setCode(e.target.value)}
+      <div className="mt-3 flex max-w-md items-center gap-2">
+        <Input className="min-w-0 flex-1" value={code} maxLength={64} placeholder="XXXX-XXXX-XXXX-XXXX" onChange={(e) => setCode(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && code.trim() && !busy) void redeem() }} />
         <Button className="shrink-0 whitespace-nowrap" loading={busy} disabled={!code.trim()} onClick={() => void redeem()}>{t('membership.redeem.submit')}</Button>
       </div>
