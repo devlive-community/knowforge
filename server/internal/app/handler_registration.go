@@ -202,13 +202,29 @@ func (a *App) EnableInviteCode(c *gin.Context) {
 // MyInvitedUsers GET /auth/invited 我邀请的用户列表（referral），关闭邀请码也可查看。
 func (a *App) MyInvitedUsers(c *gin.Context) {
 	u := currentUser(c)
+	page, pageSize := paginate(c)
+	query := a.DB.Model(&models.User{}).Where("invited_by = ?", u.ID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		fail(c, http.StatusInternalServerError, "查询邀请记录失败")
+		return
+	}
+	if total > 0 {
+		lastPage := int((total + int64(pageSize) - 1) / int64(pageSize))
+		if page > lastPage {
+			page = lastPage
+		}
+	}
 	var users []models.User
-	a.DB.Where("invited_by = ?", u.ID).Order("created_at DESC").Find(&users)
+	if err := query.Order("created_at DESC, id DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&users).Error; err != nil {
+		fail(c, http.StatusInternalServerError, "查询邀请记录失败")
+		return
+	}
 	items := make([]gin.H, 0, len(users))
 	for _, x := range users {
 		items = append(items, gin.H{"username": x.Username, "nickname": x.Nickname, "display_name": x.PublicName(), "avatar": x.Avatar, "created_at": x.CreatedAt})
 	}
-	ok(c, gin.H{"items": items, "total": len(items)})
+	ok(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize})
 }
 
 // DisableInviteCode DELETE /auth/invite-code 停用邀请码（保留 InviteCode，再开启仍是同一个）。

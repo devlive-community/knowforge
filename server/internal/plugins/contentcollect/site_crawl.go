@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
 
 	"github.com/gin-gonic/gin"
@@ -670,13 +671,28 @@ func (cc *behavior) ListBookCrawlJobs(c *gin.Context) {
 		cc.core.Fail(c, http.StatusForbidden, "无权查看采集历史")
 		return
 	}
-	q := cc.core.Gorm().Where("book_id = ?", book.ID)
+	page, pageSize := cc.core.Paginate(c)
+	q := cc.core.Gorm().Model(&CrawlJob{}).Where("book_id = ?", book.ID)
 	if kind := strings.TrimSpace(c.Query("kind")); kind != "" {
 		q = q.Where("kind = ?", kind)
 	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		cc.core.Fail(c, http.StatusInternalServerError, "查询采集历史失败")
+		return
+	}
+	if total > 0 {
+		lastPage := int((total + int64(pageSize) - 1) / int64(pageSize))
+		if page > lastPage {
+			page = lastPage
+		}
+	}
 	jobs := []CrawlJob{}
-	q.Order("created_at DESC").Limit(200).Find(&jobs)
-	cc.core.OK(c, gin.H{"items": jobs})
+	if err := q.Order("created_at DESC, id DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&jobs).Error; err != nil {
+		cc.core.Fail(c, http.StatusInternalServerError, "查询采集历史失败")
+		return
+	}
+	cc.core.OK(c, plugincore.PageResult{Items: jobs, Total: total, Page: page, PageSize: pageSize})
 }
 
 // GetCrawlJob GET /collect/jobs/:id 任务详情 + 页面清单（按 sort_order，供前端按目录结构展示）。
@@ -685,9 +701,25 @@ func (cc *behavior) GetCrawlJob(c *gin.Context) {
 	if !ok2 {
 		return
 	}
+	page, pageSize := cc.core.Paginate(c)
+	query := cc.core.Gorm().Model(&CrawlPage{}).Where("job_id = ?", job.ID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		cc.core.Fail(c, http.StatusInternalServerError, "查询采集页面失败")
+		return
+	}
+	if total > 0 {
+		lastPage := int((total + int64(pageSize) - 1) / int64(pageSize))
+		if page > lastPage {
+			page = lastPage
+		}
+	}
 	pages := []CrawlPage{}
-	cc.core.Gorm().Where("job_id = ?", job.ID).Order("sort_order ASC").Find(&pages)
-	cc.core.OK(c, gin.H{"job": job, "pages": pages})
+	if err := query.Order("sort_order ASC, id ASC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&pages).Error; err != nil {
+		cc.core.Fail(c, http.StatusInternalServerError, "查询采集页面失败")
+		return
+	}
+	cc.core.OK(c, gin.H{"job": job, "pages": pages, "pages_total": total, "pages_page": page, "pages_page_size": pageSize})
 }
 
 // RetryCrawlJob POST /collect/jobs/:id/retry 重试该任务所有失败页。

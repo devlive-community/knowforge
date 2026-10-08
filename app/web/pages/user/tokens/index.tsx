@@ -6,7 +6,7 @@ import AccountSettingsLayout from '@/components/AccountSettingsLayout'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Badge, Button, Checkbox, EmptyState, Field, Input, Loading, Modal, SegmentedTabs, Select, useFeedback } from '@/components/ui'
+import { Badge, Button, Checkbox, EmptyState, Field, Input, Loading, Modal, Pagination, SegmentedTabs, Select, useFeedback } from '@/components/ui'
 
 interface AccessToken {
   id: number
@@ -22,7 +22,9 @@ interface AccessToken {
   expired: boolean
   created_at: string
 }
-interface TokenList { items: AccessToken[]; active: number; limit: number }
+interface TokenList { items: AccessToken[]; total: number; page: number; page_size: number; active: number; limit: number }
+
+const PAGE_SIZE = 20
 
 interface PermissionGroup { resource: string; permissions: string[] }
 
@@ -48,13 +50,22 @@ export default function AccessTokensPage() {
   const { showToast, confirmAction } = useFeedback()
   const permLabel = usePermissionLabel()
   const [data, setData] = useState<TokenList | null>(null)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<string>('')
   const [revoking, setRevoking] = useState<number | null>(null)
 
   const load = useCallback(() => {
-    api<TokenList>('/auth/tokens').then(setData).catch((e) => showToast({ title: t('account.tokens.loadFailed'), message: (e as Error).message, tone: 'error' }))
-  }, [showToast, t])
+    setLoading(true)
+    api<TokenList>('/auth/tokens', { params: { page, page_size: PAGE_SIZE } })
+      .then((result) => {
+        setData(result)
+        if (result.page !== page) setPage(result.page)
+      })
+      .catch((e) => showToast({ title: t('account.tokens.loadFailed'), message: (e as Error).message, tone: 'error' }))
+      .finally(() => setLoading(false))
+  }, [page, showToast, t])
   useEffect(() => { if (user) load() }, [user, load])
 
   if (!user) return <Loading className="min-h-[60vh]" label={t('account.common.loadingInfo')} />
@@ -145,12 +156,15 @@ export default function AccessTokensPage() {
                   })}
                 </ul>
               )}
+              {data && data.total > data.page_size && (
+                <Pagination page={data.page} pageSize={data.page_size} total={data.total} onChange={setPage} loading={loading} />
+              )}
               <p className="mt-4 text-xs leading-5 text-slate-400">{t('account.tokens.rules')}</p>
             </div>
           </div>
         </AccountSettingsLayout>
       </Container>
-      {creating && <CreateTokenModal onClose={() => setCreating(false)} onCreated={(token) => { setCreating(false); setCreated(token); load() }} />}
+      {creating && <CreateTokenModal onClose={() => setCreating(false)} onCreated={(token) => { setCreating(false); setCreated(token); if (page === 1) load(); else setPage(1) }} />}
       {created && <CreatedTokenModal token={created} onClose={() => setCreated('')} />}
     </>
   )

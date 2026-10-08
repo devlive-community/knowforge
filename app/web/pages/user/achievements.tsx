@@ -7,10 +7,12 @@ import Seo from '@/components/Seo'
 import { api } from '@/lib/api'
 import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Badge, Button, Card, EmptyState, Loading, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Loading, Pagination, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
 import type { AchievementGrant, UserAchievementItem } from '@/lib/types'
 
 type Tab = 'unlocked' | 'progress' | 'all'
+
+const PAGE_SIZE = 12
 
 interface AchievementPageData {
   enabled: boolean
@@ -36,7 +38,11 @@ function MyAchievementsInner() {
   const router = useRouter()
   // Tab（筛选）用查询参数承载，不用本地 state
   const tab: Tab = router.query.tab === 'progress' || router.query.tab === 'all' ? router.query.tab : 'unlocked'
-  const setTab = (next: Tab) => router.push({ query: next === 'unlocked' ? {} : { tab: next } }, undefined, { shallow: true })
+  const [page, setPage] = useState(1)
+  const setTab = (next: Tab) => {
+    setPage(1)
+    return router.push({ query: next === 'unlocked' ? {} : { tab: next } }, undefined, { shallow: true })
+  }
   const [data, setData] = useState<AchievementPageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -61,6 +67,8 @@ function MyAchievementsInner() {
     }
     return source
   }, [data, tab])
+
+  const visibleItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   async function updateDisplay(grant: AchievementGrant, patch: { is_public?: boolean; showcase_order?: number }) {
     setUpdating(grant.id)
@@ -102,8 +110,9 @@ function MyAchievementsInner() {
             <>
               <div className="mt-6"><SegmentedTabs value={tab} onChange={(value) => setTab(value as Tab)} ariaLabel={t('myAch.statusAria')} items={[{ value: 'unlocked', label: t('myAch.tabUnlocked', { n: data.unlocked_count }) }, { value: 'progress', label: t('myAch.tabProgress') }, { value: 'all', label: t('myAch.tabAll', { n: data.total }) }]} /></div>
               {items.length === 0 ? <div className="mt-6"><EmptyState>{tab === 'unlocked' ? t('myAch.emptyUnlocked') : tab === 'progress' ? t('myAch.emptyProgress') : t('myAch.emptyAll')}</EmptyState></div> : (
-                <div className="mt-6 grid gap-4 grid-cols-[repeat(auto-fill,minmax(18rem,1fr))]">
-                  {items.map((item) => {
+                <>
+                  <div className="mt-6 grid gap-4 grid-cols-[repeat(auto-fill,minmax(18rem,1fr))]">
+                    {visibleItems.map((item) => {
                     const definition = item.definition
                     const progress = item.progress?.percent || 0
                     const name = definition.name
@@ -119,8 +128,10 @@ function MyAchievementsInner() {
                         {item.grant && <div className="mt-4 border-t border-slate-100 pt-4"><div className="flex items-center justify-between gap-3"><span className="text-xs text-slate-400">{t('myAch.unlockedAt', { date: new Date(item.grant.unlocked_at).toLocaleDateString(locale) })}</span><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-500"><span>{definition.visibility !== 'private' ? t('myAch.public') : t('myAch.selfOnly')}</span><Switch ariaLabel={t('myAch.publicAria')} checked={item.grant.is_public} disabled={definition.visibility === 'private' || (!data.allow_user_hide && item.grant.is_public) || updating === item.grant.id} onChange={(value) => updateDisplay(item.grant as AchievementGrant, { is_public: value })} /></label><Button variant={item.grant.showcase_order > 0 ? 'primary' : 'outline'} disabled={definition.visibility === 'private'} loading={updating === item.grant.id} onClick={() => updateDisplay(item.grant as AchievementGrant, { showcase_order: item.grant?.showcase_order ? 0 : 1 })}>{item.grant.showcase_order > 0 ? t('myAch.pinned') : t('myAch.pin')}</Button></div></div></div>}
                       </Card>
                     )
-                  })}
-                </div>
+                    })}
+                  </div>
+                  <Pagination page={page} pageSize={PAGE_SIZE} total={items.length} onChange={setPage} />
+                </>
               )}
             </>
           )}

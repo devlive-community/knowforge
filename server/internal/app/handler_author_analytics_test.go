@@ -79,11 +79,16 @@ func TestAuthorAnalyticsOverview(t *testing.T) {
 	request(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/view", bookA), map[string]any{}, "")
 	request(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/view", bookB), map[string]any{}, "")
 
-	// 一名读者读完 Book A 全部已发布章节。
+	// 两名读者通过作者的邀请码注册，用于验证邀请列表分页。
+	_, inviteCodeData := request(http.MethodPost, "/api/v1/auth/invite-code", map[string]any{}, authorToken)
+	inviteCode := inviteCodeData["data"].(map[string]any)["invite_code"].(string)
 	_, registered := request(http.MethodPost, "/api/v1/auth/register", map[string]any{
-		"username": "reader", "email": "reader@test.local", "password": "secret123",
+		"username": "reader", "email": "reader@test.local", "password": "secret123", "invite_code": inviteCode,
 	}, "")
 	readerToken := registered["data"].(map[string]any)["token"].(string)
+	request(http.MethodPost, "/api/v1/auth/register", map[string]any{
+		"username": "reader2", "email": "reader2@test.local", "password": "secret123", "invite_code": inviteCode,
+	}, "")
 	for _, doc := range []map[string]any{docA1, docA2} {
 		request(http.MethodPut, fmt.Sprintf("/api/v1/reading-progress/%d", bookA), map[string]any{
 			"doc_id": int(doc["id"].(float64)), "doc_slug": doc["slug"].(string), "doc_title": doc["title"].(string),
@@ -123,6 +128,23 @@ func TestAuthorAnalyticsOverview(t *testing.T) {
 	rowB := byTitle["Book B"]
 	if rowB["period_views"] != float64(1) || rowB["registered_readers"] != float64(0) {
 		t.Fatalf("Book B 指标错误: %v", rowB)
+	}
+
+	status, invitedPage := request(http.MethodGet, "/api/v1/auth/invited?page=1&page_size=1", nil, authorToken)
+	if status != http.StatusOK {
+		t.Fatalf("查询邀请列表失败: %d %v", status, invitedPage)
+	}
+	pageData := invitedPage["data"].(map[string]any)
+	if pageData["total"] != float64(2) || pageData["page"] != float64(1) || len(pageData["items"].([]any)) != 1 {
+		t.Fatalf("邀请列表第一页异常: %v", pageData)
+	}
+	status, invitedLastPage := request(http.MethodGet, "/api/v1/auth/invited?page=99&page_size=1", nil, authorToken)
+	if status != http.StatusOK {
+		t.Fatalf("查询邀请列表末页失败: %d %v", status, invitedLastPage)
+	}
+	lastPageData := invitedLastPage["data"].(map[string]any)
+	if lastPageData["page"] != float64(2) || len(lastPageData["items"].([]any)) != 1 {
+		t.Fatalf("超出范围的邀请页码应归到末页: %v", lastPageData)
 	}
 
 	// 读者本人没有书籍，仪表盘应为空。

@@ -64,3 +64,4 @@ app/web/private/
 
 # 浏览器实机验证的会话 profile 目录
 .rundata/
+.workbuddy-ai

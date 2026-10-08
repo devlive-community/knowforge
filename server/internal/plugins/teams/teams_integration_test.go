@@ -134,7 +134,15 @@ func TestTeams(t *testing.T) {
 	if inv := mine["invitations"].([]any); len(inv) != 1 {
 		t.Fatalf("应有一条待接受的邀请: %v", mine)
 	}
+	minePage := e.must(t, member.token, http.MethodGet, "/api/v1/teams?invitations_page=1&invitations_page_size=1", "")
+	if minePage["invitations_total"] != float64(1) || minePage["invitations_page"] != float64(1) || len(minePage["invitations"].([]any)) != 1 {
+		t.Fatalf("邀请分页响应异常: %v", minePage)
+	}
 	e.must(t, member.token, http.MethodPost, fmt.Sprintf("/api/v1/team-invitations/%d/accept", uint(pending["id"].(float64))), "")
+	teamPage := e.must(t, member.token, http.MethodGet, "/api/v1/teams?teams_page=1&teams_page_size=1", "")
+	if teamPage["teams_total"] != float64(1) || teamPage["teams_page"] != float64(1) || len(teamPage["teams"].([]any)) != 1 {
+		t.Fatalf("团队分页响应异常: %v", teamPage)
+	}
 
 	// 书籍加入团队：管理员为编辑，普通成员按书的成员权限；非成员无权限
 	if status, _ := e.req(t, member.token, http.MethodPost, fmt.Sprintf("/api/v1/teams/%d/books", teamID), fmt.Sprintf(`{"book_id":%d}`, book.ID)); status != http.StatusForbidden {

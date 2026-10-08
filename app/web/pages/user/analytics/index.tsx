@@ -4,7 +4,7 @@ import Container from '@/components/Container'
 import { api, formatNumber } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Card, EmptyState, Loading, SegmentedTabs, Tooltip } from '@/components/ui'
+import { Card, EmptyState, Loading, Pagination, SegmentedTabs, Tooltip } from '@/components/ui'
 import Seo from '@/components/Seo'
 import { BookIcon, EyeIcon, UsersIcon, CheckCircleSmallIcon } from '@/components/icons'
 
@@ -50,6 +50,8 @@ interface ReaderRetention {
 }
 
 type SortKey = 'lifetime_views' | 'period_views' | 'registered_readers' | 'completion_rate' | 'chapters'
+
+const BOOKS_PER_PAGE = 10
 
 function StatTile({ icon, label, value, hint, tone }: { icon: string; label: string; value: string; hint?: string; tone: string }) {
   return (
@@ -187,6 +189,7 @@ export default function AuthorAnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>('period_views')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     if (!user) return
@@ -207,6 +210,7 @@ export default function AuthorAnalyticsPage() {
   }, [data, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
+    setPage(1)
     if (key === sortKey) {
       setSortDir((dir) => (dir === 'desc' ? 'asc' : 'desc'))
     } else {
@@ -214,6 +218,13 @@ export default function AuthorAnalyticsPage() {
       setSortDir('desc')
     }
   }
+
+  function changePeriod(value: string) {
+    setDays(value)
+    setPage(1)
+  }
+
+  const visibleRows = sorted.slice((page - 1) * BOOKS_PER_PAGE, page * BOOKS_PER_PAGE)
 
   const PERIODS = [
     { value: '7', label: t('user.analytics.period7') },
@@ -249,7 +260,7 @@ export default function AuthorAnalyticsPage() {
             <h1 className="text-2xl font-bold text-ink">{t('user.analytics.title')}</h1>
             <p className="mt-1 text-sm text-slate-500">{t('user.analytics.description')}</p>
           </div>
-          <SegmentedTabs size="sm" value={days} items={PERIODS} ariaLabel={t('user.analytics.period')} onChange={setDays} />
+          <SegmentedTabs size="sm" value={days} items={PERIODS} ariaLabel={t('user.analytics.period')} onChange={changePeriod} />
         </div>
 
         {loading || data === null ? (
@@ -293,7 +304,7 @@ export default function AuthorAnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {sorted.map((row) => (
+                    {visibleRows.map((row) => (
                       <tr key={row.id} className="transition-colors hover:bg-slate-50/60">
                         <td className="px-6 py-3.5">
                           <Link href={`/book/settings/${encodeURIComponent(row.slug)}/analytics`}
@@ -315,6 +326,9 @@ export default function AuthorAnalyticsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="px-6 pb-5">
+                <Pagination page={page} pageSize={BOOKS_PER_PAGE} total={sorted.length} onChange={setPage} />
               </div>
             </Card>
 

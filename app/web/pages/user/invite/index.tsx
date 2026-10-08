@@ -7,7 +7,7 @@ import UserAvatar from '@/components/UserAvatar'
 import { api, formatDate } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Button, Input, Loading, EmptyState, useFeedback } from '@/components/ui'
+import { Button, Input, Loading, EmptyState, Pagination, useFeedback } from '@/components/ui'
 import { displayName } from '@/lib/users'
 
 interface InvitedUser {
@@ -15,6 +15,15 @@ interface InvitedUser {
   avatar?: string
   created_at: string
 }
+
+interface InvitedUsersPage {
+  items: InvitedUser[]
+  total: number
+  page: number
+  page_size: number
+}
+
+const INVITED_PAGE_SIZE = 10
 
 export default function InvitePage() {
   const { site } = useApp()
@@ -26,14 +35,24 @@ export default function InvitePage() {
   const [enabled, setEnabled] = useState(false)
   const [customCode, setCustomCode] = useState('')
   const [busy, setBusy] = useState(false)
-  const [invited, setInvited] = useState<InvitedUser[] | null>(null)
+  const [invited, setInvited] = useState<InvitedUsersPage | null>(null)
+  const [invitePage, setInvitePage] = useState(1)
+  const [invitedLoading, setInvitedLoading] = useState(false)
 
   useEffect(() => {
     if (!user) return
     api<{ invite_code: string; enabled: boolean }>('/auth/invite-code')
       .then((d) => { setCode(d.invite_code || ''); setEnabled(!!d.enabled) }).catch(() => {})
-    api<{ items: InvitedUser[] }>('/auth/invited').then((d) => setInvited(d.items || [])).catch(() => setInvited([]))
   }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    setInvitedLoading(true)
+    api<InvitedUsersPage>('/auth/invited', { params: { page: invitePage, page_size: INVITED_PAGE_SIZE } })
+      .then(setInvited)
+      .catch(() => setInvited({ items: [], total: 0, page: 1, page_size: INVITED_PAGE_SIZE }))
+      .finally(() => setInvitedLoading(false))
+  }, [user, invitePage])
 
   if (!user) return <Loading className="min-h-[60vh]" label={t('account.common.loadingInfo')} />
 
@@ -139,20 +158,23 @@ export default function InvitePage() {
             <div className="px-6 pb-6">
               {invited === null ? (
                 <Loading className="py-8" label={t('invite.invitedLoading')} />
-              ) : invited.length === 0 ? (
+              ) : invited.total === 0 ? (
                 <EmptyState>{t('invite.invitedEmpty')}</EmptyState>
               ) : (
-                <div className="divide-y divide-slate-100">
-                  {invited.map((u) => (
-                    <div key={u.username} className="flex items-center gap-3 py-3">
-                      <UserAvatar user={u} size="h-9 w-9" link={false} tooltip={false} />
-                      <div className="min-w-0">
-                        <Link href={`/user/${encodeURIComponent(u.username)}`} className="font-medium text-slate-800 hover:text-primary-600">{displayName(u)}</Link>
-                        <div className="text-xs text-slate-400">{t('invite.registeredAt', { date: formatDate(u.created_at).slice(0, 10) })}</div>
+                <>
+                  <div className="divide-y divide-slate-100">
+                    {invited.items.map((u) => (
+                      <div key={u.username} className="flex items-center gap-3 py-3">
+                        <UserAvatar user={u} size="h-9 w-9" link={false} tooltip={false} />
+                        <div className="min-w-0">
+                          <Link href={`/user/${encodeURIComponent(u.username)}`} className="font-medium text-slate-800 hover:text-primary-600">{displayName(u)}</Link>
+                          <div className="text-xs text-slate-400">{t('invite.registeredAt', { date: formatDate(u.created_at).slice(0, 10) })}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  <Pagination page={invited.page} pageSize={invited.page_size} total={invited.total} onChange={setInvitePage} loading={invitedLoading} />
+                </>
               )}
             </div>
           </div>

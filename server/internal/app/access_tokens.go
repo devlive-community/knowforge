@@ -284,13 +284,29 @@ func (a *App) activeTokenCount(userID uint) int64 {
 // MyAccessTokens GET /auth/tokens 我的访问令牌（含已吊销、已过期的，新→旧）与数量上限。
 func (a *App) MyAccessTokens(c *gin.Context) {
 	u := currentUser(c)
+	page, pageSize := paginate(c)
+	query := a.DB.Model(&models.PersonalAccessToken{}).Where("user_id = ?", u.ID)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		fail(c, http.StatusInternalServerError, "查询令牌失败")
+		return
+	}
+	if total > 0 {
+		lastPage := int((total + int64(pageSize) - 1) / int64(pageSize))
+		if page > lastPage {
+			page = lastPage
+		}
+	}
 	var rows []models.PersonalAccessToken
-	a.DB.Where("user_id = ?", u.ID).Order("id DESC").Limit(100).Find(&rows)
+	if err := query.Order("id DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&rows).Error; err != nil {
+		fail(c, http.StatusInternalServerError, "查询令牌失败")
+		return
+	}
 	items := make([]accessTokenView, 0, len(rows))
 	for _, t := range rows {
 		items = append(items, a.toTokenView(t))
 	}
-	ok(c, gin.H{"items": items, "active": a.activeTokenCount(u.ID), "limit": a.entitlement(u, entAPITokensMax)})
+	ok(c, gin.H{"items": items, "total": total, "page": page, "page_size": pageSize, "active": a.activeTokenCount(u.ID), "limit": a.entitlement(u, entAPITokensMax)})
 }
 
 // CreateAccessToken POST /auth/tokens {name, scope: all|custom, permissions[]（custom 时必填）, expires_days: 0（永不过期）|7|30|90|365}

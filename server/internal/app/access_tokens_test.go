@@ -127,6 +127,16 @@ func TestPersonalAccessTokens(t *testing.T) {
 	if _, leaked := items[0].(map[string]any)["token_hash"]; leaked {
 		t.Fatal("列表不应返回令牌摘要")
 	}
+	_, firstPage := do(userJWT, http.MethodGet, "/api/v1/auth/tokens?page=1&page_size=1", "")
+	firstPageData := data(firstPage)
+	if firstPageData["total"].(float64) != 2 || firstPageData["page"].(float64) != 1 || firstPageData["page_size"].(float64) != 1 || len(firstPageData["items"].([]any)) != 1 {
+		t.Fatalf("令牌分页第一页异常: %v", firstPageData)
+	}
+	_, lastPage := do(userJWT, http.MethodGet, "/api/v1/auth/tokens?page=99&page_size=1", "")
+	lastPageData := data(lastPage)
+	if lastPageData["page"].(float64) != 2 || len(lastPageData["items"].([]any)) != 1 {
+		t.Fatalf("超出范围的页码应归到末页: %v", lastPageData)
+	}
 
 	// 吊销后立即失效；过期后失效
 	readID := uint(items[1].(map[string]any)["id"].(float64))

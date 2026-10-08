@@ -130,6 +130,16 @@ func TestBookTagsThroughCoreExtensionPoints(t *testing.T) {
 	}
 	e.do(t, http.MethodPost, "/api/v1/books", `{"title":"无标签书","status":"published","is_public":true}`)
 
+	_, publicTags := e.do(t, http.MethodGet, "/api/v1/tags?page=1&page_size=1", "")
+	publicTagPage := publicTags["data"].(map[string]any)
+	if publicTagPage["total"] != float64(2) || publicTagPage["page"] != float64(1) || len(publicTagPage["items"].([]any)) != 1 {
+		t.Fatalf("公开标签分页异常: %v", publicTagPage)
+	}
+	_, legacyTags := e.do(t, http.MethodGet, "/api/v1/tags?limit=10", "")
+	if _, ok := legacyTags["data"].([]any); !ok {
+		t.Fatalf("未请求分页的 /tags 应保持数组响应: %v", legacyTags["data"])
+	}
+
 	_, detail := e.do(t, http.MethodGet, fmt.Sprintf("/api/v1/books/%d", id), "")
 	if got := tagNames(detail["data"].(map[string]any)["tags"]); len(got) != 2 {
 		t.Fatalf("详情应回填标签，实际 %v", got)

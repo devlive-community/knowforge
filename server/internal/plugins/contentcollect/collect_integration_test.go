@@ -269,6 +269,24 @@ func TestRunSiteCrawlJob(t *testing.T) {
 	if got.Status != "succeeded" || got.Success != 3 || got.Failed != 0 {
 		t.Fatalf("任务应全部成功，实际 status=%s success=%d failed=%d", got.Status, got.Success, got.Failed)
 	}
+	historyPath := "/api/v1/books/" + strconv.FormatUint(uint64(book.ID), 10) + "/collect/jobs?kind=site&page=1&page_size=1"
+	status, history := e.do(t, http.MethodGet, historyPath, "", e.token)
+	if status != http.StatusOK {
+		t.Fatalf("读取分页采集历史失败: %d %v", status, history)
+	}
+	historyData := history["data"].(map[string]any)
+	if historyData["total"] != float64(1) || historyData["page"] != float64(1) || len(historyData["items"].([]any)) != 1 {
+		t.Fatalf("采集历史分页响应异常: %v", historyData)
+	}
+	detailPath := "/api/v1/collect/jobs/" + strconv.FormatUint(uint64(job.ID), 10) + "?page=2&page_size=1"
+	status, pagedDetail := e.do(t, http.MethodGet, detailPath, "", e.token)
+	if status != http.StatusOK {
+		t.Fatalf("读取分页采集页面失败: %d %v", status, pagedDetail)
+	}
+	pagedDetailData := pagedDetail["data"].(map[string]any)
+	if pagedDetailData["pages_total"] != float64(3) || pagedDetailData["pages_page"] != float64(2) || len(pagedDetailData["pages"].([]any)) != 1 {
+		t.Fatalf("采集任务页面分页响应异常: %v", pagedDetailData)
+	}
 	var docs []models.Document
 	e.db.Where("book_id = ?", book.ID).Order("sort_order ASC").Find(&docs)
 	if len(docs) != 3 {

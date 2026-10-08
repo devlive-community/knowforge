@@ -186,35 +186,86 @@ type invitationView struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+func minePage(c *gin.Context, core plugincore.Core, pageKey, sizeKey string) (int, int) {
+	page := core.AtoiDefault(c.Query(pageKey), 1)
+	pageSize := core.AtoiDefault(c.Query(sizeKey), 12)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 12
+	}
+	return page, pageSize
+}
+
 // ListMine GET /teams 我加入的团队与待接受的邀请，以及创建团队的额度。
 func (b *behavior) ListMine(c *gin.Context) {
 	u := b.core.CurrentUser(c)
 	db := b.core.Gorm()
-	var mine []Member
-	db.Where("user_id = ?", u.ID).Order("created_at ASC").Find(&mine)
+	teamPage, teamPageSize := minePage(c, b.core, "teams_page", "teams_page_size")
+	invitationPage, invitationPageSize := minePage(c, b.core, "invitations_page", "invitations_page_size")
+
+	var teamTotal, invitationTotal int64
+	if err := db.Model(&Member{}).Where("user_id = ? AND status = ?", u.ID, "accepted").Count(&teamTotal).Error; err != nil {
+		b.core.Fail(c, http.StatusInternalServerError, "查询团队列表失败")
+		return
+	}
+	if err := db.Model(&Member{}).Where("user_id = ? AND status = ?", u.ID, "pending").Count(&invitationTotal).Error; err != nil {
+		b.core.Fail(c, http.StatusInternalServerError, "查询团队邀请失败")
+		return
+	}
+	if teamTotal > 0 {
+		lastPage := int((teamTotal + int64(teamPageSize) - 1) / int64(teamPageSize))
+		if teamPage > lastPage {
+			teamPage = lastPage
+		}
+	}
+	if invitationTotal > 0 {
+		lastPage := int((invitationTotal + int64(invitationPageSize) - 1) / int64(invitationPageSize))
+		if invitationPage > lastPage {
+			invitationPage = lastPage
+		}
+	}
+
+	teamsMemberships := []Member{}
+	if err := db.Where("user_id = ? AND status = ?", u.ID, "accepted").Order("created_at ASC, id ASC").Limit(teamPageSize).Offset((teamPage - 1) * teamPageSize).Find(&teamsMemberships).Error; err != nil {
+		b.core.Fail(c, http.StatusInternalServerError, "查询团队列表失败")
+		return
+	}
+	pendingMemberships := []Member{}
+	if err := db.Where("user_id = ? AND status = ?", u.ID, "pending").Order("created_at ASC, id ASC").Limit(invitationPageSize).Offset((invitationPage - 1) * invitationPageSize).Find(&pendingMemberships).Error; err != nil {
+		b.core.Fail(c, http.StatusInternalServerError, "查询团队邀请失败")
+		return
+	}
+
 	teams := []teamView{}
 	invitations := []invitationView{}
 	var inviterIDs []uint
-	for _, m := range mine {
-		if m.Status == "pending" {
-			inviterIDs = append(inviterIDs, m.InvitedBy)
-		}
+	for _, m := range pendingMemberships {
+		inviterIDs = append(inviterIDs, m.InvitedBy)
 	}
 	inviters := b.users(inviterIDs)
-	for _, m := range mine {
+	for _, m := range teamsMemberships {
 		var t Team
 		if db.First(&t, m.TeamID).Error != nil || !b.ensureOwner(&t) {
 			continue
 		}
-		if m.Status == "accepted" {
-			teams = append(teams, b.view(t, m.Role))
-		} else if m.Status == "pending" {
-			invitations = append(invitations, invitationView{ID: m.ID, Team: t, Role: m.Role, Inviter: inviters[m.InvitedBy], CreatedAt: m.UpdatedAt})
+		teams = append(teams, b.view(t, m.Role))
+	}
+	for _, m := range pendingMemberships {
+		var t Team
+		if db.First(&t, m.TeamID).Error != nil || !b.ensureOwner(&t) {
+			continue
 		}
+		invitations = append(invitations, invitationView{ID: m.ID, Team: t, Role: m.Role, Inviter: inviters[m.InvitedBy], CreatedAt: m.UpdatedAt})
 	}
 	var owned int64
 	db.Model(&Team{}).Where("owner_id = ?", u.ID).Count(&owned)
-	b.core.OK(c, gin.H{"teams": teams, "invitations": invitations, "owned": owned, "owned_limit": plugincore.EntitlementValue(b.core, u, entOwned)})
+	b.core.OK(c, gin.H{
+		"teams": teams, "teams_total": teamTotal, "teams_page": teamPage, "teams_page_size": teamPageSize,
+		"invitations": invitations, "invitations_total": invitationTotal, "invitations_page": invitationPage, "invitations_page_size": invitationPageSize,
+		"owned": owned, "owned_limit": plugincore.EntitlementValue(b.core, u, entOwned),
+	})
 }
 
 type teamPayload struct {

@@ -76,11 +76,37 @@ func (b *behavior) findOrCreateTag(name string) (*models.Tag, error) {
 // ListTags GET /tags 标签列表（含公开书籍使用计数）
 func (b *behavior) ListTags(c *gin.Context) {
 	core := b.core
+	q := strings.TrimSpace(c.Query("q"))
+	paged := c.Query("page") != "" || c.Query("page_size") != ""
+	page, pageSize := 1, 0
+	var total int64
+	if paged {
+		page, pageSize = core.Paginate(c)
+		countQuery := core.Gorm().Model(&models.Tag{}).
+			Joins("JOIN book_tags ON book_tags.tag_id = tags.id").
+			Joins("JOIN books ON books.id = book_tags.book_id").
+			Where("books.is_public = ? AND books.status IN ?", true, core.PubliclyReadableBookStatuses())
+		if core.CurrentUser(c) == nil {
+			countQuery = countQuery.Where("books.login_required = ?", false)
+		}
+		if q != "" {
+			countQuery = countQuery.Where("tags.name LIKE ?", "%"+q+"%")
+		}
+		if err := countQuery.Distinct("tags.id").Count(&total).Error; err != nil {
+			core.Fail(c, http.StatusInternalServerError, "查询失败")
+			return
+		}
+		if total > 0 {
+			lastPage := int((total + int64(pageSize) - 1) / int64(pageSize))
+			if page > lastPage {
+				page = lastPage
+			}
+		}
+	}
 	limit := core.AtoiDefault(c.Query("limit"), 50)
 	if limit < 1 || limit > 200 {
 		limit = 50
 	}
-	q := strings.TrimSpace(c.Query("q"))
 
 	query := core.Gorm().Model(&models.Tag{}).
 		Select("tags.id, tags.name, tags.slug, tags.icon_type, tags.icon_value, COUNT(book_tags.book_id) AS book_count").
@@ -95,8 +121,17 @@ func (b *behavior) ListTags(c *gin.Context) {
 		query = query.Where("tags.name LIKE ?", "%"+q+"%")
 	}
 	tagsList := []models.Tag{}
-	if err := query.Order("book_count DESC").Limit(limit).Find(&tagsList).Error; err != nil {
+	if paged {
+		query = query.Limit(pageSize).Offset((page - 1) * pageSize)
+	} else {
+		query = query.Limit(limit)
+	}
+	if err := query.Order("book_count DESC").Find(&tagsList).Error; err != nil {
 		core.Fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	if paged {
+		core.OK(c, plugincore.PageResult{Items: tagsList, Total: total, Page: page, PageSize: pageSize})
 		return
 	}
 	core.OK(c, tagsList)

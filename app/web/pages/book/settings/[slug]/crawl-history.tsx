@@ -6,7 +6,7 @@ import { requireBookSettingsFeature } from '@/lib/book-settings'
 import { api } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
-import { Badge, Button, ButtonLink, EmptyState, Loading, SegmentedTabs, useFeedback } from '@/components/ui'
+import { Badge, Button, ButtonLink, EmptyState, Loading, Pagination, SegmentedTabs, useFeedback } from '@/components/ui'
 import { ChevronRightIcon } from '@/components/icons'
 import { entitlementAllowed } from '@/lib/entitlements'
 
@@ -33,6 +33,24 @@ interface CrawlPage {
   doc_id: number
 }
 
+interface CrawlJobsPage {
+  items: CrawlJob[]
+  total: number
+  page: number
+  page_size: number
+}
+
+interface CrawlJobDetail {
+  job: CrawlJob
+  pages: CrawlPage[]
+  pages_total: number
+  pages_page: number
+  pages_page_size: number
+}
+
+const CRAWL_JOBS_PAGE_SIZE = 10
+const CRAWL_PAGES_PAGE_SIZE = 25
+
 const JOB_TONE: Record<string, 'slate' | 'primary' | 'emerald' | 'amber' | 'rose'> = {
   preview: 'slate', pending: 'primary', running: 'primary', succeeded: 'emerald', partial: 'amber', failed: 'rose',
 }
@@ -48,30 +66,43 @@ export default function CrawlHistoryPage({ book }: InferGetServerSidePropsType<t
   const kind = router.query.kind === 'chapter' ? 'chapter' : 'site'
   const jobId = router.query.job ? Number(router.query.job) : 0
 
-  const [jobs, setJobs] = useState<CrawlJob[] | null>(null)
-  const [detail, setDetail] = useState<{ job: CrawlJob; pages: CrawlPage[] } | null>(null)
+  const [jobs, setJobs] = useState<CrawlJobsPage | null>(null)
+  const [page, setPage] = useState(1)
+  const [detail, setDetail] = useState<CrawlJobDetail | null>(null)
+  const [detailPage, setDetailPage] = useState(1)
+  const [detailLoadFailed, setDetailLoadFailed] = useState(false)
   const [busy, setBusy] = useState<number | 'all' | null>(null)
 
   const loadJobs = useCallback(() => {
     setJobs(null)
-    api<{ items: CrawlJob[] }>(`/books/${book.id}/collect/jobs`, { params: { kind } })
-      .then((d) => setJobs(d.items || []))
-      .catch(() => setJobs([]))
-  }, [book.id, kind])
+    api<CrawlJobsPage>(`/books/${book.id}/collect/jobs`, { params: { kind, page, page_size: CRAWL_JOBS_PAGE_SIZE } })
+      .then(setJobs)
+      .catch(() => setJobs({ items: [], total: 0, page: 1, page_size: CRAWL_JOBS_PAGE_SIZE }))
+  }, [book.id, kind, page])
 
   const loadDetail = useCallback(() => {
-    if (!jobId) { setDetail(null); return }
+    if (!jobId) { setDetail(null); setDetailLoadFailed(false); return }
     setDetail(null)
-    api<{ job: CrawlJob; pages: CrawlPage[] }>(`/collect/jobs/${jobId}`)
-      .then(setDetail)
-      .catch(() => setDetail(null))
-  }, [jobId])
+    setDetailLoadFailed(false)
+    api<CrawlJobDetail>(`/collect/jobs/${jobId}`, { params: { page: detailPage, page_size: CRAWL_PAGES_PAGE_SIZE } })
+      .then((result) => {
+        setDetail(result)
+        if (result.pages_page !== detailPage) setDetailPage(result.pages_page)
+      })
+      .catch(() => { setDetail(null); setDetailLoadFailed(true) })
+  }, [jobId, detailPage])
 
   useEffect(() => { if (!jobId) loadJobs() }, [jobId, loadJobs])
   useEffect(() => { loadDetail() }, [loadDetail])
 
-  const goKind = (k: string) => router.push({ pathname: router.pathname, query: { slug: book.slug, kind: k } }, undefined, { shallow: false })
-  const openJob = (id: number) => router.push({ pathname: router.pathname, query: { slug: book.slug, job: id } })
+  const goKind = (k: string) => {
+    setPage(1)
+    return router.push({ pathname: router.pathname, query: { slug: book.slug, kind: k } }, undefined, { shallow: false })
+  }
+  const openJob = (id: number) => {
+    setDetailPage(1)
+    return router.push({ pathname: router.pathname, query: { slug: book.slug, job: id } })
+  }
   const backToList = () => router.push({ pathname: router.pathname, query: { slug: book.slug, kind } })
 
   async function retryJob(id: number) {
@@ -129,30 +160,36 @@ export default function CrawlHistoryPage({ book }: InferGetServerSidePropsType<t
               </li>
             ))}
           </ul>
+          <Pagination page={detail.pages_page} pageSize={detail.pages_page_size} total={detail.pages_total} onChange={setDetailPage} />
         </div>
+      ) : jobId && !detailLoadFailed ? (
+        <Loading label={t('crawlHistory.loading')} />
       ) : (
         <>
           <SegmentedTabs className="mb-4 max-w-sm" value={kind} ariaLabel={t('crawlHistory.title')} onChange={goKind}
             items={[{ value: 'site', label: t('crawlHistory.kindSite') }, { value: 'chapter', label: t('crawlHistory.kindChapter') }]} />
           {jobs === null ? (
             <Loading label={t('crawlHistory.loading')} />
-          ) : jobs.length === 0 ? (
+          ) : jobs.total === 0 ? (
             <EmptyState>{t('crawlHistory.empty')}</EmptyState>
           ) : (
-            <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
-              {jobs.map((j) => (
-                <li key={j.id}>
-                  <button onClick={() => openJob(j.id)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50">
-                    <Badge tone={JOB_TONE[j.status] || 'slate'}>{t(`crawlHistory.status.${j.status}`)}</Badge>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-slate-800">{j.root_url}</span>
-                      <span className="text-xs text-slate-400">{t('crawlHistory.counts', { success: j.success, failed: j.failed, total: j.total })} · {j.created_at}</span>
-                    </span>
-                    <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-300" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                {jobs.items.map((j) => (
+                  <li key={j.id}>
+                    <button onClick={() => openJob(j.id)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50">
+                      <Badge tone={JOB_TONE[j.status] || 'slate'}>{t(`crawlHistory.status.${j.status}`)}</Badge>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-800">{j.root_url}</span>
+                        <span className="text-xs text-slate-400">{t('crawlHistory.counts', { success: j.success, failed: j.failed, total: j.total })} · {j.created_at}</span>
+                      </span>
+                      <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-300" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <Pagination page={jobs.page} pageSize={jobs.page_size} total={jobs.total} onChange={setPage} />
+            </>
           )}
         </>
       )}

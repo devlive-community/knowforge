@@ -9,11 +9,17 @@ import { api } from '@/lib/api'
 import { useApp, useRequireAuth } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { TEAM_ROLE_KEYS, type Team, type TeamInvitation } from '@/lib/teams'
-import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Textarea, useFeedback } from '@/components/ui'
+import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Pagination, Textarea, useFeedback } from '@/components/ui'
 
 interface Mine {
   teams: Team[]
+  teams_total: number
+  teams_page: number
+  teams_page_size: number
   invitations: TeamInvitation[]
+  invitations_total: number
+  invitations_page: number
+  invitations_page_size: number
   owned: number
   owned_limit: number
 }
@@ -39,6 +45,8 @@ function TeamsInner() {
   const router = useRouter()
   const { showToast } = useFeedback()
   const [data, setData] = useState<Mine | null>(null)
+  const [teamPage, setTeamPage] = useState(1)
+  const [invitationPage, setInvitationPage] = useState(1)
   const [responding, setResponding] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
@@ -47,11 +55,17 @@ function TeamsInner() {
 
   const load = useCallback(async () => {
     try {
-      setData(await api<Mine>('/teams'))
+      const result = await api<Mine>('/teams', { params: {
+        teams_page: teamPage, teams_page_size: 12,
+        invitations_page: invitationPage, invitations_page_size: 12,
+      } })
+      setData(result)
+      if (result.teams_page !== teamPage) setTeamPage(result.teams_page)
+      if (result.invitations_page !== invitationPage) setInvitationPage(result.invitations_page)
     } catch (e) {
       showToast({ message: (e as Error).message, tone: 'error' })
     }
-  }, [showToast])
+  }, [teamPage, invitationPage, showToast])
   useEffect(() => { void load() }, [load])
 
   async function respond(inv: TeamInvitation, accept: boolean) {
@@ -101,7 +115,7 @@ function TeamsInner() {
           {data.owned_limit >= 0 && (
             <p className="text-xs text-slate-400">{t('teams.create.quota', { used: data.owned, limit: data.owned_limit })}</p>
           )}
-          {data.invitations.length > 0 && (
+          {data.invitations_total > 0 && (
             <Card className="p-5" data-testid="team-invitations">
               <h2 className="font-semibold text-slate-900">{t('teams.invite.pendingTitle')}</h2>
               <ul className="mt-3 divide-y divide-slate-100">
@@ -117,29 +131,33 @@ function TeamsInner() {
                   </li>
                 ))}
               </ul>
+              <Pagination page={data.invitations_page} pageSize={data.invitations_page_size} total={data.invitations_total} onChange={setInvitationPage} />
             </Card>
           )}
-          {data.teams.length === 0 ? (
+          {data.teams_total === 0 ? (
             <EmptyState>{t('teams.page.empty')}</EmptyState>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="team-list">
-              {data.teams.map((team) => (
-                <Link key={team.id} href={`/teams/${team.slug}`} className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary-300 hover:shadow">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-lg font-bold text-primary-600">{team.name.slice(0, 1).toUpperCase()}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-semibold text-slate-900 group-hover:text-primary-600">{team.name}</div>
-                      {team.my_role && <div className="text-xs text-slate-400">{t(TEAM_ROLE_KEYS[team.my_role])}</div>}
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="team-list">
+                {data.teams.map((team) => (
+                  <Link key={team.id} href={`/teams/${team.slug}`} className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary-300 hover:shadow">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-lg font-bold text-primary-600">{team.name.slice(0, 1).toUpperCase()}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-slate-900 group-hover:text-primary-600">{team.name}</div>
+                        {team.my_role && <div className="text-xs text-slate-400">{t(TEAM_ROLE_KEYS[team.my_role])}</div>}
+                      </div>
                     </div>
-                  </div>
-                  {team.description && <p className="mt-3 line-clamp-2 text-sm text-slate-500">{team.description}</p>}
-                  <div className="mt-3 flex gap-4 text-xs text-slate-500">
-                    <span><i className="fa-solid fa-user-group mr-1" aria-hidden="true" />{t('teams.stats.members', { n: team.member_count })}</span>
-                    <span><i className="fa-solid fa-book mr-1" aria-hidden="true" />{t('teams.stats.books', { n: team.book_count })}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                    {team.description && <p className="mt-3 line-clamp-2 text-sm text-slate-500">{team.description}</p>}
+                    <div className="mt-3 flex gap-4 text-xs text-slate-500">
+                      <span><i className="fa-solid fa-user-group mr-1" aria-hidden="true" />{t('teams.stats.members', { n: team.member_count })}</span>
+                      <span><i className="fa-solid fa-book mr-1" aria-hidden="true" />{t('teams.stats.books', { n: team.book_count })}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              <Pagination page={data.teams_page} pageSize={data.teams_page_size} total={data.teams_total} onChange={setTeamPage} />
+            </>
           )}
         </div>
       )}
