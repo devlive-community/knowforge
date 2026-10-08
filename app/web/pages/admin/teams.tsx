@@ -62,9 +62,9 @@ function Inner() {
         <h1 className="text-2xl font-bold text-slate-900">{t('admin.nav.teams')}</h1>
         <p className="mt-1.5 text-sm text-slate-500">{t('admin.teams.description')}</p>
       </div>
-      <form onSubmit={submit} className="mt-6 flex max-w-md gap-2">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('admin.teams.search')} />
-        <Button type="submit" variant="outline" loading={loading && search !== ''}>{t('admin.teams.searchButton')}</Button>
+      <form onSubmit={submit} className="mt-6 flex max-w-md items-center gap-2">
+        <Input className="min-w-0 flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('admin.teams.search')} />
+        <Button type="submit" variant="outline" className="shrink-0 whitespace-nowrap" loading={loading && q.trim() !== search}>{t('admin.teams.searchButton')}</Button>
       </form>
       <div className="mt-4">
         {!data ? <Loading className="py-12" /> : data.items.length === 0 ? <EmptyState>{t('admin.teams.empty')}</EmptyState> : (

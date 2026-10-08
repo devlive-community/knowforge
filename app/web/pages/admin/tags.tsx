@@ -81,7 +81,7 @@ export default function AdminTags() {
 
       <form className="mt-6 flex max-w-md items-center gap-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setSearch(q.trim()) }}>
         <div className="min-w-0 flex-1"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('admin.tags.searchPlaceholder')} /></div>
-        <Button type="submit" variant="outline" className="shrink-0">{t('common.actions.search')}</Button>
+        <Button type="submit" variant="outline" className="shrink-0 whitespace-nowrap">{t('common.actions.search')}</Button>
       </form>
 
       <div className="mt-6">
