@@ -14,7 +14,7 @@ import {
 } from '@/components/icons'
 import { displayName } from '@/lib/users'
 
-export type AdminNavKey = 'system' | 'users' | 'books' | 'documents' | 'tags' | 'achievements' | 'growth' | 'membership' | 'payment' | 'paid' | 'moderation' | 'qa' | 'chapter-guide' | 'read-aloud' | 'book-translations' | 'collect' | 'templates' | 'teams' | 'reports' | 'audit' | 'ai-usage' | 'tasks' | 'languages' | 'settings' | 'plugins' | 'upgrade'
+export type AdminNavKey = 'system' | 'users' | 'books' | 'documents' | 'tags' | 'achievements' | 'growth' | 'membership' | 'payment' | 'paid' | 'moderation' | 'qa' | 'chapter-guide' | 'read-aloud' | 'book-translations' | 'collect' | 'templates' | 'teams' | 'reports' | 'audit' | 'ai-usage' | 'tasks' | 'languages' | 'settings' | 'plugins' | 'indexnow' | 'upgrade'
 
 function ReportIcon({ className }: { className?: string }) {
   return <i className={`fa-solid fa-flag ${className || ''}`.trim()} aria-hidden="true" />
@@ -88,6 +88,7 @@ function SidebarNav({ current, onNavigate }: { current: AdminNavKey; onNavigate?
     { key: 'languages', labelKey: 'admin.nav.languages', href: '/admin/languages', icon: ({ className }) => <i className={`fa-solid fa-language ${className || ''}`} aria-hidden="true" /> },
     { key: 'settings', labelKey: 'admin.nav.settings', href: '/admin/settings/site', icon: GearIcon },
     { key: 'plugins', labelKey: 'admin.nav.plugins', href: '/admin/plugins', icon: CodeIcon },
+    { key: 'indexnow', labelKey: 'admin.nav.indexNow', href: '/admin/indexnow', icon: ({ className }) => <i className={`fa-solid fa-paper-plane ${className || ''}`} aria-hidden="true" /> },
     { key: 'upgrade', labelKey: 'admin.nav.upgrade', href: '/admin/upgrade', icon: CloudIcon },
   ]
 
@@ -108,6 +109,7 @@ function SidebarNav({ current, onNavigate }: { current: AdminNavKey; onNavigate?
     if (item.key === 'collect') return features.includes('content-collect')
     if (item.key === 'templates') return features.includes('templates')
     if (item.key === 'teams') return features.includes('teams')
+    if (item.key === 'indexnow') return features.includes('indexnow')
     return true
   })
 

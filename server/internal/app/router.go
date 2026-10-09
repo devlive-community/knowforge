@@ -447,6 +447,6 @@ func (a *App) Router() *gin.Engine {
 		p.RegisterRoutes(api, a)
 	}
 
-	RegisterWeb(r, a.web)
+	RegisterWeb(r, a.web, a.serveIndexNowVerificationFile)
 	return r
 }

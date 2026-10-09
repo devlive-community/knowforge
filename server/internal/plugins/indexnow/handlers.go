@@ -34,6 +34,19 @@ func validateSetup(raw string) error {
 	return nil
 }
 
+// VerificationKeyMatches checks a candidate key without exposing the configured value.
+// It is shared by the HTTP API and the root-host plain-text verification endpoint.
+func VerificationKeyMatches(core plugincore.Core, candidate string) bool {
+	if !core.PluginEnabled(pluginKey) || len(candidate) != 32 {
+		return false
+	}
+	if _, err := hex.DecodeString(candidate); err != nil {
+		return false
+	}
+	cfg, ok := (&behavior{core: core}).config()
+	return ok && cfg.Key == candidate
+}
+
 func (b *behavior) config() (Config, bool) {
 	if !b.core.Gorm().Migrator().HasTable(&Config{}) {
 		return Config{}, false

@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -9,9 +10,16 @@ import (
 
 // RegisterWeb 将页面请求转发给由 Go 托管的内嵌 Next.js；普通开发构建
 // 没有内嵌资源时仍返回说明页，方便前后端分开调试。
-func RegisterWeb(r *gin.Engine, web *webRuntime) {
+var indexNowVerificationPath = regexp.MustCompile(`^/([a-f0-9]{32})\.txt$`)
+
+func RegisterWeb(r *gin.Engine, web *webRuntime, indexNowVerificationHandler ...gin.HandlerFunc) {
 	r.NoRoute(func(c *gin.Context) {
 		p := c.Request.URL.Path
+		if match := indexNowVerificationPath.FindStringSubmatch(p); len(match) == 2 && len(indexNowVerificationHandler) > 0 {
+			c.Set("indexnow_verification_key", match[1])
+			indexNowVerificationHandler[0](c)
+			return
+		}
 		if !strings.HasPrefix(p, "/api/") && !strings.HasPrefix(p, "/uploads/") {
 			if web != nil {
 				web.proxy.ServeHTTP(c.Writer, c.Request)

@@ -1,29 +1,17 @@
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { api, API_BASE, getToken } from '@/lib/api'
 import type { MailConfig } from '@/lib/admin'
 import { resolveMediaUrl } from '@/lib/media'
 import { useApp } from '@/lib/auth'
 import SettingsLayout from '@/components/SettingsLayout'
 import ChapterLinkPicker from '@/components/ChapterLinkPicker'
-import { Badge, Button, Input, Textarea, Field, Switch, Select, useFeedback } from '@/components/ui'
+import { Button, Input, Textarea, Field, Switch, Select } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
-
-interface IndexNowStatus {
-  enabled: boolean
-  site_url_valid: boolean
-  key_configured: boolean
-  key_file_url?: string
-  pending?: number
-  failed?: number
-  last_submitted_at?: string | null
-}
 
 // 系统设置 · 站点设置：站点名称、描述、Logo 与全站公告（仅管理员；页脚链接见独立的「页脚链接」Tab）
 export default function SettingsSite() {
   const { site } = useApp()
   const { t } = useTranslation()
-  const { confirmAction } = useFeedback()
   const [siteName, setSiteName] = useState(site.site_name || '')
   const [siteDesc, setSiteDesc] = useState(site.site_description || '')
   const [siteLogo, setSiteLogo] = useState(site.site_logo || '')
@@ -44,9 +32,6 @@ export default function SettingsSite() {
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
-  const [indexNow, setIndexNow] = useState<IndexNowStatus | null>(null)
-  const [indexNowBusy, setIndexNowBusy] = useState<'key' | 'retry' | null>(null)
-  const [indexNowMessage, setIndexNowMessage] = useState('')
 
   // 直接刷新 /admin/settings/site 时 pageProps 不含 site，context.site 为空，
   // 若以空值初始化表单再保存，会把服务端已存在的配置整体覆盖丢失。
@@ -55,7 +40,6 @@ export default function SettingsSite() {
     api<MailConfig>('/mail')
       .then((m) => setSiteUrl(m.site_url || ''))
       .catch(() => {})
-    api<IndexNowStatus>('/admin/indexnow').then(setIndexNow).catch(() => setIndexNow(null))
     api<Record<string, unknown>>('/site')
       .then((cfg) => {
         const str = (k: string) => (typeof cfg[k] === 'string' ? (cfg[k] as string) : '')
@@ -118,45 +102,6 @@ export default function SettingsSite() {
     }
   }
 
-  async function reloadIndexNow() {
-    const status = await api<IndexNowStatus>('/admin/indexnow')
-    setIndexNow(status)
-  }
-
-  async function configureIndexNowKey() {
-    const rotate = !!indexNow?.key_configured
-    if (rotate && !await confirmAction({
-      title: t('admin.settings.site.indexNowRotate'),
-      message: t('admin.settings.site.indexNowRotateConfirm'),
-      confirmLabel: t('admin.settings.site.indexNowRotate'),
-      danger: true,
-    })) return
-    setIndexNowBusy('key')
-    setIndexNowMessage('')
-    try {
-      const result = await api<Pick<IndexNowStatus, 'key_configured' | 'key_file_url'>>('/admin/indexnow/key', { method: 'POST', body: { rotate } })
-      setIndexNow((current) => current ? { ...current, ...result } : current)
-    } catch (e) {
-      setIndexNowMessage((e as Error).message || t('admin.settings.site.indexNowGenerateFailed'))
-    } finally {
-      setIndexNowBusy(null)
-    }
-  }
-
-  async function retryIndexNow() {
-    setIndexNowBusy('retry')
-    setIndexNowMessage('')
-    try {
-      await api('/admin/indexnow/retry', { method: 'POST' })
-      setIndexNowMessage(t('admin.settings.site.indexNowRetryQueued'))
-      await reloadIndexNow()
-    } catch (e) {
-      setIndexNowMessage((e as Error).message || t('admin.settings.site.indexNowRetryFailed'))
-    } finally {
-      setIndexNowBusy(null)
-    }
-  }
-
   async function save() {
     setSaving(true)
     setMessage('')
@@ -170,7 +115,6 @@ export default function SettingsSite() {
         pwa_enabled: pwaEnabled,
       } })
       setMessage(t('admin.settings.site.saved'))
-      void reloadIndexNow().catch(() => setIndexNow(null))
     } catch (e) {
       setMessage((e as Error).message)
     } finally {
@@ -188,31 +132,6 @@ export default function SettingsSite() {
           <Field label={t('admin.settings.mail.siteUrl')} hint={t('admin.settings.mail.siteUrlHint')}>
             <Input value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} placeholder="https://kb.example.com" />
           </Field>
-          <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4" data-testid="indexnow-settings">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-slate-800">{t('admin.settings.site.indexNowTitle')}</h3>
-              {indexNow && <Badge tone={indexNow.enabled ? 'emerald' : 'slate'}>{indexNow.enabled ? t('admin.settings.site.indexNowEnabled') : t('admin.settings.site.indexNowDisabled')}</Badge>}
-            </div>
-            <p className="mt-1 text-xs leading-5 text-slate-500">{t('admin.settings.site.indexNowHint')}</p>
-            {!indexNow?.enabled && <p className="mt-2 text-xs text-amber-700">{t('admin.settings.site.indexNowDisabled')} <Link href="/admin/plugins" className="font-medium underline">{t('admin.nav.plugins')}</Link></p>}
-            {indexNow && !indexNow.site_url_valid && <p className="mt-2 text-xs text-rose-600">{t('admin.settings.site.indexNowSiteInvalid')}</p>}
-            {indexNow && (
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-                <span>{indexNow.key_configured ? t('admin.settings.site.indexNowKeyReady') : t('admin.settings.site.indexNowKeyMissing')}</span>
-                {indexNow.key_file_url && <a href={indexNow.key_file_url} target="_blank" rel="noopener noreferrer" className="min-w-0 break-all font-mono text-primary-600 hover:underline">{indexNow.key_file_url}</a>}
-                <span>{t('admin.settings.site.indexNowPending', { n: indexNow.pending || 0 })}</span>
-                {(indexNow.failed || 0) > 0 && <span className="text-rose-600">{t('admin.settings.site.indexNowFailed', { n: indexNow.failed || 0 })}</span>}
-                {indexNow.last_submitted_at && <span>{t('admin.settings.site.indexNowLastSent', { time: new Date(indexNow.last_submitted_at).toLocaleString() })}</span>}
-              </div>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" loading={indexNowBusy === 'key'} disabled={!indexNow?.enabled || !indexNow.site_url_valid || indexNowBusy !== null} onClick={() => void configureIndexNowKey()}>
-                {t(indexNow?.key_configured ? 'admin.settings.site.indexNowRotate' : 'admin.settings.site.indexNowGenerate')}
-              </Button>
-              {(indexNow?.failed || 0) > 0 && <Button size="sm" variant="outline" loading={indexNowBusy === 'retry'} disabled={indexNowBusy !== null} onClick={() => void retryIndexNow()}>{t('admin.settings.site.indexNowRetry')}</Button>}
-            </div>
-            {indexNowMessage && <p role="status" className="mt-2 break-words text-xs text-slate-600">{indexNowMessage}</p>}
-          </section>
           <Field label={t('admin.settings.site.siteDescription')} hint={t('admin.settings.site.siteDescriptionHint')}>
             <Textarea rows={3} value={siteDesc} onChange={(e) => setSiteDesc(e.target.value)}
               placeholder={t('admin.settings.site.siteDescriptionPlaceholder')} />
