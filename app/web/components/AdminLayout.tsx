@@ -86,9 +86,9 @@ function SidebarNav({ current, onNavigate }: { current: AdminNavKey; onNavigate?
     { key: 'ai-usage', labelKey: 'admin.nav.aiUsage', href: '/admin/ai-usage', icon: ({ className }) => <i className={`fa-solid fa-microchip ${className || ''}`} aria-hidden="true" /> },
     { key: 'tasks', labelKey: 'admin.nav.tasks', href: '/admin/tasks', icon: ClockIcon },
     { key: 'languages', labelKey: 'admin.nav.languages', href: '/admin/languages', icon: ({ className }) => <i className={`fa-solid fa-language ${className || ''}`} aria-hidden="true" /> },
+    { key: 'indexnow', labelKey: 'admin.nav.indexNow', href: '/admin/indexnow', icon: ({ className }) => <i className={`fa-solid fa-paper-plane ${className || ''}`} aria-hidden="true" /> },
     { key: 'settings', labelKey: 'admin.nav.settings', href: '/admin/settings/site', icon: GearIcon },
     { key: 'plugins', labelKey: 'admin.nav.plugins', href: '/admin/plugins', icon: CodeIcon },
-    { key: 'indexnow', labelKey: 'admin.nav.indexNow', href: '/admin/indexnow', icon: ({ className }) => <i className={`fa-solid fa-paper-plane ${className || ''}`} aria-hidden="true" /> },
     { key: 'upgrade', labelKey: 'admin.nav.upgrade', href: '/admin/upgrade', icon: CloudIcon },
   ]
 
