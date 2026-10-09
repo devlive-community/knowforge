@@ -5,6 +5,25 @@ import { NextRequest, NextResponse } from 'next/server'
 const API_INTERNAL = process.env.KNOWFORGE_API_URL || 'http://127.0.0.1:6969'
 
 const INSTALL_PATH = '/install'
+const INDEXNOW_VERIFICATION_PATH = /^\/([a-f0-9]{32})\.txt$/
+
+async function serveIndexNowVerificationFile(pathname: string): Promise<NextResponse | null> {
+  const match = INDEXNOW_VERIFICATION_PATH.exec(pathname)
+  if (!match) return null
+  try {
+    const res = await fetch(`${API_INTERNAL}/api/v1/indexnow/key`, { cache: 'no-store' })
+    const payload = await res.json().catch(() => null)
+    if (res.ok && payload?.success !== false && payload?.data?.key === match[1]) {
+      return new NextResponse(match[1], {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, no-cache, must-revalidate' },
+      })
+    }
+  } catch {
+    // A missing API/key/plugin is indistinguishable from an unconfigured verification file.
+  }
+  return new NextResponse(null, { status: 404, headers: { 'Cache-Control': 'no-store' } })
+}
 
 // 模块级缓存：避免每个请求都探测一次安装状态
 let cache: { installed: boolean; expires: number } | null = null
@@ -23,8 +42,11 @@ async function checkInstalled(): Promise<boolean> {
 }
 
 export async function middleware(req: NextRequest) {
-  const installed = await checkInstalled()
   const { pathname } = req.nextUrl
+  const verificationFile = await serveIndexNowVerificationFile(pathname)
+  if (verificationFile) return verificationFile
+
+  const installed = await checkInstalled()
 
   // standalone 模式下 nextUrl.host 是绑定地址（localhost:6900），
   // 需从 nginx 的转发头还原对外地址，否则重定向会指向内网
