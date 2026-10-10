@@ -1,11 +1,10 @@
 import Link from 'next/link'
-import { ReactNode, useRef, useState } from 'react'
+import { ReactNode } from 'react'
 import UserAvatar from '@/components/UserAvatar'
-import { getToken } from '@/lib/api'
+import AvatarUpload from '@/components/upload/AvatarUpload'
 import { useApp } from '@/lib/auth'
 import type { User } from '@/lib/types'
 import { ShieldIcon, UserCircleIcon, DownloadIcon, LinkIcon, PaletteIcon, TrashIcon } from '@/components/icons'
-import { useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import { displayName } from '@/lib/users'
 
@@ -14,38 +13,15 @@ interface AccountSettingsLayoutProps {
   active: 'profile' | 'security' | 'invite' | 'notify' | 'export' | 'oauth' | 'theme' | 'tokens' | 'webhooks' | 'danger'
   /** 头像上传后回调（个人资料页用） */
   onAvatarChange?: (url: string) => void
+  /** 未保存的头像（个人资料页编辑中），缺省为 user.avatar */
+  avatar?: string
   children: ReactNode
 }
 
 // AccountSettingsLayout 账户设置：左侧身份卡与导航 + 右侧内容区（原型双栏布局）
-export default function AccountSettingsLayout({ user, active, onAvatarChange, children }: AccountSettingsLayoutProps) {
-  const { showToast } = useFeedback()
+export default function AccountSettingsLayout({ user, active, onAvatarChange, avatar, children }: AccountSettingsLayoutProps) {
   const { t } = useTranslation()
   const { site } = useApp()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-
-  async function uploadAvatar(file: File | undefined) {
-    if (!file || !onAvatarChange) return
-    setUploading(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/v1/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
-        body: fd,
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok || payload.success === false) throw new Error(payload.message || t('common.uploadFailed'))
-      onAvatarChange(payload.data.url)
-    } catch (e) {
-      showToast({ title: t('account.avatar.failed'), message: (e as Error).message, tone: 'error' })
-    } finally {
-      setUploading(false)
-    }
-  }
-
   const nav = [
     { key: 'profile' as const, label: t('account.nav.profile'), icon: <UserCircleIcon className="h-4 w-4" />, href: '/user/profile' },
     { key: 'security' as const, label: t('account.nav.security'), icon: <ShieldIcon className="h-4 w-4" />, href: '/user/security' },
@@ -67,25 +43,14 @@ export default function AccountSettingsLayout({ user, active, onAvatarChange, ch
       {/* 左：身份卡 + 导航 */}
       <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-20">
         <div className="flex items-center gap-3">
-          <UserAvatar user={user} size="h-14 w-14" link={false} />
+          {onAvatarChange
+            ? <AvatarUpload user={user} value={avatar ?? (user.avatar || '')} onChange={onAvatarChange} size="md" actions={false} />
+            : <UserAvatar user={user} size="h-14 w-14" link={false} />}
           <div className="min-w-0">
             <div className="truncate font-bold text-slate-900">{displayName(user)}</div>
             <div className="truncate text-sm text-slate-400">@{user.username}</div>
           </div>
         </div>
-        {onAvatarChange && (
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-              className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 transition-colors hover:border-primary-400 hover:text-primary-600 disabled:opacity-50">
-              {uploading ? t('account.avatar.uploading') : t('account.avatar.change')}
-            </button>
-            {user.avatar && (
-              <button type="button" onClick={() => onAvatarChange('')}
-                className="rounded-lg px-2 py-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500">{t('account.avatar.remove')}</button>
-            )}
-          </div>
-        )}
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { uploadAvatar(e.target.files?.[0]); e.target.value = '' }} />
 
         <nav className="mt-4 space-y-1 border-t border-slate-100 pt-4">
           {nav.map((item) => {

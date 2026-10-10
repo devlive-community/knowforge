@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AdminLayout from '@/components/AdminLayout'
@@ -101,8 +101,7 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
     setForm({ id: n.id, translations, slug: n.slug, icon_type: n.icon_type, icon_value: n.icon_value, parent_id: n.parent_id ? String(n.parent_id) : '', sort_order: String(n.sort_order) })
   }
 
-  async function save(e?: FormEvent) {
-    e?.preventDefault()
+  async function save() {
     if (!form) return
     // 名称在「国际化信息」中按语言填写：默认语言没有名称时切过去提示
     if (!form.translations[defaultLocale]?.fields.name?.trim()) {
@@ -192,7 +191,7 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
           <Button loading={saving} disabled={translationBusy} onClick={() => void save()} data-testid="category-save">{t('common.actions.save')}</Button>
         </>}>
         {form && (
-          <form onSubmit={save} className="space-y-6">
+          <div className="space-y-6">
             <LocalizedFormTabs value={formTab} onChange={setFormTab} translations={form.translations} ariaLabel={t('admin.categories.createTitle')} />
             <div className={formTab === 'basic' ? 'space-y-5' : 'hidden'}>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -218,7 +217,7 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
                 { key: 'description', label: t('admin.categories.field.description'), maxLength: 300, multiline: true },
               ]} />
             </div>
-          </form>
+          </div>
         )}
       </Modal>
     </>

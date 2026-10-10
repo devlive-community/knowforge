@@ -17,6 +17,7 @@ import { ArrowRightIcon, BookIcon, CalendarIcon, EyeIcon, GitHubIcon, GridIcon, 
 import TagChips from '@/components/TagChips'
 import type { AchievementGrant, Book, PageResult, User } from '@/lib/types'
 import { useTranslation } from '@/lib/i18n'
+import { parseIcon } from '@/lib/icons'
 import FeedButton from '@/components/FeedButton'
 import { feedsEnabled, userFeedPath } from '@/lib/feeds'
 import UserBookLists from '@/components/booklists/UserBookLists'
@@ -101,7 +102,7 @@ function ProfileLevelBadge({ username }: { username: string }) {
   if (!enabled || !level) return null
   return (
     <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
-      {level.icon_type !== 'image' && level.icon_type !== 'svg' && <i className={`fa-solid ${level.icon_value || 'fa-star'}`} aria-hidden="true" />}{level.name}
+      {level.icon_type !== 'image' && level.icon_type !== 'svg' && <i className={`fa-solid ${parseIcon(level.icon_type, level.icon_value).value || 'fa-star'}`} aria-hidden="true" />}{level.name}
     </span>
   )
 }

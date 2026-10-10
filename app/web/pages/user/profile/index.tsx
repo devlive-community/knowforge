@@ -3,13 +3,13 @@ import Seo from '@/components/Seo'
 import Link from 'next/link'
 import Container from '@/components/Container'
 import AccountSettingsLayout from '@/components/AccountSettingsLayout'
-import { api, API_BASE, getToken } from '@/lib/api'
-import { resolveMediaUrl } from '@/lib/media'
+import { api } from '@/lib/api'
 import { useRequireAuth, useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { Button, Input, Textarea, Field, Loading, Select } from '@/components/ui'
 import { EyeIcon, SaveIcon } from '@/components/icons'
 import UserAvatar from '@/components/UserAvatar'
+import AvatarUpload from '@/components/upload/AvatarUpload'
 
 const MAX_BIO = 200
 
@@ -31,7 +31,6 @@ export default function Profile() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -49,27 +48,8 @@ export default function Profile() {
 
   if (!user) return <Loading className="min-h-[60vh]" label={t('user.profile.loading')} />
 
-  const avatarSrc = resolveMediaUrl(avatar)
   // 与服务端规则一致：选择显示用户名或没有昵称时为用户名，否则为昵称
   const previewName = nameDisplay === 'username' || !nickname.trim() ? user.username : nickname.trim()
-
-  async function uploadAvatar(file: File | undefined) {
-    if (!file) return
-    setUploadingAvatar(true)
-    setError('')
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch(`${API_BASE}/api/v1/upload`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` }, body: fd })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok || payload.success === false) throw new Error(payload.message || t('user.profile.uploadFailed'))
-      setAvatar(payload.data.url)
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setUploadingAvatar(false)
-    }
-  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -105,7 +85,7 @@ export default function Profile() {
           <p className="mt-2 text-[15px] text-slate-500">{t('user.profile.description')}</p>
         </div>
 
-        <AccountSettingsLayout user={user} active="profile" onAvatarChange={setAvatar}>
+        <AccountSettingsLayout user={user} active="profile" onAvatarChange={setAvatar} avatar={avatar}>
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">
               <h2 className="text-xl font-bold text-slate-900">{t('user.profile.personalInfo')}</h2>
@@ -120,17 +100,7 @@ export default function Profile() {
                 {/* 头像 */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-[120px_1fr]">
                   <label className="pt-1 text-sm font-medium text-slate-700">{t('user.profile.avatar')}</label>
-                  <div className="flex items-start gap-4">
-                    <UserAvatar user={{ username: user.username, avatar }} size="h-20 w-20 text-2xl" link={false} />
-                    <div className="space-y-2">
-                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50">
-                        {uploadingAvatar ? t('user.profile.uploading') : t('user.profile.uploadAvatar')}
-                        <input type="file" accept="image/*" hidden disabled={uploadingAvatar}
-                          onChange={(e) => { void uploadAvatar(e.target.files?.[0]); e.target.value = '' }} />
-                      </label>
-                      <p className="text-xs text-slate-400">{t('user.profile.avatarHint')}</p>
-                    </div>
-                  </div>
+                  <AvatarUpload user={{ username: user.username, nickname, display_name: previewName }} value={avatar} onChange={setAvatar} />
                 </div>
 
                 {/* 头像地址 */}

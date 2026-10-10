@@ -20,6 +20,8 @@ LOCALES_DIR = os.path.join(WEB_DIR, 'lib', 'i18n', 'locales')
 # 必须在此显式登记取值域（新增动态键拼接时请同步维护）。
 DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'i18n.': ['enabled', 'content_enabled', 'ui_enabled', 'is_default'],
+    # IconPicker: t(`iconPicker.group.${g}`)（分组见 lib/icons.ts ICON_GROUPS）
+    'iconPicker.group.': ['common', 'files', 'users', 'system', 'media', 'editing', 'education', 'all'],
     # BookCard/WriterWorkbench/detail: t(`book.status.${status}`)，BookStatus 共 5 种
     'book.status.': ['draft', 'in_progress', 'published', 'completed', 'archived'],
     # 我的任务: t(`userTasks.kind|status|tab|empty.${x}`)（任务种类与状态见 lib/user-tasks.ts）

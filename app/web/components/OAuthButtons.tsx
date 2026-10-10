@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { API_BASE, api } from '@/lib/api'
 import { Button, Loading } from '@/components/ui'
 import { resolveMediaUrl } from '@/lib/media'
+import { parseIcon } from '@/lib/icons'
 import { useTranslation } from '@/lib/i18n'
 
 // icon 为完整 FontAwesome 类名（品牌图标用 fa-brands，无品牌图标的国内平台用 fa-solid）。
@@ -17,12 +18,13 @@ interface Provider { provider: string; enabled: boolean; icon_type?: string; ico
 
 // providerIcon 优先用管理员自定义图标（image/svg 用图片，fa 用类名），否则回退品牌默认图标。供登录页与后台复用。
 export function providerIcon(p: { provider: string; icon_type?: string; icon_value?: string }, className: string) {
-  const iv = (p.icon_value || '').trim()
+  const icon = parseIcon(p.icon_type, (p.icon_value || '').trim())
+  const iv = icon.value
   if (iv && (p.icon_type === 'image' || p.icon_type === 'svg')) {
     return <img src={resolveMediaUrl(iv)} alt="" className={`${className} object-contain`} />
   }
   const cls = iv ? `fa-solid ${iv}` : (PROVIDER_META[p.provider]?.icon || 'fa-solid fa-right-to-bracket')
-  return <i className={`${cls} ${className}`} aria-hidden="true" />
+  return <i className={`${cls} ${className}`} style={iv && icon.color ? { color: icon.color } : undefined} aria-hidden="true" />
 }
 
 // OAuthButtons 第三方登录入口：拉取启用中的 provider，按显示方式（按钮/图标）渲染（登录/注册页共用）

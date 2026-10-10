@@ -56,8 +56,8 @@ export default function LocalizedFields({ value, onChange, fields, onBusyChange 
     <div className="flex flex-wrap items-center gap-3">
       <div className="min-w-0 flex-1"><Select disabled={translating} value={active.code} onChange={setSelected} options={choices.map((item) => ({ value: item.code, label: item.native_name + (value[item.code]?.fields.name ? ' •' : '') }))} /></div>
       <Badge>{active.is_default ? t('i18n.default') : active.code}</Badge>
-      {active.code !== defaultLocale && <Button disabled={translating} variant="outline" onClick={() => update({ fields: Object.fromEntries(fields.map((field) => [field.key, entry.fields[field.key] || value[defaultLocale]?.fields[field.key] || ''])), publish: false })}>{t('i18n.copyDefault')}</Button>}
-      {active.code !== defaultLocale && site.translation_enabled && <Button loading={translating} variant="outline" onClick={translateMissing}>{t('i18n.translateMissing')}</Button>}
+      {active.code !== defaultLocale && <Button type="button" disabled={translating} variant="outline" onClick={() => update({ fields: Object.fromEntries(fields.map((field) => [field.key, entry.fields[field.key] || value[defaultLocale]?.fields[field.key] || ''])), publish: false })}>{t('i18n.copyDefault')}</Button>}
+      {active.code !== defaultLocale && site.translation_enabled && <Button type="button" loading={translating} variant="outline" onClick={translateMissing}>{t('i18n.translateMissing')}</Button>}
     </div>
     <div dir={active.direction} className="grid gap-4 sm:grid-cols-2">
       {fields.map((field) => <Field key={field.key} label={field.label} hint={String((entry.fields[field.key] || '').length) + ' / ' + field.maxLength}>
