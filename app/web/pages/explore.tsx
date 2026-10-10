@@ -70,9 +70,9 @@ export const getServerSideProps: GetServerSideProps<ExploreProps> = async ({ req
       : serverApi<PageResult<Book>>('/books', { headers: auth, params: { page, page_size: 12, title: keyword || undefined, visibility: visibility || undefined, tag: tag || undefined, category: category || undefined, group_versions: grouped ? 'true' : undefined } })
           .catch(() => ({ items: [], total: 0, page: 1, page_size: 12 }) as PageResult<Book>),
     serverApi<Tag[]>('/tags', { params: { limit: 200 } }).catch(() => [] as Tag[]),
-    // 分类插件未启用时接口不可用，按空处理
-    serverApi<{ items: CategoryNode[] }>('/categories').then((r) => r.items || []).catch(() => [] as CategoryNode[]),
-    category ? serverApi<CategoryInfo>(`/categories/${encodeURIComponent(category)}`).catch(() => null) : Promise.resolve(null),
+    // 分类插件未启用时接口不可用，按空处理；透传语言信号，分类名称按访问者语言显示
+    serverApi<{ items: CategoryNode[] }>('/categories', { headers: auth }).then((r) => r.items || []).catch(() => [] as CategoryNode[]),
+    category ? serverApi<CategoryInfo>(`/categories/${encodeURIComponent(category)}`, { headers: auth }).catch(() => null) : Promise.resolve(null),
   ])
   const selectedBookTag = data.items
     .flatMap((book) => book.tags || [])

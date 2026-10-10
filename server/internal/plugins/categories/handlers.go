@@ -1,6 +1,8 @@
 package categories
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -9,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
@@ -36,8 +39,9 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 
 type node struct {
 	Category
-	BookCount int64   `json:"book_count"` // 含子分类
-	Children  []*node `json:"children"`
+	BookCount    int64           `json:"book_count"` // 含子分类
+	Children     []*node         `json:"children"`
+	Translations json.RawMessage `json:"translations,omitempty"` // 仅管理端：多语言内容
 }
 
 // counts 每个分类直接归入的书籍数（publicOnly 时只计公开可读的书）。
@@ -85,12 +89,15 @@ func (t tree) build(counts map[uint]int64) []*node {
 
 // PublicTree GET /categories 分类树（书籍数只计公开可读的书，含子分类）。
 func (b *behavior) PublicTree(c *gin.Context) {
-	b.core.OK(c, gin.H{"items": b.tree().build(b.counts(true))})
+	t := b.tree()
+	b.localizeTree(c, t)
+	b.core.OK(c, gin.H{"items": t.build(b.counts(true))})
 }
 
 // PublicCategory GET /categories/:slug 分类详情：自身、路径（顶级 → 自身）与子分类。
 func (b *behavior) PublicCategory(c *gin.Context) {
 	t := b.tree()
+	b.localizeTree(c, t)
 	cat, found := t.bySlug[c.Param("slug")]
 	if !found {
 		b.core.Fail(c, http.StatusNotFound, "分类不存在")
@@ -128,7 +135,22 @@ func (b *behavior) AdminTree(c *gin.Context) {
 	db := b.core.Gorm()
 	db.Model(&models.Book{}).Count(&total)
 	db.Table("book_category_assignments bca").Joins("JOIN books ON books.id = bca.book_id AND books.deleted_at IS NULL").Count(&assigned)
-	b.core.OK(c, gin.H{"items": b.tree().build(b.counts(false)), "uncategorized": total - assigned, "max_depth": maxDepth})
+	t := b.tree()
+	ids := make([]uint, 0, len(t.byID))
+	for id := range t.byID {
+		ids = append(ids, id)
+	}
+	trs := b.translations(ids)
+	nodes := t.build(b.counts(false))
+	var fill func([]*node)
+	fill = func(ns []*node) {
+		for _, n := range ns {
+			n.Translations = trs[n.ID]
+			fill(n.Children)
+		}
+	}
+	fill(nodes)
+	b.core.OK(c, gin.H{"items": nodes, "uncategorized": total - assigned, "max_depth": maxDepth})
 }
 
 // —— 增删改 ——
@@ -143,6 +165,8 @@ type categoryPayload struct {
 	IconValue   string `json:"icon_value"`
 	ParentID    uint   `json:"parent_id"`
 	SortOrder   int    `json:"sort_order"`
+	// Translations 各语言的名称与简介（只需传有改动的语言）；默认语言须有已发布的名称
+	Translations map[string]plugincore.ResourceTranslation `json:"translations"`
 }
 
 // validate 校验并规范化请求；id 为正在编辑的分类（新建为 0）。
@@ -212,13 +236,23 @@ func (b *behavior) AdminCreate(c *gin.Context) {
 		b.core.Fail(c, http.StatusBadRequest, fmt.Sprintf("分类最多 %d 个", maxCategories))
 		return
 	}
+	if err := b.prepareTexts(&req, 0); err != nil {
+		b.core.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	if status, msg := b.validate(&req, t, 0); status != 0 {
 		b.core.Fail(c, status, msg)
 		return
 	}
 	cat := Category{Name: req.Name, Slug: req.Slug, Description: req.Description, IconType: req.IconType, IconValue: req.IconValue, ParentID: req.ParentID, SortOrder: req.SortOrder}
-	if err := b.core.Gorm().Create(&cat).Error; err != nil {
-		b.core.Fail(c, http.StatusInternalServerError, "保存失败")
+	actor := b.core.CurrentUser(c).ID
+	if err := b.core.Gorm().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&cat).Error; err != nil {
+			return err
+		}
+		return b.core.SaveResourceTranslations(tx, resourceKind, cat.ID, actor, req.Translations)
+	}); err != nil {
+		b.failSave(c, err)
 		return
 	}
 	b.core.RecordAudit(c, "categories.created", "book_category", strconv.FormatUint(uint64(cat.ID), 10), cat.Name, nil)
@@ -240,16 +274,26 @@ func (b *behavior) AdminUpdate(c *gin.Context) {
 		b.core.Fail(c, http.StatusBadRequest, "参数错误")
 		return
 	}
+	if err := b.prepareTexts(&req, cat.ID); err != nil {
+		b.core.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	if status, msg := b.validate(&req, t, cat.ID); status != 0 {
 		b.core.Fail(c, status, msg)
 		return
 	}
 	oldSlug := cat.Slug
-	if err := b.core.Gorm().Model(&Category{}).Where("id = ?", cat.ID).Updates(map[string]any{
-		"name": req.Name, "slug": req.Slug, "description": req.Description, "icon_type": req.IconType, "icon_value": req.IconValue,
-		"parent_id": req.ParentID, "sort_order": req.SortOrder,
-	}).Error; err != nil {
-		b.core.Fail(c, http.StatusInternalServerError, "保存失败")
+	actor := b.core.CurrentUser(c).ID
+	if err := b.core.Gorm().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&Category{}).Where("id = ?", cat.ID).Updates(map[string]any{
+			"name": req.Name, "slug": req.Slug, "description": req.Description, "icon_type": req.IconType, "icon_value": req.IconValue,
+			"parent_id": req.ParentID, "sort_order": req.SortOrder,
+		}).Error; err != nil {
+			return err
+		}
+		return b.core.SaveResourceTranslations(tx, resourceKind, cat.ID, actor, req.Translations)
+	}); err != nil {
+		b.failSave(c, err)
 		return
 	}
 	b.core.Gorm().First(&cat, cat.ID)
@@ -281,13 +325,27 @@ func (b *behavior) AdminDelete(c *gin.Context) {
 		b.core.Fail(c, http.StatusConflict, fmt.Sprintf("该分类下还有 %d 本书，请先把它们归入其他分类", n))
 		return
 	}
-	if err := b.core.Gorm().Delete(&Category{}, cat.ID).Error; err != nil {
+	if err := b.core.Gorm().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("resource_type = ? AND resource_id = ?", resourceKind, cat.ID).Delete(&models.LocalizedResourceContent{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&Category{}, cat.ID).Error
+	}); err != nil {
 		b.core.Fail(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
 	b.core.RecordAudit(c, "categories.deleted", "book_category", strconv.FormatUint(uint64(cat.ID), 10), cat.Name, nil)
 	b.core.NotifyIndexablePaths(categoryPath(cat.Slug))
 	b.core.OK(c, gin.H{"deleted": true})
+}
+
+// failSave 保存失败：翻译被并发修改时 409，其他校验错误 400。
+func (b *behavior) failSave(c *gin.Context, err error) {
+	if errors.Is(err, plugincore.ErrTranslationConflict) {
+		b.core.Fail(c, http.StatusConflict, err.Error())
+		return
+	}
+	b.core.Fail(c, http.StatusBadRequest, err.Error())
 }
 
 // —— 批量归类 ——
@@ -314,6 +372,11 @@ func (b *behavior) AdminBooks(c *gin.Context) {
 	var books []models.Book
 	b.core.PreloadBookUserOn(q).Order("books.updated_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&books)
 	b.core.DecorateBookList(books)
+	ptrs := make([]*models.Book, len(books))
+	for i := range books {
+		ptrs[i] = &books[i]
+	}
+	b.localizeBooks(c, ptrs)
 	b.core.OK(c, plugincore.PageResult{Items: books, Total: total, Page: page, PageSize: pageSize})
 }
 

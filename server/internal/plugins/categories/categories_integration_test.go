@@ -195,6 +195,53 @@ func TestCategories(t *testing.T) {
 		t.Fatalf("Sitemap 应包含分类页: %v", sm["entries"])
 	}
 
+	// 多语言：名称按请求语言显示（未翻译的语言沿用默认语言），书籍上的分类路径同样本地化
+	_, loc := e.req(t, e.token, http.MethodGet, "/api/v1/admin/i18n/locales", "")
+	ld := loc["data"].(map[string]any)
+	items, hasEn := ld["items"].([]any), false
+	for _, it := range items {
+		if m := it.(map[string]any); m["code"] == "en" {
+			m["enabled"], m["content_enabled"], hasEn = true, true, true
+		}
+	}
+	if !hasEn {
+		items = append(items, map[string]any{"code": "en", "native_name": "English", "direction": "ltr", "enabled": true, "content_enabled": true, "fallback_locale": "zh-CN"})
+	}
+	locBody, _ := json.Marshal(map[string]any{"items": items, "revision": ld["revision"]})
+	e.must(t, e.token, http.MethodPut, "/api/v1/admin/i18n/locales", string(locBody))
+	science := e.category(t, `{"slug":"science","translations":{"zh-CN":{"fields":{"name":"科学","description":"自然科学"},"revision":0,"publish":true},"en":{"fields":{"name":"Science"},"revision":0,"publish":true}}}`)
+	if status, _ := e.req(t, e.token, http.MethodPost, "/api/v1/admin/categories", `{"translations":{"en":{"fields":{"name":"Only English"},"revision":0,"publish":true}}}`); status != http.StatusBadRequest {
+		t.Fatalf("缺少默认语言名称应拒绝: %d", status)
+	}
+	e.must(t, token, http.MethodPut, fmt.Sprintf("/api/v1/books/%d", goBook), fmt.Sprintf(`{"category_id":%d}`, science))
+	nameOf := func(path string) string {
+		for _, it := range e.must(t, "", http.MethodGet, path, "")["items"].([]any) {
+			if n := it.(map[string]any); n["slug"] == "science" {
+				return n["name"].(string)
+			}
+		}
+		return ""
+	}
+	if zh, en := nameOf("/api/v1/categories?locale=zh-CN"), nameOf("/api/v1/categories?locale=en"); zh != "科学" || en != "Science" {
+		t.Fatalf("分类树应按语言显示: %q %q", zh, en)
+	}
+	if one := e.must(t, "", http.MethodGet, "/api/v1/categories/tech?locale=en", ""); one["category"].(map[string]any)["name"] != "Tech" {
+		t.Fatalf("未翻译的分类沿用默认语言: %v", one["category"])
+	}
+	if d := e.must(t, token, http.MethodGet, fmt.Sprintf("/api/v1/books/%d?locale=en", goBook), ""); d["category"].(map[string]any)["name"] != "Science" {
+		t.Fatalf("书籍上的分类应按语言显示: %v", d["category"])
+	}
+	_, p = e.req(t, "", http.MethodGet, "/api/v1/books?category=science&locale=en", "")
+	if b := p["data"].(map[string]any)["items"].([]any); len(b) != 1 || b[0].(map[string]any)["category"].(map[string]any)["name"] != "Science" {
+		t.Fatalf("书籍列表中的分类应按语言显示: %v", b)
+	}
+	tree = e.must(t, e.token, http.MethodGet, "/api/v1/admin/categories", "")["items"].([]any)
+	for _, it := range tree {
+		if n := it.(map[string]any); n["slug"] == "science" && n["translations"] == nil {
+			t.Fatalf("管理端应返回多语言内容: %v", n)
+		}
+	}
+
 	// 插件禁用：不再回填分类，筛选参数被忽略，接口停用
 	e.must(t, e.token, http.MethodPost, "/api/v1/admin/plugins/categories/uninstall", "")
 	if d := e.must(t, token, http.MethodGet, fmt.Sprintf("/api/v1/books/%d", goBook), ""); d["category"] != nil {

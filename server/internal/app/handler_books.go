@@ -47,11 +47,20 @@ func bookOrder(sort string) string {
 
 // decorateBookList 让插件回填列表书籍的非持久化字段（标签插件的标签、内容采集插件的「采集中」标记等）。
 func (a *App) decorateBookList(books []models.Book) {
+	plugincore.DecorateBooks(a, bookPtrs(books))
+}
+
+// localizeBookList 按请求语言本地化列表书籍上的插件字段（如分类名称）；须在 decorateBookList 之后调用。
+func (a *App) localizeBookList(c *gin.Context, books []models.Book) {
+	plugincore.LocalizeBooks(a, c, bookPtrs(books))
+}
+
+func bookPtrs(books []models.Book) []*models.Book {
 	ptrs := make([]*models.Book, len(books))
 	for i := range books {
 		ptrs[i] = &books[i]
 	}
-	plugincore.DecorateBooks(a, ptrs)
+	return ptrs
 }
 
 // attachChapterCounts 一次分组查询回填各书籍的章节（文档）数量，避免 N+1
@@ -244,6 +253,7 @@ func (a *App) ListBooks(c *gin.Context) {
 	}
 	a.attachChapterCounts(books)
 	a.decorateBookList(books)
+	a.localizeBookList(c, books)
 	a.attachVersionInfo(books, versionCounts, u)
 	if scope == "collaborating" {
 		for i := range books {
@@ -523,6 +533,7 @@ func (a *App) GetBook(c *gin.Context) {
 		return
 	}
 	plugincore.DecorateBooks(a, []*models.Book{book})
+	plugincore.LocalizeBooks(a, c, []*models.Book{book})
 	ok(c, book)
 }
 
@@ -538,6 +549,7 @@ func (a *App) GetBookBySlug(c *gin.Context) {
 		return
 	}
 	plugincore.DecorateBooks(a, []*models.Book{&book})
+	plugincore.LocalizeBooks(a, c, []*models.Book{&book})
 	ok(c, book)
 }
 

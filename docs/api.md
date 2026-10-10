@@ -466,13 +466,14 @@ Authorization: Bearer kf_pat_…
 - **筛选**：`GET /books?category=<slug>` 返回该分类及其子分类下的书（未知分类为空）；发现页地址为 `/explore?category=<slug>`。
 - **SEO**：分类页写入 Sitemap，新建、修改（含 slug 变化时的旧地址）、删除分类与批量归类时推送 IndexNow 并重建 Sitemap。
 - **插件开关**：禁用后不再回填分类、忽略 `category` 筛选、接口停用，数据保留；复制书籍时一并复制分类，彻底删除书籍时清理归类。
+- **多语言**：名称与简介为可翻译资源（`book_category`）。创建 / 修改时传 `translations{<locale>: {fields{name, description}, revision, publish}}`（只需传有改动的语言，默认语言须有已发布的名称）；未传 `translations` 时按 `name` / `description` 作为默认语言直接发布。分类树、分类详情与书籍上的 `category`（详情与 `/books` 列表）按请求语言（`?locale`、`X-KnowForge-Locale`、用户偏好、Cookie、`Accept-Language`）显示已发布的翻译，未翻译的沿用默认语言；管理端分类树返回各分类的 `translations`。
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/categories` | 分类树 `items[]{id, parent_id, name, slug, description, icon_type, icon_value, sort_order, book_count, children[]}`（`book_count` 只计公开可读的书，含子分类） | 公开 |
 | GET | `/categories/:slug` | `{category, path[], children[]}`；不存在 404 | 公开 |
 | GET | `/admin/categories` | 分类树（书籍数含私有书）+ `uncategorized`（未分类书籍数）+ `max_depth`（3） | 管理员 + `categories:manage` |
-| POST | `/admin/categories` | `{name(≤40), slug?(小写字母数字与连字符，≤60，留空按名称生成), description?(≤300), icon_type?, icon_value?, parent_id?, sort_order?}`；超过三层 400，slug 重复 409 | 同上 |
+| POST | `/admin/categories` | `{translations 或 name(≤40)/description, slug?(小写字母数字与连字符，≤60，留空按名称生成), description?(≤300), icon_type?, icon_value?, parent_id?, sort_order?}`；超过三层 400，slug 重复 409 | 同上 |
 | PUT | `/admin/categories/:id` | 同上；可修改上级（子分类随之移动），不能移到自身或子孙下面，移动后不能超过三层 | 同上 |
 | DELETE | `/admin/categories/:id` | 只能删除没有子分类、没有书籍的分类（否则 409） | 同上 |
 | GET | `/admin/category-books?q=&category=<id\|none>&page=` | 按书名 / 作者用户名或昵称与当前分类（含子分类；`none` 为未分类）筛选书籍（含私有书），分页 | 同上 |

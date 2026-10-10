@@ -235,6 +235,27 @@ func DecorateBooks(core Core, books []*models.Book) {
 	}
 }
 
+// —— 书籍本地化：核心按请求返回书籍（详情、列表）前调用，插件把回填的可翻译内容（如分类名称）换成请求语言。——
+// 与 OnDecorateBooks 分开：装饰没有请求上下文，许多内部调用也不需要语言。
+
+// BooksLocalizer 按请求语言本地化一批书籍上的插件字段。
+type BooksLocalizer func(core Core, c *gin.Context, books []*models.Book)
+
+var booksLocalizers []BooksLocalizer
+
+// OnLocalizeBooks 订阅书籍本地化。
+func OnLocalizeBooks(h BooksLocalizer) { booksLocalizers = append(booksLocalizers, h) }
+
+// LocalizeBooks 由核心在返回书籍前调用（须先完成装饰）。
+func LocalizeBooks(core Core, c *gin.Context, books []*models.Book) {
+	if len(books) == 0 {
+		return
+	}
+	for _, h := range booksLocalizers {
+		h(core, c, books)
+	}
+}
+
 // —— Sitemap：插件登记额外的公开页面（如分类页），由核心写入 Sitemap 第 0 片与 /sitemap 清单。——
 
 // SitemapPage 一个公开页面：站内路径（以 / 开头，可带查询参数）与最近更新时间（零值表示不输出 lastmod）。
