@@ -47,6 +47,12 @@ func (a *App) Upload(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "读取文件失败")
 		return
 	}
+	if ext == ".svg" {
+		if err := checkSVG(data); err != nil {
+			fail(c, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	url, err := a.storeUserFile(currentUser(c), "upload", ext, data)
 	if isStorageFull(err) {
 		fail(c, http.StatusForbidden, err.Error())
