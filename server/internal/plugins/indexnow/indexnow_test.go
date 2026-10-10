@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -28,6 +29,12 @@ type testCore struct {
 func (c *testCore) Gorm() *gorm.DB            { return c.db }
 func (c *testCore) PluginEnabled(string) bool { return c.enabled }
 func (c *testCore) JobQueue() *jobqueue.Queue { return nil }
+func (c *testCore) OK(g *gin.Context, data any) {
+	g.JSON(http.StatusOK, gin.H{"success": true, "data": data})
+}
+func (c *testCore) Fail(g *gin.Context, status int, message string) {
+	g.JSON(status, gin.H{"success": false, "message": message})
+}
 func (c *testCore) GetSetting(key string) string {
 	if key == "site_url" {
 		return c.siteURL
@@ -41,7 +48,7 @@ func newTestCore(t *testing.T, siteURL string) *testCore {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&Config{}, &URL{}); err != nil {
+	if err := db.AutoMigrate(&Config{}, &URL{}, &PushLog{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&Config{ID: 1, Key: "0123456789abcdef0123456789abcdef"}).Error; err != nil {
@@ -284,5 +291,112 @@ func TestSubmitSurvivesDatabaseTimePrecisionLoss(t *testing.T) {
 				t.Fatalf("failed push must count an attempt: err=%v row=%+v", err, got)
 			}
 		})
+	}
+}
+
+func TestValidSubmittedURLAllowsCategoryPages(t *testing.T) {
+	base, _ := canonicalSiteURL("https://example.com")
+	if !validSubmittedURL("https://example.com/explore?category=go", base) {
+		t.Fatal("category page should be submittable")
+	}
+	for _, raw := range []string{"https://example.com/explore", "https://example.com/explore?category=go&page=2", "https://example.com/explore?tag=go", "https://example.com/book/detail/a?x=1"} {
+		if validSubmittedURL(raw, base) {
+			t.Errorf("validSubmittedURL(%q) unexpectedly succeeded", raw)
+		}
+	}
+}
+
+func fakeEndpoint(t *testing.T, status int) *atomic.Int32 {
+	t.Helper()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(server.Close)
+	old := endpointURL
+	endpointURL = server.URL
+	t.Cleanup(func() { endpointURL = old })
+	return &requests
+}
+
+// 访问时推送：立即推送并把队列中同一地址记为已推送；间隔内不重复推送；每次推送都有记录。
+func TestPushNowSkipsRecentlySubmittedAndCompletesQueue(t *testing.T) {
+	core := newTestCore(t, "https://example.com")
+	requests := fakeEndpoint(t, http.StatusOK)
+	address := "https://example.com/book/detail/a-book"
+	queued := URL{Address: address, AddressHash: addressHash(address), Version: 3, SubmittedVersion: 1, UpdatedAt: time.Now().UTC()}
+	core.db.Create(&queued)
+	b := &behavior{core: core}
+	if n, err := b.pushNow(context.Background(), sourceVisit, []string{address}, time.Hour); err != nil || n != 1 {
+		t.Fatalf("first visit should push: n=%d err=%v", n, err)
+	}
+	var got URL
+	core.db.First(&got, queued.ID)
+	if got.SubmittedVersion != 3 || got.LastSubmittedAt == nil {
+		t.Fatalf("queued URL should be completed: %+v", got)
+	}
+	if n, _ := b.pushNow(context.Background(), sourceVisit, []string{address}, time.Hour); n != 0 || requests.Load() != 1 {
+		t.Fatalf("visit within interval must not push again: n=%d requests=%d", n, requests.Load())
+	}
+	other := "https://example.com/book/reader/a-book/one"
+	if n, _ := b.pushNow(context.Background(), sourceManual, []string{other}, 0); n != 1 {
+		t.Fatal("manual push of a new URL should be sent")
+	}
+	var logs []PushLog
+	core.db.Order("id ASC").Find(&logs)
+	if len(logs) != 2 || logs[0].Source != sourceVisit || logs[1].Source != sourceManual || logs[1].Status != "ok" {
+		t.Fatalf("push logs: %+v", logs)
+	}
+}
+
+func TestManualURLAcceptsSitePathsOnly(t *testing.T) {
+	base, _ := canonicalSiteURL("https://example.com")
+	if u, ok := manualURL("/book/detail/a", base); !ok || u != "https://example.com/book/detail/a" {
+		t.Fatalf("site path: %q %v", u, ok)
+	}
+	if u, ok := manualURL("https://EXAMPLE.com/explore?category=go", base); !ok || u != "https://EXAMPLE.com/explore?category=go" {
+		t.Fatalf("absolute same-host: %q %v", u, ok)
+	}
+	for _, raw := range []string{"https://other.com/a", "http://example.com/a", "//other.com/a", "https://example.com/a#x"} {
+		if _, ok := manualURL(raw, base); ok {
+			t.Errorf("manualURL(%q) unexpectedly accepted", raw)
+		}
+	}
+}
+
+// 触发地址：密钥错误 404；正确时立即推送积压并返回剩余数；短时间内重复触发 429。
+func TestTriggerFlushesPendingWithToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	core := newTestCore(t, "https://example.com")
+	core.db.Model(&Config{}).Where("id = 1").Update("trigger_token", "secret-token")
+	requests := fakeEndpoint(t, http.StatusOK)
+	for i, path := range []string{"/book/detail/a", "/book/detail/b"} {
+		raw := "https://example.com" + path
+		core.db.Create(&URL{Address: raw, AddressHash: addressHash(raw), Version: 1, UpdatedAt: time.Now().UTC().Add(time.Duration(i) * time.Second)})
+	}
+	b := &behavior{core: core}
+	r := gin.New()
+	r.GET("/trigger", b.trigger)
+	call := func(token string) (int, string) {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/trigger?token="+token, nil))
+		return w.Code, w.Body.String()
+	}
+	triggerGate.last = time.Time{}
+	if code, _ := call("wrong"); code != http.StatusNotFound {
+		t.Fatalf("wrong token: %d", code)
+	}
+	code, body := call("secret-token")
+	if code != http.StatusOK || !strings.Contains(body, `"submitted":2`) || !strings.Contains(body, `"remaining":0`) || requests.Load() != 1 {
+		t.Fatalf("trigger should flush pending: %d %s requests=%d", code, body, requests.Load())
+	}
+	if code, _ := call("secret-token"); code != http.StatusTooManyRequests {
+		t.Fatalf("repeated trigger should be throttled: %d", code)
+	}
+	var log PushLog
+	core.db.Last(&log)
+	if log.Source != sourceTrigger || log.URLCount != 2 {
+		t.Fatalf("trigger log: %+v", log)
 	}
 }

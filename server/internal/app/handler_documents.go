@@ -413,6 +413,7 @@ func (a *App) GetDocumentBySlug(c *gin.Context) {
 		fail(c, http.StatusForbidden, "无权访问该文档")
 		return
 	}
+	a.notifyDocumentVisited(book, &doc)
 	a.applyContentGate(currentUser(c), book, &doc)
 	ok(c, withContentHash(&doc))
 }

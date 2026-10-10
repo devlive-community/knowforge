@@ -550,6 +550,7 @@ func (a *App) GetBookBySlug(c *gin.Context) {
 	}
 	plugincore.DecorateBooks(a, []*models.Book{&book})
 	plugincore.LocalizeBooks(a, c, []*models.Book{&book})
+	a.notifyBookVisited(&book)
 	ok(c, book)
 }
 

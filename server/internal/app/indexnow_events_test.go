@@ -3,10 +3,16 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
+	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/plugincore"
 )
 
 func TestIndexableBookURLsMatchPublicSitemapScope(t *testing.T) {
@@ -163,5 +169,39 @@ func TestSitemapWithoutSiteURLMarksCurrentRevisionHandled(t *testing.T) {
 	}
 	if got := a.getSetting("sitemap_built_revision"); got != "revision-1" {
 		t.Fatalf("sitemap revision was not marked handled without site URL: %q", got)
+	}
+}
+
+// 公开可索引的书籍详情与已发布章节被读取时通知「访问」订阅方（如 IndexNow 访问时推送）；私有书籍不通知。
+func TestIndexableVisitsAreAnnounced(t *testing.T) {
+	a, owner, db := newContentImportTestApp(t)
+	a.Config = &config.Config{Installed: true, Secret: "indexnow-visit-test"}
+	if err := a.setSetting("site_url", "https://books.example", "test site URL"); err != nil {
+		t.Fatal(err)
+	}
+	var visits []string
+	plugincore.OnIndexableURLVisited(func(_ plugincore.Core, kind, url string) {
+		if strings.HasPrefix(url, "https://books.example/") {
+			visits = append(visits, kind+" "+url)
+		}
+	})
+	public := models.Book{Title: "Visit", Slug: "visit-book", UserID: owner.ID, Status: "in_progress", IsPublic: true}
+	private := models.Book{Title: "Hidden", Slug: "hidden-book", UserID: owner.ID, Status: "in_progress"}
+	db.Create(&public)
+	db.Create(&private)
+	db.Create(&models.Document{BookID: public.ID, UserID: owner.ID, Title: "One", Slug: "one", Status: "published"})
+	router := a.Router()
+	get := func(path string) int {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		return w.Code
+	}
+	if get("/api/v1/books/slug/visit-book") != http.StatusOK || get(fmt.Sprintf("/api/v1/books/%d/documents/slug/one", public.ID)) != http.StatusOK {
+		t.Fatal("public book and chapter should be readable")
+	}
+	get("/api/v1/books/slug/hidden-book")
+	want := []string{"book https://books.example/book/detail/visit-book", "chapter https://books.example/book/reader/visit-book/one"}
+	if !reflect.DeepEqual(visits, want) {
+		t.Fatalf("visits: %v", visits)
 	}
 }

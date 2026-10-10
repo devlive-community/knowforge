@@ -19,11 +19,21 @@ func (b *behavior) Key() string { return pluginKey }
 
 func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	b.core = core
-	api.GET("/indexnow/key", core.RequireFeaturePlugin(pluginKey), b.publicKey)
+	feat := core.RequireFeaturePlugin(pluginKey)
+	api.GET("/indexnow/key", feat, b.publicKey)
+	// 触发地址：凭密钥立即推送积压（可接外部定时任务）
+	api.GET("/indexnow/trigger", feat, b.trigger)
+	api.POST("/indexnow/trigger", feat, b.trigger)
 	admin := []gin.HandlerFunc{core.RequireAuth(), core.RequirePermission(authz.SiteUpdate)}
+	withFeat := func(h gin.HandlerFunc) []gin.HandlerFunc {
+		return append(append([]gin.HandlerFunc{}, admin...), feat, h)
+	}
 	api.GET("/admin/indexnow", append(admin, b.adminStatus)...)
 	api.POST("/admin/indexnow/key", append(admin, b.generateKey)...)
 	api.POST("/admin/indexnow/retry", append(admin, b.retry)...)
+	api.PUT("/admin/indexnow/settings", withFeat(b.updateSettings)...)
+	api.POST("/admin/indexnow/trigger", withFeat(b.updateTrigger)...)
+	api.POST("/admin/indexnow/submit", withFeat(b.manualSubmit)...)
 }
 
 func validateSetup(raw string) error {
@@ -81,15 +91,27 @@ func (b *behavior) adminStatus(c *gin.Context) {
 			lastSubmitted = last.LastSubmittedAt
 		}
 	}
-	keyFileURL := ""
+	keyFileURL, triggerURL := "", ""
 	if siteErr == nil && configured {
 		keyFile := *base
 		keyFile.Path = "/" + cfg.Key + ".txt"
 		keyFileURL = keyFile.String()
+		if cfg.TriggerToken != "" {
+			trigger := *base
+			trigger.Path = "/api/v1/indexnow/trigger"
+			trigger.RawQuery = url.Values{"token": {cfg.TriggerToken}}.Encode()
+			triggerURL = trigger.String()
+		}
+	}
+	logs := []PushLog{}
+	if b.core.Gorm().Migrator().HasTable(&PushLog{}) {
+		b.core.Gorm().Order("id DESC").Limit(20).Find(&logs)
 	}
 	b.core.OK(c, gin.H{
 		"enabled": b.core.PluginEnabled(pluginKey), "site_url_valid": siteErr == nil, "key_configured": configured,
 		"key_file_url": keyFileURL, "pending": pending, "failed": failed, "last_submitted_at": lastSubmitted,
+		"settings":    settingsPayload{VisitPush: cfg.VisitPush, VisitBooks: cfg.VisitBooks, VisitChapters: cfg.VisitChapters, VisitIntervalHours: visitIntervalHours(cfg)},
+		"trigger_url": triggerURL, "logs": logs,
 	})
 }
 
@@ -135,8 +157,14 @@ func (b *behavior) generateKey(c *gin.Context) {
 		return
 	}
 	now := time.Now().UTC()
-	cfg = Config{ID: 1, Key: key, UpdatedAt: now}
-	if err := db.Save(&cfg).Error; err != nil {
+	// 只更新密钥，保留实时推送等其他设置；首次生成时访问推送默认对书籍与章节生效（总开关默认关闭）
+	var saveErr error
+	if db.First(&Config{}, 1).Error == nil {
+		saveErr = db.Model(&Config{}).Where("id = ?", 1).Updates(map[string]any{"key": key, "updated_at": now}).Error
+	} else {
+		saveErr = db.Create(&Config{ID: 1, Key: key, VisitBooks: true, VisitChapters: true, VisitIntervalHours: defaultVisitInterval, UpdatedAt: now}).Error
+	}
+	if err := saveErr; err != nil {
 		b.core.Fail(c, http.StatusInternalServerError, "保存 IndexNow 密钥失败")
 		return
 	}

@@ -23,9 +23,16 @@ const (
 
 // Config is private plugin data. The key is public only through the verified root key file.
 type Config struct {
-	ID        uint      `gorm:"primaryKey" json:"-"`
-	Key       string    `gorm:"size:128;not null" json:"-"`
-	UpdatedAt time.Time `json:"-"`
+	ID  uint   `gorm:"primaryKey" json:"-"`
+	Key string `gorm:"size:128;not null" json:"-"`
+	// 访问时推送：公开书籍详情 / 章节被访问时立即推送该页，同一地址在 VisitIntervalHours 内只推一次
+	VisitPush          bool `gorm:"not null;default:false" json:"-"`
+	VisitBooks         bool `gorm:"not null;default:false" json:"-"`
+	VisitChapters      bool `gorm:"not null;default:false" json:"-"`
+	VisitIntervalHours int  `gorm:"not null;default:24" json:"-"`
+	// TriggerToken 触发地址的密钥：访问 /indexnow/trigger?token= 立即推送积压的 URL；为空表示未开启
+	TriggerToken string    `gorm:"size:64;not null;default:''" json:"-"`
+	UpdatedAt    time.Time `json:"-"`
 }
 
 func (Config) TableName() string { return "indexnow_config" }
@@ -50,6 +57,19 @@ type URL struct {
 
 func (URL) TableName() string { return "indexnow_urls" }
 
+// PushLog 一次推送的记录（队列、访问、触发地址或手动），只保留最近 keepLogs 条，供管理页确认推送结果。
+type PushLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Source    string    `gorm:"size:16;not null" json:"source"` // queue | visit | trigger | manual
+	URLCount  int       `gorm:"not null" json:"url_count"`
+	SampleURL string    `gorm:"size:500" json:"sample_url"`
+	Status    string    `gorm:"size:16;not null" json:"status"` // ok | error
+	Message   string    `gorm:"size:500" json:"message"`
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+}
+
+func (PushLog) TableName() string { return "indexnow_logs" }
+
 type submitPayload struct{}
 
 type behavior struct{ core plugincore.Core }
@@ -59,12 +79,12 @@ func init() {
 		Order:       140,
 		Key:         pluginKey,
 		Name:        "IndexNow",
-		Description: "将公开书籍和已发布章节的 URL 变更通知 IndexNow 参与搜索引擎；需要配置站点 HTTPS 地址。",
+		Description: "将公开书籍、已发布章节与分类页的 URL 变更通知 IndexNow 参与搜索引擎；也可在页面被访问时实时推送、用触发地址立即推送积压或在后台手动推送。需要配置站点 HTTPS 地址。",
 		Kind:        plugins.KindFeature,
 		Builtin:     true,
 		EnabledKey:  cfgEnabled,
-		Models:      []any{&Config{}, &URL{}},
-		Tables:      []string{"indexnow_urls", "indexnow_config"},
+		Models:      []any{&Config{}, &URL{}, &PushLog{}},
+		Tables:      []string{"indexnow_logs", "indexnow_urls", "indexnow_config"},
 	})
 	plugincore.RegisterBehavior(&behavior{})
 	plugincore.RegisterJob(jobSubmit, func(core plugincore.Core) func(context.Context, json.RawMessage) error {
@@ -75,10 +95,16 @@ func init() {
 			(&behavior{core: core}).recordAndEnqueue(urls)
 		}
 	})
+	plugincore.OnIndexableURLVisited(func(core plugincore.Core, kind, url string) {
+		if core.PluginEnabled(pluginKey) {
+			(&behavior{core: core}).onVisit(kind, url)
+		}
+	})
 	plugincore.OnJobQueueSweep(func(core plugincore.Core, _ *jobqueue.Queue) {
 		if core.PluginEnabled(pluginKey) {
 			b := &behavior{core: core}
 			b.purgeSubmitted(context.Background(), time.Now().UTC())
+			b.purgeLogs()
 			b.enqueueIfPending(context.Background())
 		}
 	})

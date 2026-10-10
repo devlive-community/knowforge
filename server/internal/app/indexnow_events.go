@@ -88,6 +88,19 @@ func (a *App) indexableBookURLs(book *models.Book) []string {
 	return urls
 }
 
+// notifyBookVisited / notifyDocumentVisited 公开可索引的书籍详情、章节被访问（SSR 取数即算一次访问，含搜索引擎抓取）。
+func (a *App) notifyBookVisited(book *models.Book) {
+	base := a.indexableSiteBase()
+	if base == "" || !indexableBook(book) {
+		return
+	}
+	plugincore.FireIndexableURLVisited(a, "book", base+"/book/detail/"+escapedPathSegment(book.Slug))
+}
+
+func (a *App) notifyDocumentVisited(book *models.Book, doc *models.Document) {
+	plugincore.FireIndexableURLVisited(a, "chapter", a.indexableDocumentURL(book, doc))
+}
+
 func (a *App) indexableDocumentSubtreeURLs(book *models.Book, root *models.Document) []string {
 	if !indexableBook(book) || root == nil {
 		return nil

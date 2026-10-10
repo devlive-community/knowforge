@@ -287,12 +287,16 @@ Authorization: Bearer kf_pat_…
 
 ## IndexNow（内置插件，默认关闭）
 
-启用 IndexNow 插件后，可在管理后台独立的「IndexNow 推送」左侧菜单设置站点 HTTPS 地址、生成密钥并查看推送状态。系统把 Sitemap 中公开书籍及已发布章节的新增、更新和下线 URL 写入持久化队列，批量通知 IndexNow 服务；站点主机变更时会以新主机地址重新排队当前公开 URL。根路径 `/{key}.txt` 在 Go Web 入口直接访问时由 Go 服务返回纯文本；若反向代理将页面请求直达 Next.js，则由 middleware 以同一公开密钥 API 校验并返回纯文本，以兼容不同的代理拓扑。IndexNow 接收通知不代表搜索引擎保证收录；现有 Sitemap 继续作为发现入口，作者主页不在首期范围内。
+启用 IndexNow 插件后，可在管理后台独立的「IndexNow 推送」左侧菜单设置站点 HTTPS 地址、生成密钥并查看推送状态。系统把 Sitemap 中公开书籍、已发布章节及分类页（`/explore?category=<slug>`）的新增、更新和下线 URL 写入持久化队列，批量通知 IndexNow 服务；站点主机变更时会以新主机地址重新排队当前公开 URL。根路径 `/{key}.txt` 在 Go Web 入口直接访问时由 Go 服务返回纯文本；若反向代理将页面请求直达 Next.js，则由 middleware 以同一公开密钥 API 校验并返回纯文本，以兼容不同的代理拓扑。IndexNow 接收通知不代表搜索引擎保证收录；现有 Sitemap 继续作为发现入口，作者主页不在首期范围内。
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/indexnow/key` | 返回当前公开验证密钥 `{key}`，仅插件启用且密钥已生成时可用；Web 同时提供根路径 `/{key}.txt` 验证文件 | 匿名；IndexNow 插件启用 |
-| GET | `/admin/indexnow` | 状态 `{enabled,site_url_valid,key_configured,key_file_url,pending,failed,last_submitted_at}`；不返回密钥本身 | 管理员 + `site:update` |
+| GET/POST | `/indexnow/trigger?token=` | 触发地址：立即推送积压的待推送 URL（每次最多 10 批、每批 1000 条），返回 `{submitted, remaining}`；密钥错误或未开启 404，全站每 10 秒最多一次（否则 429） | 凭触发密钥；IndexNow 插件启用 |
+| GET | `/admin/indexnow` | 状态 `{enabled,site_url_valid,key_configured,key_file_url,pending,failed,last_submitted_at,settings{visit_push,visit_books,visit_chapters,visit_interval_hours},trigger_url,logs[]{id,source: queue\|visit\|trigger\|manual,url_count,sample_url,status: ok\|error,message,created_at}}`（`logs` 为最近 20 次推送）；不返回验证密钥本身 | 管理员 + `site:update` |
+| PUT | `/admin/indexnow/settings` | 访问时推送 `{visit_push, visit_books, visit_chapters, visit_interval_hours(1–720)}`：公开书籍详情 / 已发布章节被读取时立即推送该页，同一地址在间隔内只推送一次（内容有新变化时除外） | 同上 |
+| POST | `/admin/indexnow/trigger` | `{enabled}` 开启（生成新的触发密钥，旧地址立即失效）或关闭触发地址，返回状态 | 同上 |
+| POST | `/admin/indexnow/submit` | `{urls[]}` 手动立即推送本站 HTTPS 页面（完整地址或以 `/` 开头的路径，最多 100 个），返回 `{submitted, invalid[]}`；IndexNow 拒绝时 502 | 同上 |
 | POST | `/admin/indexnow/key` | `{rotate:boolean}` 生成或轮换密钥；轮换需显式传 `rotate:true`。响应只含 `{key_configured,key_file_url}`，密钥通过站点根路径验证文件提供 | 管理员 + `site:update` |
 | POST | `/admin/indexnow/retry` | 将达到自动重试上限的失败 URL 重置并重新排队，返回 `{queued,urls}` | 管理员 + `site:update` |
 

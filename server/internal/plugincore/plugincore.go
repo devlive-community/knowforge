@@ -301,6 +301,28 @@ func FirePublicURLsChanged(core Core, urls []string) {
 	}
 }
 
+// —— SEO：可索引的公开页面被访问（书籍详情、已发布章节），供插件实时通知搜索引擎（如 IndexNow 的「访问时推送」）。——
+// kind 为 book 或 chapter；url 为绝对地址。核心只在页面公开可索引且已配置 HTTPS 站点地址时调用，订阅方须自行限流。
+
+type IndexableURLVisitedHook func(core Core, kind, url string)
+
+var indexableURLVisitedHooks []IndexableURLVisitedHook
+
+// OnIndexableURLVisited 订阅可索引页面的访问。
+func OnIndexableURLVisited(h IndexableURLVisitedHook) {
+	indexableURLVisitedHooks = append(indexableURLVisitedHooks, h)
+}
+
+// FireIndexableURLVisited 由核心在返回可索引页面的数据后调用。
+func FireIndexableURLVisited(core Core, kind, url string) {
+	if url == "" {
+		return
+	}
+	for _, h := range indexableURLVisitedHooks {
+		h(core, kind, url)
+	}
+}
+
 // —— 业务活动事件：核心在业务操作成功后发出（注册、建书、评论、阅读等），插件订阅（如成就评估）。——
 
 // ActivityEvent 一次业务活动；DedupeKey 用于订阅方幂等。

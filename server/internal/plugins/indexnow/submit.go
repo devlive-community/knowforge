@@ -58,10 +58,18 @@ func validSubmittedURL(raw string, base *url.URL) bool {
 		return false
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" {
 		return false
 	}
 	if !strings.EqualFold(u.Host, base.Host) || u.Path == "" || strings.Contains(u.Path, "\\") {
+		return false
+	}
+	// 分类页（书籍分类插件）：/explore?category=<slug>，只允许这一个参数
+	if u.Path == "/explore" {
+		q, err := url.ParseQuery(u.RawQuery)
+		return err == nil && len(q) == 1 && len(q["category"]) == 1 && q.Get("category") != ""
+	}
+	if u.RawQuery != "" {
 		return false
 	}
 	parts := strings.Split(u.EscapedPath(), "/")
@@ -162,20 +170,34 @@ func (b *behavior) retryFailed(ctx context.Context) (int64, error) {
 }
 
 func (b *behavior) submitPending(ctx context.Context, _ json.RawMessage) error {
+	if _, err := b.flushBatch(ctx, sourceQueue); err != nil {
+		return err
+	}
+	var pending int64
+	if b.core.Gorm().Model(&URL{}).Where("version > submitted_version AND attempts < ?", maxAttempts).Count(&pending).Error == nil && pending > 0 {
+		if q := b.core.JobQueue(); q != nil {
+			_, _ = q.Enqueue(ctx, jobSubmit, submitPayload{}, maxAttempts)
+		}
+	}
+	return nil
+}
+
+// flushBatch 认领一批待推送的 URL（最多 maxBatchURLs 条）并提交，返回提交成功的条数；没有待推送的返回 0。
+func (b *behavior) flushBatch(ctx context.Context, source string) (int, error) {
 	if !b.core.PluginEnabled(pluginKey) || !b.core.Gorm().Migrator().HasTable(&URL{}) {
-		return nil
+		return 0, nil
 	}
 	cfg, configured := b.config()
 	if !configured {
-		return nil
+		return 0, nil
 	}
 	base, err := canonicalSiteURL(b.core.GetSetting("site_url"))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	claimed, err := b.claim(ctx, time.Now().UTC())
 	if err != nil || len(claimed) == 0 {
-		return err
+		return 0, err
 	}
 	validClaims := claimed[:0]
 	for _, item := range claimed {
@@ -187,7 +209,7 @@ func (b *behavior) submitPending(ctx context.Context, _ json.RawMessage) error {
 	}
 	claimed = validClaims
 	if len(claimed) == 0 {
-		return nil
+		return 0, nil
 	}
 	urls := make([]string, 0, len(claimed))
 	for _, item := range claimed {
@@ -195,16 +217,12 @@ func (b *behavior) submitPending(ctx context.Context, _ json.RawMessage) error {
 	}
 	if err := post(ctx, endpointURL, base, cfg.Key, urls); err != nil {
 		b.unlock(claimed, err.Error())
-		return err
+		b.logPush(source, urls, err)
+		return 0, err
 	}
 	b.markSubmitted(claimed, time.Now().UTC())
-	var pending int64
-	if b.core.Gorm().Model(&URL{}).Where("version > submitted_version AND attempts < ?", maxAttempts).Count(&pending).Error == nil && pending > 0 {
-		if q := b.core.JobQueue(); q != nil {
-			_, _ = q.Enqueue(ctx, jobSubmit, submitPayload{}, maxAttempts)
-		}
-	}
-	return nil
+	b.logPush(source, urls, nil)
+	return len(urls), nil
 }
 
 // markSubmitted 推送成功：记录已提交的版本（推送期间到达的新版本仍保持待推送）。
