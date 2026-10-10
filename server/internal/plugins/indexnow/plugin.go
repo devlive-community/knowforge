@@ -39,10 +39,13 @@ type URL struct {
 	Version          int64      `gorm:"not null;default:1" json:"-"`
 	SubmittedVersion int64      `gorm:"not null;default:0" json:"-"`
 	LockedAt         *time.Time `gorm:"index" json:"-"`
-	LastSubmittedAt  *time.Time `json:"-"`
-	Attempts         int        `gorm:"not null;default:0" json:"-"`
-	LastError        string     `gorm:"size:1000" json:"-"`
-	UpdatedAt        time.Time  `gorm:"index" json:"-"`
+	// ClaimToken 本次认领的随机令牌：认领后的更新按令牌匹配，不依赖 locked_at 的精度
+	// （MySQL / PostgreSQL 会截断纳秒，按时间相等匹配会落空，导致已推送的 URL 一直处于待推送并被反复提交）。
+	ClaimToken      string     `gorm:"size:32;index;not null;default:''" json:"-"`
+	LastSubmittedAt *time.Time `json:"-"`
+	Attempts        int        `gorm:"not null;default:0" json:"-"`
+	LastError       string     `gorm:"size:1000" json:"-"`
+	UpdatedAt       time.Time  `gorm:"index" json:"-"`
 }
 
 func (URL) TableName() string { return "indexnow_urls" }

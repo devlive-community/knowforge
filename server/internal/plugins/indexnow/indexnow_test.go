@@ -241,3 +241,48 @@ func TestSubmitPreservesURLChangesReceivedDuringRequest(t *testing.T) {
 		t.Fatalf("in-flight content change was lost or left locked: %+v", got)
 	}
 }
+
+// MySQL（DATETIME(3)）与 PostgreSQL 会截断 locked_at 的纳秒部分：推送成功或失败后的更新都不能依赖时间相等，
+// 否则已推送的 URL 会一直处于待推送并在锁过期后被反复提交，失败也不会计入重试次数。
+func TestSubmitSurvivesDatabaseTimePrecisionLoss(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+	}{{"success", http.StatusOK}, {"failure", http.StatusInternalServerError}} {
+		t.Run(tc.name, func(t *testing.T) {
+			core := newTestCore(t, "https://example.com")
+			row := URL{Address: "https://example.com/book/detail/a-book", AddressHash: "hash", Version: 1, UpdatedAt: time.Now().UTC()}
+			if err := core.db.Create(&row).Error; err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				// 模拟数据库按毫秒保存认领时间
+				var claimed URL
+				core.db.First(&claimed, row.ID)
+				if claimed.LockedAt == nil {
+					t.Error("URL should be claimed during the request")
+				} else {
+					core.db.Model(&URL{}).Where("id = ?", row.ID).Update("locked_at", claimed.LockedAt.Truncate(time.Millisecond).Add(-time.Microsecond))
+				}
+				w.WriteHeader(tc.status)
+			}))
+			defer server.Close()
+			oldEndpoint := endpointURL
+			endpointURL = server.URL
+			t.Cleanup(func() { endpointURL = oldEndpoint })
+
+			err := (&behavior{core: core}).submitPending(context.Background(), nil)
+			var got URL
+			core.db.First(&got, row.ID)
+			if got.LockedAt != nil || got.ClaimToken != "" {
+				t.Fatalf("claim must be released: %+v", got)
+			}
+			if tc.status == http.StatusOK && (err != nil || got.SubmittedVersion != 1 || got.LastSubmittedAt == nil) {
+				t.Fatalf("successful push must mark the URL submitted: err=%v row=%+v", err, got)
+			}
+			if tc.status != http.StatusOK && (err == nil || got.Attempts != 1 || got.SubmittedVersion != 0) {
+				t.Fatalf("failed push must count an attempt: err=%v row=%+v", err, got)
+			}
+		})
+	}
+}

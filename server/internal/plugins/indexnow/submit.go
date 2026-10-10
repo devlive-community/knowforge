@@ -3,6 +3,7 @@ package indexnow
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -33,8 +34,14 @@ type indexNowRequest struct {
 }
 
 type claimedURL struct {
-	row    URL
-	lockAt time.Time
+	row   URL
+	token string
+}
+
+func newClaimToken() string {
+	var raw [16]byte
+	_, _ = rand.Read(raw[:])
+	return hex.EncodeToString(raw[:])
 }
 
 func canonicalSiteURL(raw string) (*url.URL, error) {
@@ -190,12 +197,7 @@ func (b *behavior) submitPending(ctx context.Context, _ json.RawMessage) error {
 		b.unlock(claimed, err.Error())
 		return err
 	}
-	now := time.Now().UTC()
-	for _, item := range claimed {
-		b.core.Gorm().Model(&URL{}).
-			Where("id = ? AND locked_at = ?", item.row.ID, item.lockAt).
-			Updates(map[string]any{"submitted_version": item.row.Version, "attempts": 0, "locked_at": nil, "last_error": "", "last_submitted_at": now, "updated_at": now})
-	}
+	b.markSubmitted(claimed, time.Now().UTC())
 	var pending int64
 	if b.core.Gorm().Model(&URL{}).Where("version > submitted_version AND attempts < ?", maxAttempts).Count(&pending).Error == nil && pending > 0 {
 		if q := b.core.JobQueue(); q != nil {
@@ -203,6 +205,17 @@ func (b *behavior) submitPending(ctx context.Context, _ json.RawMessage) error {
 		}
 	}
 	return nil
+}
+
+// markSubmitted 推送成功：记录已提交的版本（推送期间到达的新版本仍保持待推送）。
+func (b *behavior) markSubmitted(claimed []claimedURL, now time.Time) {
+	for _, item := range claimed {
+		if err := b.core.Gorm().Model(&URL{}).
+			Where("id = ? AND claim_token = ?", item.row.ID, item.token).
+			Updates(map[string]any{"submitted_version": item.row.Version, "attempts": 0, "locked_at": nil, "claim_token": "", "last_error": "", "last_submitted_at": now, "updated_at": now}).Error; err != nil {
+			log.Printf("[indexnow] mark URL submitted failed: %v", err)
+		}
+	}
 }
 
 func (b *behavior) claim(ctx context.Context, now time.Time) ([]claimedURL, error) {
@@ -214,16 +227,16 @@ func (b *behavior) claim(ctx context.Context, now time.Time) ([]claimedURL, erro
 	}
 	claimed := make([]claimedURL, 0, len(rows))
 	for _, row := range rows {
-		lockAt := now
+		token := newClaimToken()
 		result := db.Model(&URL{}).
 			Where("id = ? AND version = ? AND attempts < ? AND (locked_at IS NULL OR locked_at < ?)", row.ID, row.Version, maxAttempts, now.Add(-staleClaimAfter)).
-			Update("locked_at", lockAt)
+			Updates(map[string]any{"locked_at": now, "claim_token": token})
 		if result.Error != nil {
 			b.unlock(claimed, result.Error.Error())
 			return nil, result.Error
 		}
 		if result.RowsAffected == 1 {
-			claimed = append(claimed, claimedURL{row: row, lockAt: lockAt})
+			claimed = append(claimed, claimedURL{row: row, token: token})
 		}
 	}
 	return claimed, nil
@@ -231,8 +244,8 @@ func (b *behavior) claim(ctx context.Context, now time.Time) ([]claimedURL, erro
 
 func (b *behavior) skipInvalidClaim(item claimedURL, now time.Time) {
 	db := b.core.Gorm().Model(&URL{})
-	result := db.Where("id = ? AND version = ? AND locked_at = ?", item.row.ID, item.row.Version, item.lockAt).
-		Updates(map[string]any{"submitted_version": item.row.Version, "locked_at": nil, "attempts": 0, "last_error": "", "updated_at": now})
+	result := db.Where("id = ? AND version = ? AND claim_token = ?", item.row.ID, item.row.Version, item.token).
+		Updates(map[string]any{"submitted_version": item.row.Version, "locked_at": nil, "claim_token": "", "attempts": 0, "last_error": "", "updated_at": now})
 	if result.Error != nil {
 		log.Printf("[indexnow] discard URL from previous site host failed: %v", result.Error)
 		return
@@ -240,7 +253,7 @@ func (b *behavior) skipInvalidClaim(item claimedURL, now time.Time) {
 	if result.RowsAffected == 0 {
 		// A new version may have arrived after claim. Release its lock but leave it pending
 		// so the next run can decide against the then-current configured host.
-		if err := db.Where("id = ? AND locked_at = ?", item.row.ID, item.lockAt).Update("locked_at", nil).Error; err != nil {
+		if err := b.core.Gorm().Model(&URL{}).Where("id = ? AND claim_token = ?", item.row.ID, item.token).Updates(map[string]any{"locked_at": nil, "claim_token": ""}).Error; err != nil {
 			log.Printf("[indexnow] release changed URL claim failed: %v", err)
 		}
 	}
@@ -251,8 +264,8 @@ func (b *behavior) unlock(rows []claimedURL, message string) {
 	message = safeError(message)
 	for _, item := range rows {
 		b.core.Gorm().Model(&URL{}).
-			Where("id = ? AND locked_at = ?", item.row.ID, item.lockAt).
-			Updates(map[string]any{"attempts": gorm.Expr("attempts + 1"), "locked_at": nil, "last_error": message, "updated_at": now})
+			Where("id = ? AND claim_token = ?", item.row.ID, item.token).
+			Updates(map[string]any{"attempts": gorm.Expr("attempts + 1"), "locked_at": nil, "claim_token": "", "last_error": message, "updated_at": now})
 	}
 }
 
