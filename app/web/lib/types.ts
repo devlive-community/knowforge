@@ -83,6 +83,7 @@ export interface Book {
   publish_held?: string // 本次保存「公开」被内容审核拦截时的说明（书籍保持私有）
   user?: Pick<User, 'id' | 'username' | 'nickname' | 'display_name' | 'avatar' | 'email' | 'bio' | 'github_url' | 'role'>
   tags?: Tag[]
+  category?: import('@/lib/categories').BookCategoryRef // 书籍分类插件回填（未分类时没有）
   crawling?: boolean
   created_at: string
   updated_at: string

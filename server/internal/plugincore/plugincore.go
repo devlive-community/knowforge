@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -69,6 +70,8 @@ type Core interface {
 	NotifyIndexableBookChange(before, after *models.Book)
 	NotifyIndexableDocumentChange(oldBook, newBook *models.Book, before, after *models.Document)
 	NotifyIndexableVariantGroupsChanged(groups ...string)
+	// NotifyIndexablePaths 站内公开页面路径（如 /explore?category=x）变化：按站点地址推送 IndexNow 并重建 Sitemap。
+	NotifyIndexablePaths(paths ...string)
 	UniqueChildSlug(bookID uint, parentID *uint, base string, excludeID uint) string
 	InstalledChromePath() string
 	CreateContentImportBook(u *models.User, title, description string, chapters []ImportedChapter) (models.Book, error)
@@ -230,6 +233,30 @@ func DecorateBooks(core Core, books []*models.Book) {
 	for _, h := range booksDecorators {
 		h(core, books)
 	}
+}
+
+// —— Sitemap：插件登记额外的公开页面（如分类页），由核心写入 Sitemap 第 0 片与 /sitemap 清单。——
+
+// SitemapPage 一个公开页面：站内路径（以 / 开头，可带查询参数）与最近更新时间（零值表示不输出 lastmod）。
+type SitemapPage struct {
+	Path    string
+	LastMod time.Time
+}
+
+var sitemapSources []func(core Core) []SitemapPage
+
+// RegisterSitemapSource 登记 Sitemap 页面来源（插件未启用时应返回空）。
+func RegisterSitemapSource(f func(core Core) []SitemapPage) {
+	sitemapSources = append(sitemapSources, f)
+}
+
+// SitemapPages 汇总全部插件登记的公开页面。
+func SitemapPages(core Core) []SitemapPage {
+	var out []SitemapPage
+	for _, f := range sitemapSources {
+		out = append(out, f(core)...)
+	}
+	return out
 }
 
 // —— SEO：核心通知插件已变化的公开页面 URL（例如 IndexNow 插件）。——

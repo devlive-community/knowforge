@@ -134,6 +134,14 @@ type Notification struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// BookCategoryRef 书籍所属分类的展示信息：Path 为从顶级分类到该分类的路径（含自身），供面包屑使用。
+type BookCategoryRef struct {
+	ID   uint              `json:"id"`
+	Name string            `json:"name"`
+	Slug string            `json:"slug"`
+	Path []BookCategoryRef `json:"path,omitempty"`
+}
+
 // BookCollaborator 书籍协作者（M14；书籍所有者为 book.user_id，不在此表）
 type BookCollaborator struct {
 	ID          uint       `gorm:"primaryKey" json:"id"`
@@ -543,6 +551,8 @@ type Book struct {
 	User      *User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	// Tags 由代码手动加载（attachBookTags），不走 GORM many2many——避免核心 Book 硬依赖标签插件表。
 	Tags []Tag `gorm:"-" json:"tags,omitempty"`
+	// Category 书籍所属分类（「书籍分类」插件回填，非持久化；未分类或插件未启用时为空）
+	Category *BookCategoryRef `gorm:"-" json:"category,omitempty"`
 	// Crawling 该书是否有进行中的整站采集任务（由 attachCrawlingFlags 按需填充，供列表/详情显示「采集中」）。
 	Crawling   bool           `gorm:"-" json:"crawling,omitempty"`
 	CreatedAt  time.Time      `json:"created_at"`

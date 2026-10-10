@@ -14,7 +14,7 @@ import {
 } from '@/components/icons'
 import { displayName } from '@/lib/users'
 
-export type AdminNavKey = 'system' | 'users' | 'books' | 'documents' | 'tags' | 'achievements' | 'growth' | 'membership' | 'payment' | 'paid' | 'moderation' | 'qa' | 'chapter-guide' | 'read-aloud' | 'book-translations' | 'collect' | 'templates' | 'teams' | 'reports' | 'audit' | 'ai-usage' | 'tasks' | 'languages' | 'settings' | 'plugins' | 'indexnow' | 'upgrade'
+export type AdminNavKey = 'system' | 'users' | 'books' | 'documents' | 'tags' | 'categories' | 'achievements' | 'growth' | 'membership' | 'payment' | 'paid' | 'moderation' | 'qa' | 'chapter-guide' | 'read-aloud' | 'book-translations' | 'collect' | 'templates' | 'teams' | 'reports' | 'audit' | 'ai-usage' | 'tasks' | 'languages' | 'settings' | 'plugins' | 'indexnow' | 'upgrade'
 
 function ReportIcon({ className }: { className?: string }) {
   return <i className={`fa-solid fa-flag ${className || ''}`.trim()} aria-hidden="true" />
@@ -68,6 +68,7 @@ function SidebarNav({ current, onNavigate }: { current: AdminNavKey; onNavigate?
     { key: 'books', labelKey: 'admin.nav.books', href: '/admin/books', icon: BookIcon },
     { key: 'documents', labelKey: 'admin.nav.documents', href: '/admin/documents', icon: ListBulletIcon },
     { key: 'tags', labelKey: 'admin.nav.tags', href: '/admin/tags', icon: ({ className }) => <i className={`fa-solid fa-tags ${className || ''}`} aria-hidden="true" /> },
+    { key: 'categories', labelKey: 'admin.nav.categories', href: '/admin/categories', icon: ({ className }) => <i className={`fa-solid fa-sitemap ${className || ''}`} aria-hidden="true" /> },
     { key: 'achievements', labelKey: 'admin.nav.achievements', href: '/admin/achievements', icon: ({ className }) => <i className={`fa-solid fa-trophy ${className || ''}`} aria-hidden="true" /> },
     { key: 'growth', labelKey: 'admin.nav.growth', href: '/admin/growth', icon: ({ className }) => <i className={`fa-solid fa-ranking-star ${className || ''}`} aria-hidden="true" /> },
     { key: 'membership', labelKey: 'admin.nav.membership', href: '/admin/membership', icon: ({ className }) => <i className={`fa-solid fa-crown ${className || ''}`} aria-hidden="true" /> },
@@ -97,6 +98,7 @@ function SidebarNav({ current, onNavigate }: { current: AdminNavKey; onNavigate?
   const visibleNav = NAV.filter((item) => {
     if (item.key === 'achievements') return site.achievements_enabled === 'true'
     if (item.key === 'tags') return features.includes('tags')
+    if (item.key === 'categories') return features.includes('categories')
     if (item.key === 'growth') return features.includes('growth')
     if (item.key === 'membership') return features.includes('membership')
     if (item.key === 'payment') return features.includes('payment')

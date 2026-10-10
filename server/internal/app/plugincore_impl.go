@@ -61,6 +61,26 @@ func (a *App) CanEditBookContent(u *models.User, b *models.Book) bool {
 }
 func (a *App) GetSetting(key string) string       { return a.getSetting(key) }
 func (a *App) NotifyIndexableURLs(urls ...string) { a.emitIndexableURLs(urls...) }
+
+// NotifyIndexablePaths 站内路径 → 绝对地址后推送；未配置可索引的站点地址时只重建 Sitemap。
+func (a *App) NotifyIndexablePaths(paths ...string) {
+	base := a.indexableSiteBase()
+	if base == "" {
+		a.enqueueSitemapGenerateSoon()
+		return
+	}
+	urls := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if strings.HasPrefix(p, "/") {
+			urls = append(urls, base+p)
+		}
+	}
+	if len(urls) == 0 {
+		a.enqueueSitemapGenerateSoon()
+		return
+	}
+	a.emitIndexableURLs(urls...)
+}
 func (a *App) NotifyIndexableBookChange(before, after *models.Book) {
 	a.notifyBookIndexableChange(before, after)
 }

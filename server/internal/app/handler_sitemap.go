@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"knowforge/server/internal/plugincore"
 )
 
 // sitemapEntry 一条可被搜索引擎抓取的公开 URL（相对路径 + 最近更新时间）。
@@ -54,5 +56,8 @@ func (a *App) SitemapURLs(c *gin.Context) {
 		}
 	}
 
+	for _, p := range plugincore.SitemapPages(a) {
+		entries = append(entries, sitemapEntry{Path: p.Path, LastMod: p.LastMod})
+	}
 	ok(c, gin.H{"entries": entries})
 }

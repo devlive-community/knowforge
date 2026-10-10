@@ -7,6 +7,7 @@ import { Button, Input, Textarea, Select, Switch } from '@/components/ui'
 import { BookIcon, CheckCircleIcon, CloseIcon, ImageIcon, LinkIcon, UploadIcon, EyeIcon } from '@/components/icons'
 import type { Book, BookStatus } from '@/lib/types'
 import { displayName } from '@/lib/users'
+import { categoriesEnabled, categoryOptionLabel, flattenCategories, type CategoryNode } from '@/lib/categories'
 
 const MAX_TITLE = 60
 const MAX_DESC = 1000
@@ -47,6 +48,7 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
   const router = useRouter()
   const { user, site } = useApp()
   const tagsEnabled = (site.feature_plugins || []).includes('tags')
+  const categoriesOn = categoriesEnabled(site)
   const transEnabled = (site.feature_plugins || []).includes('book-translations')
   const versionsEnabled = (site.feature_plugins || []).includes('book-versions')
   const { t } = useTranslation()
@@ -71,6 +73,9 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
   const watermarkText = initial?.watermark_text || ''
   const [tags, setTags] = useState<string[]>((initial?.tags || []).map((t) => t.name))
   const [tagInput, setTagInput] = useState('')
+  // 书籍分类（可选）：'' 为未分类
+  const [categoryId, setCategoryId] = useState(initial?.category ? String(initial.category.id) : '')
+  const [categories, setCategories] = useState<CategoryNode[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -95,6 +100,11 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
     if (e.key === 'Enter') { e.preventDefault(); addTag() }
     else if (e.key === 'Backspace' && !tagInput && tags.length) setTags(tags.slice(0, -1))
   }
+
+  useEffect(() => {
+    if (!categoriesOn) return
+    api<{ items: CategoryNode[] }>('/categories').then((r) => setCategories(r.items || [])).catch(() => {})
+  }, [categoriesOn])
 
   // 标签检索：输入时查现有标签，供作者直接引用（后端 /tags?q=，防抖；排除已选）。
   const [tagSuggest, setTagSuggest] = useState<{ name: string; book_count?: number }[]>([])
@@ -156,6 +166,7 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
         watermark_enabled: watermarkEnabled,
         watermark_text: watermarkText.trim(),
         tags,
+        ...(categoriesOn ? { category_id: Number(categoryId) || 0 } : {}),
       })
     } catch (err) {
       setError((err as Error).message)
@@ -201,6 +212,12 @@ export default function BookForm({ initial, heading, subheading, breadcrumb, sub
                 <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-slate-400">{description.length} / {MAX_DESC}</span>
               </div>
             </RowField>
+            {categoriesOn && categories.length > 0 && (
+              <RowField label={t('bookForm.label.category')} hint={t('bookForm.hint.category')}>
+                <Select searchable value={categoryId} onChange={setCategoryId} placeholder={t('bookForm.placeholder.category')}
+                  options={[{ value: '', label: t('bookForm.category.none') }, ...flattenCategories(categories).map(({ node, depth }) => ({ value: String(node.id), label: categoryOptionLabel(node.name, depth) }))]} />
+              </RowField>
+            )}
             {tagsEnabled && (
             <RowField label={t('bookForm.label.tags')} hint={t('bookForm.hint.tags', { count: MAX_TAGS })}>
               <div className="relative">

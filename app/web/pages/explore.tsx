@@ -16,6 +16,7 @@ import VersionGroupToggle from '@/components/VersionGroupToggle'
 import { ArrowRightIcon, BookIcon, ClockIcon, EyeIcon, GlobeIcon, GridIcon, ListIcon, SearchIcon } from '@/components/icons'
 import { useTranslation } from '@/lib/i18n'
 import type { Book, PageResult, Tag, User } from '@/lib/types'
+import { categoriesEnabled, categoryHref, type CategoryNode } from '@/lib/categories'
 
 interface ExploreProps {
   installed: boolean
@@ -25,6 +26,10 @@ interface ExploreProps {
   keyword: string
   tag: string
   tagName: string
+  /** 书籍分类（分类插件）：当前分类 slug、分类详情（路径与子分类）与分类树 */
+  category: string
+  categoryInfo: CategoryInfo | null
+  categoryTree: CategoryNode[]
   sort: 'latest' | 'hot'
   visibility: string
   /** 版本聚合（URL: versions=grouped，服务端聚合） */
@@ -33,6 +38,12 @@ interface ExploreProps {
   data: PageResult<Book>
   hotTags: Tag[]
   featuredLists: BookList[]
+}
+
+interface CategoryInfo {
+  category: CategoryNode
+  path: CategoryNode[]
+  children: CategoryNode[]
 }
 
 export const getServerSideProps: GetServerSideProps<ExploreProps> = async ({ req, query }) => {
@@ -48,16 +59,20 @@ export const getServerSideProps: GetServerSideProps<ExploreProps> = async ({ req
   const visibility = query.visibility === 'login' && user ? 'login' : ''
   const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1)
   const grouped = query.versions === 'grouped'
+  const category = typeof query.category === 'string' ? query.category.slice(0, 80) : ''
 
-  const [site, data, tags] = await Promise.all([
+  const [site, data, tags, categoryTree, categoryInfo] = await Promise.all([
     getSiteConfig(),
     // 版本聚合走 /books（支持 tag 过滤 + group_versions 服务端聚合）
-    tag && !grouped
+    tag && !grouped && !category
       ? serverApi<PageResult<Book>>(`/tags/${encodeURIComponent(tag)}/books`, { params: { page, page_size: 12 } })
           .catch(() => ({ items: [], total: 0, page: 1, page_size: 12 }) as PageResult<Book>)
-      : serverApi<PageResult<Book>>('/books', { headers: auth, params: { page, page_size: 12, title: keyword || undefined, visibility: visibility || undefined, tag: tag || undefined, group_versions: grouped ? 'true' : undefined } })
+      : serverApi<PageResult<Book>>('/books', { headers: auth, params: { page, page_size: 12, title: keyword || undefined, visibility: visibility || undefined, tag: tag || undefined, category: category || undefined, group_versions: grouped ? 'true' : undefined } })
           .catch(() => ({ items: [], total: 0, page: 1, page_size: 12 }) as PageResult<Book>),
     serverApi<Tag[]>('/tags', { params: { limit: 200 } }).catch(() => [] as Tag[]),
+    // 分类插件未启用时接口不可用，按空处理
+    serverApi<{ items: CategoryNode[] }>('/categories').then((r) => r.items || []).catch(() => [] as CategoryNode[]),
+    category ? serverApi<CategoryInfo>(`/categories/${encodeURIComponent(category)}`).catch(() => null) : Promise.resolve(null),
   ])
   const selectedBookTag = data.items
     .flatMap((book) => book.tags || [])
@@ -65,16 +80,16 @@ export const getServerSideProps: GetServerSideProps<ExploreProps> = async ({ req
   const tagName = tag ? selectedBookTag?.name || tags.find((item) => item.slug === tag)?.name || tag : ''
   // 精选书单（书单插件启用时）：只在不带搜索/标签筛选的第一页展示；没有精选时用收藏最多的书单
   let featuredLists: BookList[] = []
-  if (bookListsEnabled(site) && page === 1 && !keyword && !tag) {
+  if (bookListsEnabled(site) && page === 1 && !keyword && !tag && !category) {
     const listsOf = (params: Record<string, string | number>) => serverApi<PageResult<BookList>>('/book-lists', { params: { ...params, page_size: 4 } })
       .then((r) => r.items || []).catch(() => [] as BookList[])
     featuredLists = await listsOf({ featured: 1 })
     if (featuredLists.length === 0) featuredLists = await listsOf({ sort: 'popular' })
   }
-  return { props: { installed: true, user, site, siteUrl: siteUrlFrom(req), keyword, tag, tagName, sort, visibility, grouped, page, data, hotTags: tags.slice(0, 6), featuredLists } }
+  return { props: { installed: true, user, site, siteUrl: siteUrlFrom(req), keyword, tag, tagName, category: categoryInfo ? category : '', categoryInfo: categoriesEnabled(site) ? categoryInfo : null, categoryTree: categoriesEnabled(site) ? categoryTree : [], sort, visibility, grouped, page, data, hotTags: tags.slice(0, 6), featuredLists } }
 }
 
-export default function Explore({ user, site, siteUrl, keyword, tag, tagName, sort, visibility, grouped, page, data, hotTags, featuredLists }: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function Explore({ user, site, siteUrl, keyword, tag, tagName, category, categoryInfo, categoryTree, sort, visibility, grouped, page, data, hotTags, featuredLists }: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const { t } = useTranslation()
   const siteName = site.site_name || 'KnowForge'
   // 标签插件禁用时，隐藏所有标签入口（热门搜索、标签侧栏、全部标签链接）
@@ -85,7 +100,7 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   // 数据/筛选变化即视为加载完成，复位 loading（含 SSR 软导航返回新 props）
-  useEffect(() => { setLoading(false) }, [data, tag, page, sort, keyword, grouped])
+  useEffect(() => { setLoading(false) }, [data, tag, category, page, sort, keyword, grouped])
 
   // 目标地址与当前不同才进入加载态，避免点击当前项后 loading 卡住
   function navLoad(href: string) {
@@ -96,7 +111,7 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
   // 保证同一时刻只有一个高亮；含标签筛选时三项均不高亮
   const rawSort = typeof router.query.sort === 'string' ? router.query.sort : ''
   const loginOnly = visibility === 'login'
-  const activeMode = tag ? '' : loginOnly ? 'login' : rawSort === 'hot' ? 'hot' : rawSort === 'latest' ? 'latest' : 'all'
+  const activeMode = tag || category ? '' : loginOnly ? 'login' : rawSort === 'hot' ? 'hot' : rawSort === 'latest' ? 'latest' : 'all'
 
   const browseItems = [
     { mode: 'all', label: t('explore.browse.all'), shortLabel: t('explore.browse.allShort'), icon: <BookIcon className="h-4 w-4" />, href: '/explore' },
@@ -111,7 +126,7 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
     return 0
   })
 
-  const sectionTitle = tag ? t('explore.section.byTag', { tag: tagName }) : keyword ? t('explore.section.searchResult', { keyword }) : loginOnly ? t('explore.browse.loginOnly') : t('explore.section.allPublic')
+  const sectionTitle = categoryInfo ? categoryInfo.category.name : tag ? t('explore.section.byTag', { tag: tagName }) : keyword ? t('explore.section.searchResult', { keyword }) : loginOnly ? t('explore.browse.loginOnly') : t('explore.section.allPublic')
 
   const jsonLd = items.length > 0 ? {
     '@context': 'https://schema.org',
@@ -129,6 +144,7 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
     const params = new URLSearchParams()
     if (keyword) params.set('title', keyword)
     if (tag) params.set('tag', tag)
+    if (category) params.set('category', category)
     if (visibility) params.set('visibility', visibility)
     if (sortValue !== 'latest') params.set('sort', sortValue)
     if (isGrouped) params.set('versions', 'grouped')
@@ -147,9 +163,9 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
     <div className="bg-warm">
       <Seo
         siteName={siteName}
-        title={keyword ? t('explore.section.searchResult', { keyword }) : t('explore.seo.title')}
-        description={keyword ? t('explore.seo.searchDescription', { site: siteName, keyword }) : t('explore.seo.description', { site: siteName })}
-        url={`${siteUrl}/explore`}
+        title={categoryInfo ? t('explore.seo.categoryTitle', { category: categoryInfo.category.name }) : keyword ? t('explore.section.searchResult', { keyword }) : t('explore.seo.title')}
+        description={categoryInfo ? (categoryInfo.category.description || t('explore.seo.categoryDescription', { site: siteName, category: categoryInfo.category.name })) : keyword ? t('explore.seo.searchDescription', { site: siteName, keyword }) : t('explore.seo.description', { site: siteName })}
+        url={categoryInfo ? `${siteUrl}${categoryHref(categoryInfo.category.slug)}` : `${siteUrl}/explore`}
         jsonLd={jsonLd}
       />
 
@@ -189,6 +205,13 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
               const item = browseItems.find((entry) => entry.mode === mode)
               if (item) { navLoad(item.href); void router.push(item.href) }
             }} />
+          {categoryTree.length > 0 && <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" data-testid="explore-category-chips">
+            {(categoryInfo && categoryInfo.children.length > 0 ? categoryInfo.children : categoryTree).map((item) => <Link key={item.id} href={categoryHref(item.slug)}
+              onClick={() => navLoad(categoryHref(item.slug))}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-sm ${category === item.slug ? 'border-primary-300 bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+              {item.name} <span className="text-xs text-slate-400">{item.book_count}</span>
+            </Link>)}
+          </div>}
           {tagsEnabled && hotTags.length > 0 && <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
             {hotTags.map((item) => <Link key={item.id} href={`/explore?tag=${encodeURIComponent(item.slug)}`}
               onClick={() => navLoad(`/explore?tag=${encodeURIComponent(item.slug)}`)}
@@ -214,6 +237,11 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
               )
             })}
           </ul>
+
+          {categoryTree.length > 0 && <div className="mt-4 border-t border-slate-100 pt-4" data-testid="explore-categories">
+            <h2 className="mb-2 px-2 text-sm font-semibold text-slate-900">{t('explore.categories.heading')}</h2>
+            <CategoryNav nodes={categoryTree} active={category} activePath={(categoryInfo?.path || []).map((c) => c.id)} onNavigate={navLoad} />
+          </div>}
 
           {tagsEnabled && <div className="mt-4 border-t border-slate-100 pt-4">
             <h2 className="mb-2 px-2 text-sm font-semibold text-slate-900">{t('explore.tags.heading')}</h2>
@@ -256,6 +284,30 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
               </div>
             </div>
           )}
+          {categoryInfo && (
+            <div className="mb-4" data-testid="explore-category-header">
+              <nav className="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
+                <Link href="/explore" onClick={() => navLoad('/explore')} className="hover:text-primary-600">{t('explore.categories.all')}</Link>
+                {categoryInfo.path.slice(0, -1).map((c) => (
+                  <span key={c.id} className="flex items-center gap-1.5">
+                    <span className="text-slate-300">/</span>
+                    <Link href={categoryHref(c.slug)} onClick={() => navLoad(categoryHref(c.slug))} className="hover:text-primary-600">{c.name}</Link>
+                  </span>
+                ))}
+              </nav>
+              {categoryInfo.category.description && <p className="mt-2 text-sm text-slate-500">{categoryInfo.category.description}</p>}
+              {categoryInfo.children.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {categoryInfo.children.map((c) => (
+                    <Link key={c.id} href={categoryHref(c.slug)} onClick={() => navLoad(categoryHref(c.slug))}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-600 transition-colors hover:border-primary-300 hover:text-primary-700">
+                      {c.name} <span className="text-xs text-slate-400">{c.book_count}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-baseline gap-3">
               <h2 className="min-w-0 text-xl font-bold text-ink sm:text-2xl">{sectionTitle}</h2>
@@ -279,7 +331,7 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
             <Loading />
           ) : items.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 py-20 text-center text-sm text-slate-400">
-              {keyword ? t('explore.empty.search') : tag ? t('explore.empty.tag') : t('explore.empty.none')}
+              {keyword ? t('explore.empty.search') : category ? t('explore.empty.category') : tag ? t('explore.empty.tag') : t('explore.empty.none')}
             </div>
           ) : (
             <div className={view === 'grid' ? 'grid gap-5 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]' : 'space-y-4'}>
@@ -294,5 +346,31 @@ export default function Explore({ user, site, siteUrl, keyword, tag, tagName, so
         </section>
       </Container>
     </div>
+  )
+}
+
+// CategoryNav 发现页侧栏的分类树：顶级分类常显，当前分类所在的分支展开（最多三层）。
+function CategoryNav({ nodes, active, activePath, onNavigate, depth = 0 }: {
+  nodes: CategoryNode[]; active: string; activePath: number[]; onNavigate: (href: string) => void; depth?: number
+}) {
+  return (
+    <ul className="space-y-0.5">
+      {nodes.map((c) => {
+        const open = activePath.includes(c.id)
+        const href = categoryHref(c.slug)
+        return (
+          <li key={c.id}>
+            <Link href={href} onClick={() => onNavigate(href)} style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
+              className={`flex items-center justify-between gap-2 rounded-lg py-2 pr-3 text-sm transition-colors ${
+                active === c.slug ? 'bg-primary-50 font-medium text-primary-700' : 'text-slate-600 hover:bg-slate-50'
+              }`}>
+              <span className="truncate">{c.name}</span>
+              <span className="shrink-0 text-xs text-slate-400">{c.book_count}</span>
+            </Link>
+            {open && c.children.length > 0 && <CategoryNav nodes={c.children} active={active} activePath={activePath} onNavigate={onNavigate} depth={depth + 1} />}
+          </li>
+        )
+      })}
+    </ul>
   )
 }

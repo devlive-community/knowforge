@@ -43,6 +43,7 @@ import OfflineBookButton from '@/components/OfflineBookButton'
 import BookListsOnBook from '@/components/booklists/BookListsOnBook'
 import { bookListsEnabled } from '@/lib/booklists'
 import { displayName } from '@/lib/users'
+import { categoriesEnabled, categoryHref } from '@/lib/categories'
 
 interface BookDetailProps {
   installed: boolean
@@ -318,6 +319,8 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
     }
   }
 
+  // 分类插件：面包屑与结构化数据使用分类路径（顶级 → 书籍所在分类），未分类时沿用首个标签
+  const categoryPath = categoriesEnabled(site) && book.category ? (book.category.path?.length ? book.category.path : [book.category]) : []
   const jsonLd = [
     {
       '@context': 'https://schema.org', '@type': 'Book', name: book.title,
@@ -328,7 +331,8 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
     { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
       { '@type': 'ListItem', position: 1, name: siteName, item: siteUrl },
       { '@type': 'ListItem', position: 2, name: t('detail.breadcrumbExplore'), item: `${siteUrl}/explore` },
-      { '@type': 'ListItem', position: 3, name: book.title, item: bookUrl },
+      ...categoryPath.map((c, i) => ({ '@type': 'ListItem', position: 3 + i, name: c.name, item: `${siteUrl}${categoryHref(c.slug)}` })),
+      { '@type': 'ListItem', position: 3 + categoryPath.length, name: book.title, item: bookUrl },
     ] },
   ]
 
@@ -415,7 +419,13 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
         {/* 面包屑 */}
         <nav className="flex min-w-0 items-center gap-1.5 overflow-hidden py-3 text-sm text-slate-500">
           <Link href="/explore" className="shrink-0 hover:text-primary-600">{t('detail.breadcrumbExplore')}</Link>
-          {tagsEnabled && (book.tags || []).slice(0, 1).map((t) => (
+          {categoryPath.map((c) => (
+            <span key={c.id} className="flex min-w-0 items-center gap-1.5" data-testid="book-category-crumb">
+              <span className="text-slate-300">/</span>
+              <Link href={categoryHref(c.slug)} className="truncate hover:text-primary-600">{c.name}</Link>
+            </span>
+          ))}
+          {categoryPath.length === 0 && tagsEnabled && (book.tags || []).slice(0, 1).map((t) => (
             <span key={t.id} className="flex min-w-0 items-center gap-1.5">
               <span className="text-slate-300">/</span>
               <Link href={`/explore?tag=${encodeURIComponent(t.slug)}`} className="truncate hover:text-primary-600">{t.name}</Link>

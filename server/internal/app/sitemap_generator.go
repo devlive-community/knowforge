@@ -13,6 +13,7 @@ import (
 
 	"knowforge/server/internal/config"
 	"knowforge/server/internal/models"
+	"knowforge/server/internal/plugincore"
 )
 
 // sitemap 后台生成：直连数据库构建静态 sitemap 文件（index + 分片），
@@ -155,6 +156,15 @@ func (a *App) buildSitemapShardXML(ctx context.Context, books []models.Book, sit
 	if includeStatic {
 		for _, p := range []string{"", "/explore", "/login", "/register"} {
 			entries = append(entries, entry{loc: siteURL + p})
+		}
+		for _, p := range plugincore.SitemapPages(a) { // 插件登记的公开页面（如分类页）
+			if strings.HasPrefix(p.Path, "/") {
+				e := entry{loc: siteURL + p.Path}
+				if !p.LastMod.IsZero() {
+					e.lastmod = lastmodOf(p.LastMod, p.LastMod)
+				}
+				entries = append(entries, e)
+			}
 		}
 	}
 

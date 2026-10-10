@@ -10,6 +10,7 @@ import (
 	_ "knowforge/server/internal/plugins/booklists"
 	_ "knowforge/server/internal/plugins/booktranslations"
 	_ "knowforge/server/internal/plugins/bookversions"
+	_ "knowforge/server/internal/plugins/categories"
 	_ "knowforge/server/internal/plugins/chapterguide"
 	_ "knowforge/server/internal/plugins/contentcollect"
 	_ "knowforge/server/internal/plugins/embed"
