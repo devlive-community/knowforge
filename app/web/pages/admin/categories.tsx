@@ -5,6 +5,7 @@ import AdminLayout from '@/components/AdminLayout'
 import FeatureGate from '@/components/FeatureGate'
 import IconPicker from '@/components/IconPicker'
 import LocalizedFields, { type ResourceTranslations } from '@/components/LocalizedFields'
+import LocalizedFormTabs, { type LocalizedFormTab } from '@/components/LocalizedFormTabs'
 import ResourceIcon from '@/components/ResourceIcon'
 import { api, formatDate } from '@/lib/api'
 import { useTranslation } from '@/lib/i18n'
@@ -77,6 +78,7 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
   const [translationBusy, setTranslationBusy] = useState(false)
   const { showToast, confirmAction } = useFeedback()
   const [form, setForm] = useState<FormState | null>(null)
+  const [formTab, setFormTab] = useState<LocalizedFormTab>('basic')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
   const rows = useMemo(() => flattenCategories(data.items), [data.items])
@@ -93,6 +95,7 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
   }, [form, rows, data.max_depth])
 
   function edit(n: AdminNode) {
+    setFormTab('basic')
     // 已有翻译默认不重新发布（与会员方案一致），只提交改动过的语言
     const translations = Object.fromEntries(Object.entries(n.translations || {}).map(([code, entry]) => [code, { ...entry, publish: false }]))
     setForm({ id: n.id, translations, slug: n.slug, icon_type: n.icon_type, icon_value: n.icon_value, parent_id: n.parent_id ? String(n.parent_id) : '', sort_order: String(n.sort_order) })
@@ -101,6 +104,12 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
   async function save(e?: FormEvent) {
     e?.preventDefault()
     if (!form) return
+    // 名称在「国际化信息」中按语言填写：默认语言没有名称时切过去提示
+    if (!form.translations[defaultLocale]?.fields.name?.trim()) {
+      setFormTab('i18n')
+      showToast({ message: t('admin.categories.nameRequired'), tone: 'error' })
+      return
+    }
     setSaving(true)
     try {
       const body = { slug: form.slug.trim(), icon_type: form.icon_type, icon_value: form.icon_value, parent_id: Number(form.parent_id) || 0, sort_order: Number(form.sort_order) || 0,
@@ -137,7 +146,7 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
           {t('admin.categories.summary', { count: total, depth: data.max_depth })}
           {data.uncategorized > 0 && <> · <Link href="/admin/categories?tab=books&category=none" className="text-primary-600 hover:underline">{t('admin.categories.uncategorized', { n: data.uncategorized })}</Link></>}
         </p>
-        <Button onClick={() => setForm(emptyForm(defaultLocale))} data-testid="category-create"><i className="fa-solid fa-plus" aria-hidden="true" /> {t('admin.categories.create')}</Button>
+        <Button onClick={() => { setFormTab('basic'); setForm(emptyForm(defaultLocale)) }} data-testid="category-create"><i className="fa-solid fa-plus" aria-hidden="true" /> {t('admin.categories.create')}</Button>
       </div>
       {rows.length === 0 ? <EmptyState>{t('admin.categories.empty')}</EmptyState> : (
         <Card className="overflow-x-auto">
@@ -165,7 +174,7 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
                   <td className="px-4 py-3 tabular-nums text-slate-600">{n.book_count}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
                     {depth + 1 < data.max_depth && (
-                      <Button size="sm" variant="ghost" onClick={() => setForm(emptyForm(defaultLocale, String(n.id)))}>{t('admin.categories.addChild')}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setFormTab('basic'); setForm(emptyForm(defaultLocale, String(n.id))) }}>{t('admin.categories.addChild')}</Button>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => edit(n)}>{t('admin.categories.edit')}</Button>
                     <Button size="sm" variant="ghost" className="text-rose-600" loading={deleting === n.id} disabled={deleting !== null} onClick={() => void remove(n)}>{t('admin.categories.delete')}</Button>
@@ -177,32 +186,37 @@ function TreePanel({ data, reload }: { data: TreeData; reload: () => void }) {
         </Card>
       )}
 
-      <Modal open={form !== null} onClose={() => setForm(null)} title={form?.id ? t('admin.categories.editTitle') : t('admin.categories.createTitle')}
+      <Modal className="max-w-5xl" open={form !== null} onClose={() => setForm(null)} title={form?.id ? t('admin.categories.editTitle') : t('admin.categories.createTitle')}
         footer={<>
           <Button variant="outline" onClick={() => setForm(null)}>{t('common.actions.cancel')}</Button>
           <Button loading={saving} disabled={translationBusy} onClick={() => void save()} data-testid="category-save">{t('common.actions.save')}</Button>
         </>}>
         {form && (
-          <form onSubmit={save} className="space-y-4">
-            <LocalizedFields value={form.translations} onBusyChange={setTranslationBusy} onChange={(translations) => setForm({ ...form, translations })} fields={[
-              { key: 'name', label: t('admin.categories.field.name'), maxLength: 40 },
-              { key: 'description', label: t('admin.categories.field.description'), maxLength: 300, multiline: true },
-            ]} />
-            <Field label={t('admin.categories.field.parent')} hint={t('admin.categories.field.parentHint', { depth: MAX_CATEGORY_DEPTH })}>
-              <Select searchable value={form.parent_id} onChange={(v) => setForm({ ...form, parent_id: v })}
-                options={[{ value: '', label: t('admin.categories.field.root') }, ...parentOptions]} />
-            </Field>
-            <Field label={t('admin.categories.field.slug')} hint={t('admin.categories.field.slugHint')}>
-              <Input value={form.slug} maxLength={60} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="programming" />
-            </Field>
-            <p className="text-xs text-slate-400">{t('admin.categories.field.descriptionHint')}</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={t('admin.categories.field.icon')}>
-                <IconPicker value={{ icon_type: form.icon_type, icon_value: form.icon_value }} onChange={(v) => setForm({ ...form, icon_type: v.icon_type, icon_value: v.icon_value })} fallback="fa-folder" />
-              </Field>
-              <Field label={t('admin.categories.field.sortOrder')} hint={t('admin.categories.field.sortOrderHint')}>
-                <Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} />
-              </Field>
+          <form onSubmit={save} className="space-y-6">
+            <LocalizedFormTabs value={formTab} onChange={setFormTab} translations={form.translations} ariaLabel={t('admin.categories.createTitle')} />
+            <div className={formTab === 'basic' ? 'space-y-5' : 'hidden'}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label={t('admin.categories.field.parent')} hint={t('admin.categories.field.parentHint', { depth: MAX_CATEGORY_DEPTH })}>
+                  <Select searchable value={form.parent_id} onChange={(v) => setForm({ ...form, parent_id: v })}
+                    options={[{ value: '', label: t('admin.categories.field.root') }, ...parentOptions]} />
+                </Field>
+                <Field label={t('admin.categories.field.slug')} hint={t('admin.categories.field.slugHint')}>
+                  <Input value={form.slug} maxLength={60} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="programming" />
+                </Field>
+                <Field label={t('admin.categories.field.icon')}>
+                  <IconPicker value={{ icon_type: form.icon_type, icon_value: form.icon_value }} onChange={(v) => setForm({ ...form, icon_type: v.icon_type, icon_value: v.icon_value })} fallback="fa-folder" />
+                </Field>
+                <Field label={t('admin.categories.field.sortOrder')} hint={t('admin.categories.field.sortOrderHint')}>
+                  <Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} />
+                </Field>
+              </div>
+            </div>
+            <div className={formTab === 'i18n' ? 'space-y-3' : 'hidden'}>
+              <p className="text-xs text-slate-500">{t('admin.categories.field.descriptionHint')}</p>
+              <LocalizedFields value={form.translations} onBusyChange={setTranslationBusy} onChange={(translations) => setForm({ ...form, translations })} fields={[
+                { key: 'name', label: t('admin.categories.field.name'), maxLength: 40 },
+                { key: 'description', label: t('admin.categories.field.description'), maxLength: 300, multiline: true },
+              ]} />
             </div>
           </form>
         )}

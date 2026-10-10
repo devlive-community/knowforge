@@ -6190,4 +6190,8 @@ export const zh: Record<string, string> = {
   'admin.indexnow.source.visit': '访问时推送',
   'admin.indexnow.source.trigger': '触发地址',
   'admin.indexnow.source.manual': '手动推送',
+  'i18n.formTab.basic': '基本信息',
+  'i18n.formTab.translations': '国际化信息',
+  'admin.categories.nameRequired': '请在「国际化信息」中填写默认语言的分类名称',
+  'admin.membership.plan.nameRequired': '请在「国际化信息」中填写默认语言的方案名称',
 }

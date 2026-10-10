@@ -12,6 +12,7 @@ import UserSearchSelect, { type UserLite } from '@/components/UserSearchSelect'
 import UserAvatar from '@/components/UserAvatar'
 import EntitlementEditor from '@/components/EntitlementEditor'
 import LocalizedFields, { type ResourceTranslations } from '@/components/LocalizedFields'
+import LocalizedFormTabs, { type LocalizedFormTab } from '@/components/LocalizedFormTabs'
 import { api, formatDate } from '@/lib/api'
 import { useApp } from '@/lib/auth'
 import { Badge, Button, Card, DateTimePicker, EmptyState, Field, Input, Loading, Modal, Pagination, Select, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
@@ -115,17 +116,20 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
   const [form, setForm] = useState<PlanForm | null>(null)
   const [saving, setSaving] = useState(false)
   const [translationBusy, setTranslationBusy] = useState(false)
+  const [formTab, setFormTab] = useState<LocalizedFormTab>('basic')
   const [deleting, setDeleting] = useState<number | null>(null)
   useEffect(() => {
     api<{ items: EntitlementDef[] }>('/entitlements/definitions').then((r) => setDefs(r.items || [])).catch(() => {})
   }, [])
 
   function openNew() {
+    setFormTab('basic')
     setForm({ icon_type: 'fa', icon_value: 'fa-crown', color: '', status: 'active', sort_order: (plans?.length || 0) + 1, trial_days: '0', group_enabled: false, entitlements: {},
       prices: [newRow({ duration_days: '30' }), newRow({ duration_days: '365' })],
       translations: { [defaultLocale]: { fields: {}, revision: 0, publish: true } } })
   }
   function openEdit(p: MembershipPlan) {
+    setFormTab('basic')
     setForm({ id: p.id, icon_type: p.icon_type || 'fa', icon_value: p.icon_value || 'fa-crown', color: p.color || '', status: p.status,
       sort_order: p.sort_order, trial_days: String(p.trial_days || 0), group_enabled: !!p.group_enabled, entitlements: { ...(p.entitlements || {}) },
       prices: p.prices.map((pr) => newRow({ id: pr.id, duration_days: String(pr.duration_days), price: inputFromCents(pr.price_cents), original: inputFromCents(pr.original_price_cents) })),
@@ -138,6 +142,12 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
 
   async function save() {
     if (!form) return
+    // 方案名称在「国际化信息」中按语言填写：默认语言没有名称时切过去提示
+    if (!form.translations[defaultLocale]?.fields.name?.trim() && !form.id) {
+      setFormTab('i18n')
+      showToast({ message: t('admin.membership.plan.nameRequired'), tone: 'error' })
+      return
+    }
     setSaving(true)
     try {
       await api(form.id ? `/admin/membership/plans/${form.id}` : '/admin/membership/plans', { method: form.id ? 'PUT' : 'POST', body: {
@@ -201,14 +211,18 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
         </div>
       )}
 
-      <Modal className="max-w-3xl" open={form !== null} onClose={() => setForm(null)} title={form?.id ? t('admin.membership.plan.edit') : t('admin.membership.plan.add')}
+      <Modal className="max-w-5xl" open={form !== null} onClose={() => setForm(null)} title={form?.id ? t('admin.membership.plan.edit') : t('admin.membership.plan.add')}
         footer={<><Button variant="outline" onClick={() => setForm(null)}>{t('common.actions.cancel')}</Button><Button loading={saving} disabled={translationBusy} onClick={save}>{t('common.actions.save')}</Button></>}>
         {form && (
-          <div className="space-y-5">
-            <LocalizedFields value={form.translations} onBusyChange={setTranslationBusy} onChange={(translations) => setForm({ ...form, translations })} fields={[
-              { key: 'name', label: t('admin.membership.plan.name'), maxLength: 120 },
-              { key: 'description', label: t('admin.membership.plan.descriptionField'), maxLength: 500, multiline: true },
-            ]} />
+          <div className="space-y-6">
+            <LocalizedFormTabs value={formTab} onChange={setFormTab} translations={form.translations} ariaLabel={t('admin.membership.plan.add')} />
+            <div className={formTab === 'i18n' ? '' : 'hidden'}>
+              <LocalizedFields value={form.translations} onBusyChange={setTranslationBusy} onChange={(translations) => setForm({ ...form, translations })} fields={[
+                { key: 'name', label: t('admin.membership.plan.name'), maxLength: 120 },
+                { key: 'description', label: t('admin.membership.plan.descriptionField'), maxLength: 500, multiline: true },
+              ]} />
+            </div>
+            <div className={formTab === 'basic' ? 'space-y-5' : 'hidden'}>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label={t('admin.membership.plan.status')}>
                 <Select value={form.status} onChange={(v) => setForm({ ...form, status: v as PlanForm['status'] })}
@@ -262,6 +276,7 @@ function PlansPanel({ plans, currency, onChanged }: { plans: PlanItem[] | null; 
                 <EntitlementEditor mode="source" defs={defs} value={form.entitlements} onChange={(entitlements) => setForm({ ...form, entitlements })} />
               </div>
             )}
+            </div>
           </div>
         )}
       </Modal>

@@ -6190,4 +6190,8 @@ export const en: Record<string, string> = {
   'admin.indexnow.source.visit': 'On visit',
   'admin.indexnow.source.trigger': 'Trigger URL',
   'admin.indexnow.source.manual': 'Manual',
+  'i18n.formTab.basic': 'Basics',
+  'i18n.formTab.translations': 'Translations',
+  'admin.categories.nameRequired': 'Enter the category name for the default language under Translations',
+  'admin.membership.plan.nameRequired': 'Enter the plan name for the default language under Translations',
 }
