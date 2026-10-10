@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type Poin
 import { useTranslation } from '@/lib/i18n'
 
 const STAGE = 288 // 裁剪区边长（px）
+const INSET = 12 // 取景框距裁剪区边缘（px），输出的就是取景框内的部分
 const MAX_ZOOM = 4
 const CANVAS_TAG = 'canvas'
 
@@ -10,8 +11,9 @@ export interface CropperHandle {
   export: (size: number, type: string) => Promise<Blob | null>
 }
 
-// ImageCropper 圆形取景的裁剪器：拖动平移、滚轮或缩放条缩放（缩放条为自绘滑块，可键盘操作），图片始终铺满取景框。
-export default function ImageCropper({ src, onReady }: { src: string; onReady: (handle: CropperHandle) => void }) {
+// ImageCropper 正方形取景的裁剪器（头像为圆形遮罩，图标图片为方形）：拖动平移、滚轮或缩放条缩放
+// （缩放条为自绘滑块，可键盘操作），图片始终铺满取景框。
+export default function ImageCropper({ src, onReady, shape = 'circle' }: { src: string; onReady: (handle: CropperHandle) => void; shape?: 'circle' | 'square' }) {
   const { t } = useTranslation()
   const imgRef = useRef<HTMLImageElement | null>(null)
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
@@ -54,7 +56,7 @@ export default function ImageCropper({ src, onReady }: { src: string; onReady: (
         canvas.height = size
         const ctx = canvas.getContext('2d')
         if (!ctx) { resolve(null); return }
-        const k = size / STAGE
+        const k = size / (STAGE - INSET * 2)
         const w = natural.w * scale * k
         const h = natural.h * scale * k
         if (type === 'image/jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, size, size) }
@@ -94,7 +96,7 @@ export default function ImageCropper({ src, onReady }: { src: string; onReady: (
           <img src={src} alt="" draggable={false} className="pointer-events-none absolute left-1/2 top-1/2 max-w-none"
             style={{ width: natural.w * scale, height: natural.h * scale, transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))` }} />
         )}
-        <div className="pointer-events-none absolute inset-3 rounded-full ring-2 ring-white/80" style={{ boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.55)' }} />
+        <div style={{ inset: INSET, boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.55)' }} className={`pointer-events-none absolute ring-2 ring-white/80 ${shape === 'circle' ? 'rounded-full' : 'rounded-lg'}`} />
       </div>
       <div className="flex w-full max-w-xs items-center gap-3">
         <button type="button" onClick={() => applyZoom(zoom - 0.25)} aria-label={t('upload.crop.zoomOut')} className="text-slate-400 hover:text-slate-700">

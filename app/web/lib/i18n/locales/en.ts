@@ -6221,7 +6221,7 @@ export const en: Record<string, string> = {
   'iconPicker.colorOriginal': 'Original colors',
   'iconPicker.customColor': 'Custom color',
   'iconPicker.imageHint': 'PNG, JPG or WebP, up to {max}',
-  'iconPicker.imageTip': 'Square images with a transparent background work best; they\'re scaled to fit.',
+  'iconPicker.imageTip': 'You can crop to a square before uploading; transparent backgrounds work best.',
   'iconPicker.svgHint': 'SVG, up to {max}',
   'iconPicker.svgSafety': 'SVGs are checked before upload: files with scripts, event attributes or dangerous links are rejected.',
   'upload.clickOrDrag': 'Click to upload or drag a file here',
@@ -6250,4 +6250,7 @@ export const en: Record<string, string> = {
   'upload.crop.zoomIn': 'Zoom in',
   'upload.crop.zoomOut': 'Zoom out',
   'upload.crop.confirm': 'Crop and upload',
+  'upload.crop.original': 'Use original',
+  'upload.crop.again': 'Crop again',
+  'upload.crop.iconTitle': 'Crop icon',
 }

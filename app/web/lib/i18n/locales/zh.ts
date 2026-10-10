@@ -6221,7 +6221,7 @@ export const zh: Record<string, string> = {
   'iconPicker.colorOriginal': '保持原色',
   'iconPicker.customColor': '自定义颜色',
   'iconPicker.imageHint': '支持 PNG、JPG、WebP，不超过 {max}',
-  'iconPicker.imageTip': '建议使用透明背景的正方形图片，显示时会按比例缩放。',
+  'iconPicker.imageTip': '上传前可裁剪为正方形；建议使用透明背景的图片。',
   'iconPicker.svgHint': '支持 SVG，不超过 {max}',
   'iconPicker.svgSafety': '上传前会做安全检查：包含脚本、事件属性或危险链接的 SVG 会被拒绝。',
   'upload.clickOrDrag': '点击上传或拖拽文件到此处',
@@ -6250,4 +6250,7 @@ export const zh: Record<string, string> = {
   'upload.crop.zoomIn': '放大',
   'upload.crop.zoomOut': '缩小',
   'upload.crop.confirm': '确定并上传',
+  'upload.crop.original': '使用原图',
+  'upload.crop.again': '重新裁剪',
+  'upload.crop.iconTitle': '裁剪图标',
 }

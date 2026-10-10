@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useRef, useState } from 'react'
 import UserAvatar, { type UserAvatarUser } from '@/components/UserAvatar'
 import { useTranslation } from '@/lib/i18n'
 import { AVATAR_RULE, acceptOf, formatSize } from '@/lib/upload'
-import { Button, Modal } from '@/components/ui'
-import ImageCropper, { type CropperHandle } from './ImageCropper'
+import { Button } from '@/components/ui'
+import CropDialog from './CropDialog'
 import { useUpload } from './useUpload'
 import { ProgressRing, UploadErrorTip } from './UploadVisuals'
 
@@ -24,9 +23,7 @@ export default function AvatarUpload({ user, value, onChange, size = 'lg', actio
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
-  const [cropSrc, setCropSrc] = useState('')
   const [removed, setRemoved] = useState('') // 删除前的头像，可撤销
-  const cropper = useRef<CropperHandle | null>(null)
   const upload = useUpload({
     rule: AVATAR_RULE,
     onUploaded: (url) => { onChange(url); setRemoved(''); setCropFile(null) },
@@ -34,12 +31,6 @@ export default function AvatarUpload({ user, value, onChange, size = 'lg', actio
   const { state } = upload
   const uploading = state.status === 'uploading'
 
-  useEffect(() => {
-    if (!cropFile) { setCropSrc(''); return }
-    const url = URL.createObjectURL(cropFile)
-    setCropSrc(url)
-    return () => URL.revokeObjectURL(url)
-  }, [cropFile])
 
   async function choose(file: File | undefined) {
     if (!file) return
@@ -49,15 +40,6 @@ export default function AvatarUpload({ user, value, onChange, size = 'lg', actio
     setCropFile(file)
   }
 
-  async function confirmCrop() {
-    if (!cropFile || !cropper.current) return
-    const type = cropFile.type === 'image/png' || cropFile.type === 'image/webp' ? 'image/png' : 'image/jpeg'
-    const blob = await cropper.current.export(OUTPUT, type)
-    if (!blob) return
-    await upload.upload(new File([blob], type === 'image/png' ? 'avatar.png' : 'avatar.jpg', { type }))
-  }
-
-  const onReady = useCallback((handle: CropperHandle) => { cropper.current = handle }, [])
   const dim = size === 'lg' ? 'h-24 w-24 text-3xl' : 'h-14 w-14 text-lg'
   const camera = size === 'lg' ? 'h-8 w-8 text-sm' : 'h-6 w-6 text-[11px]'
 
@@ -105,18 +87,8 @@ export default function AvatarUpload({ user, value, onChange, size = 'lg', actio
       )}
       <input ref={inputRef} type="file" hidden accept={acceptOf(AVATAR_RULE)} onChange={(e) => { void choose(e.target.files?.[0]); e.target.value = '' }} />
 
-      {/* 裁剪弹窗挂到 body：头像组件常放在资料表单里，避免弹窗按钮触发外层表单提交 */}
-      {cropFile && createPortal(<Modal open={!!cropFile} onClose={() => { if (!uploading) { setCropFile(null); upload.reset() } }} title={t('upload.crop.title')} className="max-w-lg"
-        footer={<>
-          <Button type="button" variant="outline" disabled={uploading} onClick={() => { setCropFile(null); upload.reset() }}>{t('common.actions.cancel')}</Button>
-          <Button type="button" loading={uploading} onClick={() => void confirmCrop()} data-testid="avatar-crop-confirm">{t('upload.crop.confirm')}</Button>
-        </>}>
-        <div className="relative">
-          {cropSrc && <ImageCropper src={cropSrc} onReady={onReady} />}
-          {uploading && <p className="mt-3 text-center text-xs tabular-nums text-primary-600">{t('upload.state.uploading')} {state.progress}%</p>}
-          <UploadErrorTip error={state.status === 'error' && cropFile ? state.error : null} onClose={upload.reset} />
-        </div>
-      </Modal>, document.body)}
+      <CropDialog file={cropFile} shape="circle" size={OUTPUT} title={t('upload.crop.title')} state={state}
+        onConfirm={(file) => void upload.upload(file)} onCancel={() => { setCropFile(null); upload.reset() }} />
     </div>
   )
 }

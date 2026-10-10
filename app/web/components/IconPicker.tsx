@@ -6,16 +6,18 @@ import { IMAGE_RULE, SVG_RULE, acceptOf, formatSize } from '@/lib/upload'
 import { Button, Input, Loading, Modal, SegmentedTabs } from '@/components/ui'
 import ResourceIcon from './ResourceIcon'
 import UploadDropzone from './upload/UploadDropzone'
+import CropDialog from './upload/CropDialog'
 import { useUpload } from './upload/useUpload'
 
 export interface IconValue { icon_type: string; icon_value: string }
 
 type PanelTab = 'library' | 'image' | 'svg'
 const PAGE = 210 // 图标库每次渲染的数量（「显示更多」继续）
+const ICON_IMAGE_SIZE = 256 // 裁剪后图标图片的边长
 
 // IconPicker 通用图标选择：左侧预览 + 右侧「选择图标」按钮，点击打开选择面板——
 //   图标库：Font Awesome 图标，支持搜索、分组筛选与颜色；
-//   上传图片：PNG / JPG / WebP；
+//   上传图片：PNG / JPG / WebP，上传前裁剪为正方形（也可使用原图）；
 //   上传 SVG：安全检查、预览，可设置单色颜色。
 // 受控组件：value / onChange 为 { icon_type, icon_value }（颜色编码在 icon_value 中，见 lib/icons.ts）。
 // 可放在 <form> 中：按钮都是 type="button"，面板经 portal 渲染，不会触发外层表单提交。
@@ -77,7 +79,17 @@ function IconPanel({ value, fallback, onClose, onPick }: {
   useEffect(() => { setLimit(PAGE) }, [group, query])
 
   const results = useMemo(() => (catalog ? searchIcons(catalog, group, query) : []), [catalog, group, query])
-  const image = useUpload({ rule: IMAGE_RULE, onUploaded: (url) => setDraft({ type: 'image', value: url, color: '' }) })
+  const [cropFile, setCropFile] = useState<File | null>(null) // 待裁剪的图片
+  const [lastImage, setLastImage] = useState<File | null>(null) // 最近选择的原图，可重新裁剪
+  const image = useUpload({ rule: IMAGE_RULE, onUploaded: (url) => { setDraft({ type: 'image', value: url, color: '' }); setCropFile(null) } })
+
+  async function chooseImage(file: File) {
+    const invalid = await image.check(file)
+    if (invalid) { image.fail(invalid, file.name); return }
+    image.reset()
+    setLastImage(file)
+    setCropFile(file)
+  }
   const svg = useUpload({ rule: SVG_RULE, svg: true, onUploaded: (url) => setDraft((d) => ({ type: 'svg', value: url, color: d.type === 'svg' ? d.color : '' })) })
 
   const canColor = draft.type === 'fa' || draft.type === 'svg'
@@ -174,10 +186,19 @@ function IconPanel({ value, fallback, onClose, onPick }: {
 
         {tab === 'image' && (
           <div className="space-y-4">
-            <UploadDropzone state={image.state} accept={acceptOf(IMAGE_RULE)} onFile={(f) => void image.upload(f)} onDismissError={image.reset} testId="icon-image-drop"
+            <UploadDropzone state={cropFile ? { status: 'idle', progress: 0, fileName: '', error: null } : image.state} accept={acceptOf(IMAGE_RULE)} onFile={(f) => void chooseImage(f)} onDismissError={image.reset} testId="icon-image-drop"
               title={t('upload.clickOrDrag')} hint={t('iconPicker.imageHint', { max: formatSize(IMAGE_RULE.maxBytes) })}
               preview={draft.type === 'image' ? <ResourceIcon iconType="image" iconValue={draft.value} className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl" /> : undefined} />
-            <p className="text-xs text-slate-400">{t('iconPicker.imageTip')}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-slate-400">{t('iconPicker.imageTip')}</p>
+              {lastImage && draft.type === 'image' && (
+                <Button type="button" size="sm" variant="outline" onClick={() => { image.reset(); setCropFile(lastImage) }} data-testid="icon-image-recrop">
+                  <i className="fa-solid fa-crop-simple" aria-hidden="true" /> {t('upload.crop.again')}
+                </Button>
+              )}
+            </div>
+            <CropDialog file={cropFile} shape="square" size={ICON_IMAGE_SIZE} title={t('upload.crop.iconTitle')} state={image.state} allowOriginal
+              onConfirm={(f) => void image.upload(f)} onCancel={() => { setCropFile(null); image.reset() }} />
           </div>
         )}
 
