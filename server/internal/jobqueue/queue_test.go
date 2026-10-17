@@ -337,12 +337,12 @@ func TestQueueLongJobsDoNotBlockOtherJobs(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() { queue.Start(ctx); close(stopped) }()
 	<-started
-	deadline := time.Now().Add(5 * time.Second)
-	for sent.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
-	}
 	var stored models.BackgroundJob
-	db.First(&stored, email.ID)
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if db.First(&stored, email.ID); stored.Status == StatusSucceeded {
+			break
+		}
+	}
 	if sent.Load() != 1 || stored.Status != StatusSucceeded {
 		t.Fatalf("email job should run while the long job is still running: sent=%d status=%s", sent.Load(), stored.Status)
 	}
