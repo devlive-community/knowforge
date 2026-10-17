@@ -9,6 +9,7 @@ export interface BookLite { id: number; title: string; slug: string }
 // BookSearchSelect 通用「可搜索书籍选择器」：输入关键字实时查后端并下拉候选，点选即回调。
 // 各处（复制章节到书籍、协议/帮助章节选择、后台等）统一复用，避免各自实现固定下拉。
 // endpoint/searchParam/baseParams 用于适配不同列表接口（/books 用 title 搜、/admin/books 用 q 搜）。
+// pinned 为固定排在最前的书（如「本书」），按关键字在本地过滤，不与搜索结果重复。
 export default function BookSearchSelect({
   value,
   onChange,
@@ -18,6 +19,7 @@ export default function BookSearchSelect({
   placeholder,
   excludeId,
   labelFor,
+  pinned,
 }: {
   value: BookLite | null
   onChange: (book: BookLite | null) => void
@@ -27,6 +29,7 @@ export default function BookSearchSelect({
   placeholder?: string
   excludeId?: number
   labelFor?: (book: BookLite) => ReactNode
+  pinned?: BookLite[]
 }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState(value?.title || '')
@@ -57,12 +60,16 @@ export default function BookSearchSelect({
     const h = setTimeout(() => {
       setLoading(true)
       api<{ items: BookLite[] }>(endpoint, { params: { ...(baseParams || {}), [searchParam]: query.trim(), page_size: 20 } })
-        .then((r) => setResults((r.items || []).filter((b) => b.id !== excludeId)))
+        .then((r) => setResults((r.items || []).filter((b) => b.id !== excludeId && !pinned?.some((p) => p.id === b.id))))
         .catch(() => setResults([]))
         .finally(() => setLoading(false))
     }, 250)
     return () => clearTimeout(h)
   }, [query, open, endpoint, searchParam, excludeId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const keyword = query.trim().toLowerCase()
+  const pinnedShown = (pinned || []).filter((b) => !keyword || b.title.toLowerCase().includes(keyword) || b.slug.toLowerCase().includes(keyword) || b.title === value?.title)
+  const options = [...pinnedShown, ...results]
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -82,12 +89,12 @@ export default function BookSearchSelect({
       {open && pos && typeof document !== 'undefined' && createPortal(
         <div ref={menuRef} className="fixed z-[200] max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg"
           style={{ top: pos.top, left: pos.left, width: pos.width }}>
-          {loading ? (
+          {loading && options.length === 0 ? (
             <div className="px-3 py-2 text-sm text-slate-400">{t('common.book.searching')}</div>
-          ) : results.length === 0 ? (
+          ) : options.length === 0 ? (
             <div className="px-3 py-2 text-sm text-slate-400">{t('common.book.noResult')}</div>
           ) : (
-            results.map((b) => (
+            options.map((b) => (
               <button key={b.id} type="button" onMouseDown={(e) => { e.preventDefault(); onChange(b); setQuery(b.title); setOpen(false) }}
                 className="block w-full truncate px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
                 {labelFor ? labelFor(b) : <>{b.title} <span className="text-xs text-slate-400">/{b.slug}</span></>}

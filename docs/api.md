@@ -967,7 +967,7 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | GET | `/import/browser-available` | 无头浏览器插件是否已安装（`{available}`），供前端联动禁用「浏览器渲染」采集模式 | `book:import` |
 | POST | `/books/:id/documents/import-web` | JSON `{url,title?,render_mode?,include_source?,parent_id?,sort_order?}`；复用网页正文提取与 SPA 渲染，剔除页头、页脚、导航、侧栏、广告、分享、评论、相关推荐与弹窗，直接在可编辑书籍内创建草稿章节。`include_source`（默认 false）为真时在正文末尾附加「来源：原始网页」链接 | `document:create` |
 | POST | `/import/web-content` | JSON `{url,render_mode?,include_source?}`；复用同款网页正文提取，**不建文档**，返回 `{title,markdown,source_url,render_mode}`（`include_source` 默认 false，为真则 markdown 末尾附来源链接），供写作编辑器「采集网页」插入到当前章节光标处 | `document:create` |
-| POST | `/books/:id/documents/copy` | JSON `{target_book_id, doc_ids:[...]}`；将选中章节**含各自子章节树**复制到目标书籍（需对目标书有编辑权），保持父子结构，顶层追加到目标目录末尾，复制为草稿。返回 `{copied_documents,target_book_id,target_slug}` | `document:create`（+ 目标书编辑权） |
+| POST | `/books/:id/documents/copy` | JSON `{target_book_id, doc_ids:[...], move?, target_parent_id?}`；将选中章节**含各自子章节树**复制到目标书籍（需对目标书有编辑权），保持父子结构，顶层追加到目标位置末尾（`target_parent_id` 为目标书的章节，缺省为顶层；不属于目标书时 400）。`move=true` 时复制后从源书删除（需源书编辑权）；目标为本书时直接调整父章节与排序，章节 ID、地址、修订与评论保留，移到所选章节自身或其子章节下返回 400。返回 `{copied_documents,moved,target_book_id,target_slug}` | `document:create`（+ 目标书编辑权） |
 
 > 安全边界：网页导入只允许 HTTP(S)，拒绝 localhost、内网、回环及链路本地地址；重定向和浏览器发起的子资源请求也执行同一校验。动态网页渲染依赖后台「无头浏览器」插件（与 PDF 导出共用同一 chrome-headless-shell），未安装则浏览器渲染不可用。所有导入章节都会生成 `create` 初始版本。PDF/ZIP 后台任务成功后立即删除源文件；最终失败任务保留源文件以供重试，超过 30 天由启动清理回收。
 

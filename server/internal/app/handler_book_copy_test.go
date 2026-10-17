@@ -131,7 +131,54 @@ func TestCopyBook(t *testing.T) {
 		t.Fatalf("单条复制 C 应 1 章: %d %v", status, cp2)
 	}
 	_, ttree2 := req(http.MethodGet, fmt.Sprintf("/api/v1/books/%d/documents", targetID), nil, token)
-	if len(ttree2["data"].([]any)) != 2 {
-		t.Fatalf("目标书顶层应为 A、C 两章，实际 %d", len(ttree2["data"].([]any)))
+	ttop2 := ttree2["data"].([]any)
+	if len(ttop2) != 2 {
+		t.Fatalf("目标书顶层应为 A、C 两章，实际 %d", len(ttop2))
+	}
+
+	// 复制到目标书的指定父章节下：C 放到目标书的 A 下（A 已有子章节 B，追加在其后）
+	targetA := int(ttop2[0].(map[string]any)["id"].(float64))
+	status, cp3 := req(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents/copy", bookID),
+		map[string]any{"target_book_id": targetID, "doc_ids": []int{c1}, "target_parent_id": targetA}, token)
+	if status != http.StatusOK {
+		t.Fatalf("复制到指定父章节失败: %d %v", status, cp3)
+	}
+	_, ttree3 := req(http.MethodGet, fmt.Sprintf("/api/v1/books/%d/documents", targetID), nil, token)
+	under := ttree3["data"].([]any)[0].(map[string]any)["children"].([]any)
+	if len(under) != 2 || under[1].(map[string]any)["title"] != "C" {
+		t.Fatalf("C 应追加到目标书 A 的子章节末尾，实际 %v", under)
+	}
+	if status, _ := req(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents/copy", bookID),
+		map[string]any{"target_book_id": targetID, "doc_ids": []int{c1}, "target_parent_id": a1}, token); status != http.StatusBadRequest {
+		t.Fatalf("目标父章节不属于目标书时应 400，实际 %d", status)
+	}
+
+	// 本书内移动：C 移到 A 下，章节 ID 不变（不是复制后删除）；不能移动到自身子章节下
+	status, mv := req(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents/copy", bookID),
+		map[string]any{"target_book_id": bookID, "doc_ids": []int{c1}, "move": true, "target_parent_id": a1}, token)
+	if status != http.StatusOK || mv["data"].(map[string]any)["moved"] != true {
+		t.Fatalf("本书内移动失败: %d %v", status, mv)
+	}
+	_, stree := req(http.MethodGet, fmt.Sprintf("/api/v1/books/%d/documents", bookID), nil, token)
+	stop := stree["data"].([]any)
+	if len(stop) != 1 {
+		t.Fatalf("移动后原书顶层应只剩 A，实际 %d", len(stop))
+	}
+	achildren2 := stop[0].(map[string]any)["children"].([]any)
+	if len(achildren2) != 2 || int(achildren2[1].(map[string]any)["id"].(float64)) != c1 {
+		t.Fatalf("C 应以原 ID 移到 A 的子章节末尾，实际 %v", achildren2)
+	}
+	if status, _ := req(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents/copy", bookID),
+		map[string]any{"target_book_id": bookID, "doc_ids": []int{a1}, "move": true, "target_parent_id": c1}, token); status != http.StatusBadRequest {
+		t.Fatalf("移动到自身子章节下应 400，实际 %d", status)
+	}
+	// 移回顶层
+	if status, _ := req(http.MethodPost, fmt.Sprintf("/api/v1/books/%d/documents/copy", bookID),
+		map[string]any{"target_book_id": bookID, "doc_ids": []int{c1}, "move": true}, token); status != http.StatusOK {
+		t.Fatalf("移回顶层失败: %d", status)
+	}
+	_, stree2 := req(http.MethodGet, fmt.Sprintf("/api/v1/books/%d/documents", bookID), nil, token)
+	if top := stree2["data"].([]any); len(top) != 2 || int(top[1].(map[string]any)["id"].(float64)) != c1 {
+		t.Fatalf("C 应回到顶层末尾，实际 %v", top)
 	}
 }

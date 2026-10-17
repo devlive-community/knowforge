@@ -402,18 +402,19 @@ export default function BookSettingsChapters({ book }: InferGetServerSidePropsTy
       </div>
 
       {copyIds !== null && (
-        <CopyToBookDialog sourceBookId={book.id} sourceBookSlug={book.slug} docIds={copyIds} mode={copyMode}
+        <CopyToBookDialog sourceBook={{ id: book.id, title: book.title, slug: book.slug }} sourceDocs={docs || []} docIds={copyIds} mode={copyMode}
           onClose={() => setCopyIds(null)}
-          onDone={() => { setCopyIds(null); setSelected(new Set()) }} />
+          onDone={() => { setCopyIds(null); setSelected(new Set()); load() }} />
       )}
     </BookSettingsLayout>
   )
 }
 
-// CopyToBookDialog 将选定章节（含子章节）复制或移动到目标书籍。
-function CopyToBookDialog({ sourceBookId, docIds, mode, onClose, onDone }: {
-  sourceBookId: number
-  sourceBookSlug: string
+// CopyToBookDialog 将选定章节（含子章节）复制或移动到目标书籍的指定位置。目标书籍默认是本书（列表第一项）：
+// 本书内移动只调整父章节，复制则在本书内建副本；目标位置可选顶层或任一章节（可搜索）。
+function CopyToBookDialog({ sourceBook, sourceDocs, docIds, mode, onClose, onDone }: {
+  sourceBook: BookLite
+  sourceDocs: Document[]
   docIds: number[]
   mode: 'copy' | 'move'
   onClose: () => void
@@ -421,16 +422,50 @@ function CopyToBookDialog({ sourceBookId, docIds, mode, onClose, onDone }: {
 }) {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
-  const [target, setTarget] = useState<BookLite | null>(null)
+  const [target, setTarget] = useState<BookLite | null>(sourceBook)
+  const [targetDocs, setTargetDocs] = useState<Document[] | null>(sourceDocs)
+  const [parent, setParent] = useState('')
   const [saving, setSaving] = useState(false)
   const isMove = mode === 'move'
+  const sameBook = target?.id === sourceBook.id
+
+  useEffect(() => {
+    setParent('')
+    if (!target) { setTargetDocs(null); return }
+    if (target.id === sourceBook.id) { setTargetDocs(sourceDocs); return }
+    setTargetDocs(null)
+    let alive = true
+    api<Document[]>(`/books/${target.id}/documents`).then((d) => { if (alive) setTargetDocs(d || []) }).catch(() => { if (alive) setTargetDocs([]) })
+    return () => { alive = false }
+  }, [target?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 目标位置候选：本书内移动时排除所选章节及其子章节（不能移到自身之下）
+  const parentOptions = useMemo(() => {
+    const blocked = new Set<number>()
+    if (isMove && sameBook) {
+      const walk = (d: Document, inside: boolean) => {
+        const hit = inside || docIds.includes(d.id)
+        if (hit) blocked.add(d.id)
+        ;(d.children || []).forEach((c) => walk(c, hit))
+      }
+      sourceDocs.forEach((d) => walk(d, false))
+    }
+    const out: { value: string; label: string }[] = [{ value: '', label: t('bookSettings.chapters.copy.parentTop') }]
+    const visit = (list: Document[], depth: number) => list.forEach((d) => {
+      if (blocked.has(d.id)) return
+      out.push({ value: String(d.id), label: `${'　'.repeat(depth)}${depth > 0 ? '└ ' : ''}${d.title}` })
+      visit(d.children || [], depth + 1)
+    })
+    visit(targetDocs || [], 0)
+    return out
+  }, [targetDocs, isMove, sameBook, docIds, sourceDocs, t])
 
   async function submit() {
     if (!target) return
     setSaving(true)
     try {
-      const r = await api<{ copied_documents: number; target_slug: string }>(`/books/${sourceBookId}/documents/copy`, {
-        method: 'POST', body: { target_book_id: target.id, doc_ids: docIds, move: isMove },
+      const r = await api<{ copied_documents: number; target_slug: string }>(`/books/${sourceBook.id}/documents/copy`, {
+        method: 'POST', body: { target_book_id: target.id, doc_ids: docIds, move: isMove, ...(parent ? { target_parent_id: Number(parent) } : {}) },
       })
       showToast({ message: t(isMove ? 'bookSettings.chapters.move.done' : 'bookSettings.chapters.copy.done', { count: r.copied_documents }), tone: 'success' })
       onDone()
@@ -441,17 +476,27 @@ function CopyToBookDialog({ sourceBookId, docIds, mode, onClose, onDone }: {
     }
   }
 
+  const desc = isMove ? (sameBook ? 'bookSettings.chapters.move.descSame' : 'bookSettings.chapters.move.desc') : 'bookSettings.chapters.copy.desc'
   return (
     <Modal open onClose={onClose} title={t(isMove ? 'bookSettings.chapters.move.title' : 'bookSettings.chapters.copy.title')}
-      footer={<><Button variant="outline" onClick={onClose}>{t('common.actions.cancel')}</Button><Button loading={saving} disabled={!target} onClick={submit}>{t(isMove ? 'bookSettings.chapters.move.confirm' : 'bookSettings.chapters.copy.confirm')}</Button></>}>
+      footer={<><Button variant="outline" onClick={onClose}>{t('common.actions.cancel')}</Button><Button loading={saving} disabled={!target || targetDocs === null} onClick={submit}>{t(isMove ? 'bookSettings.chapters.move.confirm' : 'bookSettings.chapters.copy.confirm')}</Button></>}>
       <div className="space-y-4">
-        <p className="text-sm text-slate-500">{t(isMove ? 'bookSettings.chapters.move.desc' : 'bookSettings.chapters.copy.desc', { count: docIds.length })}</p>
+        <p className="text-sm text-slate-500">{t(desc, { count: docIds.length })}</p>
         <Field label={t('bookSettings.chapters.copy.target')}>
-          {/* 通用可搜索书籍选择器：查自己的书（含协作），排除源书自身 */}
+          {/* 通用可搜索书籍选择器：查自己的书（含协作），本书固定在第一项 */}
           <BookSearchSelect value={target} onChange={setTarget} endpoint="/books" searchParam="title"
-            baseParams={{ mine: true }} excludeId={sourceBookId} placeholder={t('bookSettings.chapters.copy.targetPlaceholder')} />
+            baseParams={{ mine: true }} pinned={[sourceBook]} placeholder={t('bookSettings.chapters.copy.targetPlaceholder')}
+            labelFor={(b) => b.id === sourceBook.id
+              ? <span className="font-medium text-primary-700">{t('bookSettings.chapters.copy.sameBook', { title: b.title })}</span>
+              : <>{b.title} <span className="text-xs text-slate-400">/{b.slug}</span></>} />
         </Field>
-        <p className="text-xs text-slate-400">{t('bookSettings.chapters.copy.hint')}</p>
+        {target && (
+          <Field label={t('bookSettings.chapters.copy.parent')}>
+            <Select value={parent} onChange={setParent} options={parentOptions} searchable disabled={targetDocs === null}
+              searchPlaceholder={t('bookSettings.chapters.copy.parentSearch')} />
+          </Field>
+        )}
+        <p className="text-xs text-slate-400">{t(isMove && sameBook ? 'bookSettings.chapters.move.hintSame' : 'bookSettings.chapters.copy.hint')}</p>
       </div>
     </Modal>
   )

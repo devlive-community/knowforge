@@ -9,6 +9,7 @@ import (
 	"knowforge/server/internal/plugincore"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type copyBookRequest struct {
@@ -169,11 +170,13 @@ func (a *App) copyBookShell(u *models.User, src *models.Book, title, slug string
 type copyDocumentsRequest struct {
 	TargetBookID uint   `json:"target_book_id"`
 	DocIDs       []uint `json:"doc_ids"`
-	Move         bool   `json:"move"` // true=移动（复制后从源书删除选中章节，需源书写权限）
+	Move         bool   `json:"move"`             // true=移动（复制后从源书删除选中章节，需源书写权限）
+	TargetParent *uint  `json:"target_parent_id"` // 可选：放到目标书籍的该章节下（缺省为顶层）
 }
 
 // CopyDocuments POST /books/:id/documents/copy 将选定章节（含各自子章节树）复制到目标书籍，保持目录结构。
-// 选中父章节即连同其子树一并复制；顶层（父不在复制集合内）追加到目标书籍目录末尾。
+// 选中父章节即连同其子树一并复制；顶层（父不在复制集合内）追加到目标位置（目标父章节或书籍顶层）末尾。
+// 目标为本书时：复制在本书内建副本；移动直接调整父章节（保留章节 ID、修订与评论）。
 func (a *App) CopyDocuments(c *gin.Context) {
 	src, status := a.findBook(c)
 	if src == nil {
@@ -241,10 +244,29 @@ func (a *App) CopyDocuments(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "没有可复制的章节")
 		return
 	}
+	var targetParent *uint
+	if req.TargetParent != nil && *req.TargetParent != 0 {
+		var parent models.Document
+		if err := a.DB.Select("id").Where("id = ? AND book_id = ?", *req.TargetParent, target.ID).First(&parent).Error; err != nil {
+			fail(c, http.StatusBadRequest, "目标父章节不存在")
+			return
+		}
+		targetParent = &parent.ID
+	}
+	if req.Move && target.ID == src.ID {
+		a.moveDocumentsWithinBook(c, src, srcDocs, copySet, targetParent)
+		return
+	}
 
-	// 目标书顶层现有数量，作为追加起始 sort_order
+	// 目标位置现有子章节数量，作为追加起始 sort_order
 	var topCount int64
-	a.DB.Model(&models.Document{}).Where("book_id = ? AND parent_id IS NULL", target.ID).Count(&topCount)
+	siblings := a.DB.Model(&models.Document{}).Where("book_id = ?", target.ID)
+	if targetParent == nil {
+		siblings = siblings.Where("parent_id IS NULL")
+	} else {
+		siblings = siblings.Where("parent_id = ?", *targetParent)
+	}
+	siblings.Count(&topCount)
 	nextTop := int(topCount)
 
 	// 按「源文档顺序」(sort_order,id) 遍历建档，保证复制后顺序与原书一致；完整复制内容与各项配置
@@ -268,6 +290,7 @@ func (a *App) CopyDocuments(c *gin.Context) {
 			Icon: d.Icon, ExternalURL: d.ExternalURL, ExternalNewTab: d.ExternalNewTab,
 		}
 		if d.ParentID == nil || !copySet[*d.ParentID] {
+			nd.ParentID = targetParent
 			nd.SortOrder = nextTop
 			nextTop++
 		} else {
@@ -325,5 +348,56 @@ func (a *App) CopyDocuments(c *gin.Context) {
 	a.recordAudit(c, action, "book", strings.TrimSpace(target.Slug), label, map[string]any{
 		"source_book_id": src.ID, "target_book_id": target.ID, "copied": copied, "moved": moved,
 	})
+	a.publishTreeChanged(c, target.ID)
+	if moved {
+		a.publishTreeChanged(c, src.ID)
+	}
 	ok(c, gin.H{"copied_documents": copied, "moved": moved, "target_book_id": target.ID, "target_slug": target.Slug})
+}
+
+// moveDocumentsWithinBook 在本书内移动选中章节（含子树）到 parent 下（nil 为顶层），追加到末尾并保持原有相对顺序。
+// 只改父章节与排序，章节 ID、地址、修订与评论都保留。
+func (a *App) moveDocumentsWithinBook(c *gin.Context, book *models.Book, docs []models.Document, moving map[uint]bool, parent *uint) {
+	if parent != nil && moving[*parent] {
+		fail(c, http.StatusBadRequest, "不能移动到所选章节自身或其子章节下")
+		return
+	}
+	// 选中子树的根（父不在集合内），按目录顺序
+	var roots []*models.Document
+	for i := range docs {
+		d := &docs[i]
+		if moving[d.ID] && (d.ParentID == nil || !moving[*d.ParentID]) {
+			roots = append(roots, d)
+		}
+	}
+	rootIDs := make([]uint, 0, len(roots))
+	for _, d := range roots {
+		rootIDs = append(rootIDs, d.ID)
+	}
+	var existing int64
+	q := a.DB.Model(&models.Document{}).Where("book_id = ? AND id NOT IN ?", book.ID, rootIDs)
+	if parent == nil {
+		q = q.Where("parent_id IS NULL")
+	} else {
+		q = q.Where("parent_id = ?", *parent)
+	}
+	q.Count(&existing)
+	err := a.DB.Transaction(func(tx *gorm.DB) error {
+		for i, d := range roots {
+			if err := tx.Model(&models.Document{}).Where("id = ?", d.ID).
+				Updates(map[string]any{"parent_id": parent, "sort_order": int(existing) + i}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		fail(c, http.StatusInternalServerError, "移动章节失败")
+		return
+	}
+	a.recordAudit(c, "document.moved", "book", strings.TrimSpace(book.Slug), "移动章节", map[string]any{
+		"source_book_id": book.ID, "target_book_id": book.ID, "copied": len(moving), "moved": true,
+	})
+	a.publishTreeChanged(c, book.ID)
+	ok(c, gin.H{"copied_documents": len(moving), "moved": true, "target_book_id": book.ID, "target_slug": book.Slug})
 }

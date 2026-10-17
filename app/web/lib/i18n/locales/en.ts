@@ -6266,4 +6266,9 @@ export const en: Record<string, string> = {
   'crawlHistory.resume': 'Resume',
   'crawlHistory.resumed': 'Resumed with {n} pages left',
   'detail.collect': 'Collect',
+  'bookSettings.chapters.copy.parent': 'Place under',
+  'bookSettings.chapters.copy.parentTop': 'Top level (end of contents)',
+  'bookSettings.chapters.copy.parentSearch': 'Search chapters',
+  'bookSettings.chapters.move.descSame': 'Move the {count} selected chapters (with their subchapters, keeping the structure) to another place in this book.',
+  'bookSettings.chapters.move.hintSame': 'Only the position changes; chapter links, revision history and comments are kept.',
 }
