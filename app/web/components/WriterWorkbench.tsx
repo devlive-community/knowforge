@@ -2303,7 +2303,7 @@ export default function Writer({ user, suggestOnly = false }: WriterProps) {
                 options={[{ value: 'draft', label: t('book.status.draft') }, { value: 'published', label: t('book.status.published') }, { value: 'archived', label: t('book.status.archived') }]} />
             </Field>
             <Field label={t('writer.parentChapter')}>
-              <Select value={parentId} onChange={(v) => setParentId(v)}
+              <Select value={parentId} onChange={(v) => setParentId(v)} searchable searchPlaceholder={t('writer.parentSearch')}
                 options={[{ value: '', label: t('writer.asTopLevel') }, ...parentCandidates.map((d) => {
                   let depth = 0
                   for (let p = d.parent_id; p; p = byId.get(p)?.parent_id ?? null) depth++

@@ -6271,4 +6271,5 @@ export const zh: Record<string, string> = {
   'bookSettings.chapters.copy.parentSearch': '搜索章节',
   'bookSettings.chapters.move.descSame': '将选定的 {count} 个章节（含各自子章节，保持目录结构）移动到本书的其他位置。',
   'bookSettings.chapters.move.hintSame': '只调整章节位置，章节地址、修订历史与评论都会保留。',
+  'writer.parentSearch': '搜索章节标题',
 }

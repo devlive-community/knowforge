@@ -6271,4 +6271,5 @@ export const en: Record<string, string> = {
   'bookSettings.chapters.copy.parentSearch': 'Search chapters',
   'bookSettings.chapters.move.descSame': 'Move the {count} selected chapters (with their subchapters, keeping the structure) to another place in this book.',
   'bookSettings.chapters.move.hintSame': 'Only the position changes; chapter links, revision history and comments are kept.',
+  'writer.parentSearch': 'Search chapter titles',
 }
