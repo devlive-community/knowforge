@@ -6272,4 +6272,6 @@ export const zh: Record<string, string> = {
   'bookSettings.chapters.move.descSame': '将选定的 {count} 个章节（含各自子章节，保持目录结构）移动到本书的其他位置。',
   'bookSettings.chapters.move.hintSame': '只调整章节位置，章节地址、修订历史与评论都会保留。',
   'writer.parentSearch': '搜索章节标题',
+  'collect.treeDragHint': '拖动可调整顺序，拖到某页中间可放到它下面成为子章节。',
+  'collect.treeReset': '恢复原目录',
 }

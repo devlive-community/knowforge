@@ -6272,4 +6272,6 @@ export const en: Record<string, string> = {
   'bookSettings.chapters.move.descSame': 'Move the {count} selected chapters (with their subchapters, keeping the structure) to another place in this book.',
   'bookSettings.chapters.move.hintSame': 'Only the position changes; chapter links, revision history and comments are kept.',
   'writer.parentSearch': 'Search chapter titles',
+  'collect.treeDragHint': 'Drag to reorder; drop onto the middle of a page to nest it under that page.',
+  'collect.treeReset': 'Reset order',
 }

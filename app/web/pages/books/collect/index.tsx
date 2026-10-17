@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState, type DragEvent } from 'react'
 import { useRouter } from 'next/router'
 import Container from '@/components/Container'
 import Seo from '@/components/Seo'
@@ -9,8 +9,9 @@ import { renderMarkdown } from '@/lib/markdown'
 import { Button, Input, Select, Loading, EmptyState, Checkbox, useFeedback } from '@/components/ui'
 import FeatureGate from '@/components/FeatureGate'
 import { entitlementAllowed } from '@/lib/entitlements'
+import { GripIcon } from '@/components/icons'
+import { crawlSubtreeURLs, moveCrawlNode, type CrawlDropPos, type CrawlNode } from '@/lib/crawl-tree'
 
-interface CrawlNode { url: string; title: string; depth: number; parent_url: string }
 interface PreviewSample { url: string; ok: boolean; title?: string; markdown?: string; error?: string }
 interface PreviewResult { root_url: string; tree: CrawlNode[]; sample: PreviewSample; limit: number }
 type RenderMode = 'auto' | 'static' | 'browser'
@@ -32,6 +33,12 @@ function CollectWizard() {
   const [title, setTitle] = useState('')
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
+  // 目录可拖拽调整：nodes 为当前顺序与层级（先序扁平），提交时按它建章节目录
+  const [nodes, setNodes] = useState<CrawlNode[]>([])
+  const [dragURL, setDragURL] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ url: string; pos: CrawlDropPos } | null>(null)
+  const blocked = useMemo(() => (dragURL ? crawlSubtreeURLs(nodes, dragURL) : null), [dragURL, nodes])
+  const reordered = !!preview && nodes.some((n, i) => n.url !== preview.tree[i]?.url || n.parent_url !== preview.tree[i]?.parent_url)
 
   async function runPreview() {
     if (!/^https?:\/\/.+/.test(url.trim())) { showToast({ message: t('collect.invalidUrl'), tone: 'error' }); return }
@@ -40,6 +47,7 @@ function CollectWizard() {
     try {
       const d = await api<PreviewResult>('/collect/site/preview', { method: 'POST', body: { url: url.trim(), render_mode: renderMode } })
       setPreview(d)
+      setNodes(d.tree)
       setExcluded(new Set())
       try { setTitle(new URL(d.root_url).hostname) } catch { setTitle('') }
     } catch (e) {
@@ -55,7 +63,7 @@ function CollectWizard() {
 
   async function start() {
     if (!preview) return
-    const pages = preview.tree.filter((n) => !excluded.has(n.url))
+    const pages = nodes.filter((n) => !excluded.has(n.url))
     if (pages.length === 0) { showToast({ message: t('collect.noPages'), tone: 'error' }); return }
     setSubmitting(true)
     try {
@@ -71,6 +79,22 @@ function CollectWizard() {
       setSubmitting(false)
     }
   }
+
+  // 放置位置：行的上四分之一放到前面，下四分之一放到后面，中间成为其子页面
+  function dragOver(e: DragEvent<HTMLDivElement>, url: string) {
+    if (!dragURL || blocked?.has(url)) return
+    e.preventDefault()
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = (e.clientY - rect.top) / rect.height
+    const pos: CrawlDropPos = y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside'
+    if (dropTarget?.url !== url || dropTarget.pos !== pos) setDropTarget({ url, pos })
+  }
+  function drop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    if (dragURL && dropTarget) setNodes((list) => moveCrawlNode(list, dragURL, dropTarget.url, dropTarget.pos))
+    endDrag()
+  }
+  function endDrag() { setDragURL(null); setDropTarget(null) }
 
   if (!user) return <Loading className="min-h-[60vh]" label={t('account.common.verifying')} />
   if (!entitlementAllowed(user, 'collect.site', site.collect_site_enabled !== false)) {
@@ -123,24 +147,41 @@ function CollectWizard() {
 
             {/* 目录预览 */}
             <div className="rounded-xl border border-slate-200 bg-white p-5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-slate-900">{t('collect.treeTitle')}</h2>
-                <span className="text-xs text-slate-400">{t('collect.treeCount', { n: included, total: preview.tree.length })}</span>
+                <span className="flex items-center gap-2 text-xs text-slate-400">
+                  {reordered && (
+                    <button type="button" onClick={() => setNodes(preview.tree)} className="text-primary-600 hover:underline">{t('collect.treeReset')}</button>
+                  )}
+                  {t('collect.treeCount', { n: included, total: preview.tree.length })}
+                </span>
               </div>
-              <p className="mt-1 text-xs text-slate-400">{t('collect.treeHint')}</p>
-              {preview.tree.length === 0 ? (
+              <p className="mt-1 text-xs text-slate-400">{t('collect.treeHint')} {t('collect.treeDragHint')}</p>
+              {nodes.length === 0 ? (
                 <EmptyState>{t('collect.treeEmpty')}</EmptyState>
               ) : (
-                <ul className="mt-3 max-h-80 space-y-0.5 overflow-y-auto">
-                  {preview.tree.map((n) => (
-                    <li key={n.url}>
-                      <div className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50"
-                        style={{ paddingLeft: `${n.depth * 18 + 4}px` }}>
-                        <Checkbox checked={!excluded.has(n.url)} onChange={() => toggle(n.url)} ariaLabel={n.title || n.url} />
-                        <span className="cursor-pointer truncate text-slate-700" onClick={() => toggle(n.url)}>{n.title || n.url}</span>
-                      </div>
-                    </li>
-                  ))}
+                <ul className="mt-3 max-h-[28rem] space-y-0.5 overflow-y-auto" data-testid="crawl-tree">
+                  {nodes.map((n) => {
+                    const target = dropTarget?.url === n.url ? dropTarget.pos : null
+                    return (
+                      <li key={n.url}>
+                        <div draggable
+                          onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', n.url); setDragURL(n.url) }}
+                          onDragOver={(e) => dragOver(e, n.url)}
+                          onDragLeave={() => { if (dropTarget?.url === n.url) setDropTarget(null) }}
+                          onDrop={drop}
+                          onDragEnd={endDrag}
+                          className={`group relative flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50 ${dragURL === n.url ? 'opacity-40' : ''} ${target === 'inside' ? 'bg-primary-50 ring-1 ring-primary-300' : ''}`}
+                          style={{ paddingLeft: `${n.depth * 18 + 4}px` }}>
+                          {target === 'before' && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-px h-0.5 rounded bg-primary-500" style={{ left: `${n.depth * 18 + 4}px` }} />}
+                          {target === 'after' && <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 -bottom-px h-0.5 rounded bg-primary-500" style={{ left: `${n.depth * 18 + 4}px` }} />}
+                          <GripIcon className="h-4 w-4 shrink-0 cursor-grab text-slate-300 group-hover:text-slate-400" />
+                          <Checkbox checked={!excluded.has(n.url)} onChange={() => toggle(n.url)} ariaLabel={n.title || n.url} />
+                          <span className="cursor-pointer truncate text-slate-700" onClick={() => toggle(n.url)}>{n.title || n.url}</span>
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
