@@ -52,8 +52,9 @@ const CRAWL_JOBS_PAGE_SIZE = 10
 const CRAWL_PAGES_PAGE_SIZE = 25
 
 const JOB_TONE: Record<string, 'slate' | 'primary' | 'emerald' | 'amber' | 'rose'> = {
-  preview: 'slate', pending: 'primary', running: 'primary', succeeded: 'emerald', partial: 'amber', failed: 'rose',
+  preview: 'slate', pending: 'primary', running: 'primary', succeeded: 'emerald', partial: 'amber', failed: 'rose', canceled: 'slate',
 }
+const ACTIVE_JOB = ['pending', 'running']
 const PAGE_TONE: Record<string, 'slate' | 'primary' | 'emerald' | 'rose'> = {
   pending: 'slate', running: 'primary', success: 'emerald', failed: 'rose', skipped: 'slate',
 }
@@ -71,7 +72,7 @@ export default function CrawlHistoryPage({ book }: InferGetServerSidePropsType<t
   const [detail, setDetail] = useState<CrawlJobDetail | null>(null)
   const [detailPage, setDetailPage] = useState(1)
   const [detailLoadFailed, setDetailLoadFailed] = useState(false)
-  const [busy, setBusy] = useState<number | 'all' | null>(null)
+  const [busy, setBusy] = useState<number | 'all' | 'cancel' | null>(null)
 
   const loadJobs = useCallback(() => {
     setJobs(null)
@@ -80,20 +81,26 @@ export default function CrawlHistoryPage({ book }: InferGetServerSidePropsType<t
       .catch(() => setJobs({ items: [], total: 0, page: 1, page_size: CRAWL_JOBS_PAGE_SIZE }))
   }, [book.id, kind, page])
 
-  const loadDetail = useCallback(() => {
+  // quiet：执行中定时刷新进度时不清空当前内容
+  const loadDetail = useCallback((quiet = false) => {
     if (!jobId) { setDetail(null); setDetailLoadFailed(false); return }
-    setDetail(null)
-    setDetailLoadFailed(false)
+    if (!quiet) { setDetail(null); setDetailLoadFailed(false) }
     api<CrawlJobDetail>(`/collect/jobs/${jobId}`, { params: { page: detailPage, page_size: CRAWL_PAGES_PAGE_SIZE } })
       .then((result) => {
         setDetail(result)
         if (result.pages_page !== detailPage) setDetailPage(result.pages_page)
       })
-      .catch(() => { setDetail(null); setDetailLoadFailed(true) })
+      .catch(() => { if (!quiet) { setDetail(null); setDetailLoadFailed(true) } })
   }, [jobId, detailPage])
 
   useEffect(() => { if (!jobId) loadJobs() }, [jobId, loadJobs])
   useEffect(() => { loadDetail() }, [loadDetail])
+  const detailActive = !!detail && ACTIVE_JOB.includes(detail.job.status)
+  useEffect(() => {
+    if (!detailActive) return
+    const timer = window.setInterval(() => loadDetail(true), 3000)
+    return () => window.clearInterval(timer)
+  }, [detailActive, loadDetail])
 
   const goKind = (k: string) => {
     setPage(1)
@@ -107,8 +114,18 @@ export default function CrawlHistoryPage({ book }: InferGetServerSidePropsType<t
 
   async function retryJob(id: number) {
     setBusy('all')
-    try { const r = await api<{ retried: number }>(`/collect/jobs/${id}/retry`, { method: 'POST' }); showToast({ message: t('crawlHistory.retried', { n: r.retried }), tone: 'success' }); loadDetail() }
+    try {
+      const r = await api<{ retried: number; pending: number }>(`/collect/jobs/${id}/retry`, { method: 'POST' })
+      showToast({ message: r.retried > 0 ? t('crawlHistory.retried', { n: r.retried }) : t('crawlHistory.resumed', { n: r.pending }), tone: 'success' })
+      loadDetail(true)
+    }
     catch (e) { showToast({ title: t('crawlHistory.retryFailed'), message: (e as Error).message, tone: 'error' }) }
+    finally { setBusy(null) }
+  }
+  async function cancelJob(id: number) {
+    setBusy('cancel')
+    try { await api(`/collect/jobs/${id}/cancel`, { method: 'POST' }); showToast({ message: t('crawlHistory.stopped'), tone: 'success' }); loadDetail(true) }
+    catch (e) { showToast({ title: t('crawlHistory.stopFailed'), message: (e as Error).message, tone: 'error' }) }
     finally { setBusy(null) }
   }
   async function retryPage(id: number) {
@@ -139,10 +156,23 @@ export default function CrawlHistoryPage({ book }: InferGetServerSidePropsType<t
             <Badge tone={JOB_TONE[detail.job.status] || 'slate'}>{t(`crawlHistory.status.${detail.job.status}`)}</Badge>
             <span className="truncate text-sm text-slate-600">{detail.job.root_url}</span>
             <span className="ml-auto text-xs text-slate-400">{t('crawlHistory.counts', { success: detail.job.success, failed: detail.job.failed, total: detail.job.total })}</span>
-            {detail.job.failed > 0 && (
+            {detailActive && (
+              <Button size="sm" variant="outline" loading={busy === 'cancel'} onClick={() => cancelJob(detail.job.id)}>
+                <i className="fa-solid fa-stop" aria-hidden="true" /> {t('crawlHistory.stop')}
+              </Button>
+            )}
+            {!detailActive && detail.job.status === 'canceled' && (
+              <Button size="sm" variant="outline" loading={busy === 'all'} onClick={() => retryJob(detail.job.id)}>
+                <i className="fa-solid fa-play" aria-hidden="true" /> {t('crawlHistory.resume')}
+              </Button>
+            )}
+            {!detailActive && detail.job.status !== 'canceled' && detail.job.failed > 0 && (
               <Button size="sm" variant="outline" loading={busy === 'all'} onClick={() => retryJob(detail.job.id)}>{t('crawlHistory.retryAllFailed')}</Button>
             )}
           </div>
+          {detail.job.status === 'canceled' && detail.job.last_error && (
+            <p className="-mt-2 mb-4 text-xs text-slate-500">{detail.job.last_error}</p>
+          )}
           <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {detail.pages.map((p) => (
               <li key={p.id} className="flex items-center gap-3 px-4 py-3" style={{ paddingLeft: `${p.depth * 16 + 16}px` }}>
@@ -154,7 +184,7 @@ export default function CrawlHistoryPage({ book }: InferGetServerSidePropsType<t
                 {p.doc_id > 0 && (
                   <a href={`/book/writer/${encodeURIComponent(book.slug)}`} className="shrink-0 text-slate-300 hover:text-primary-500"><ChevronRightIcon className="h-4 w-4" /></a>
                 )}
-                {p.status === 'failed' && (
+                {p.status === 'failed' && !detailActive && (
                   <Button size="sm" variant="ghost" loading={busy === p.id} onClick={() => retryPage(p.id)}>{t('crawlHistory.retry')}</Button>
                 )}
               </li>

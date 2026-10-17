@@ -203,6 +203,7 @@ type JobHandlerFactory func(core Core) func(ctx context.Context, raw json.RawMes
 type PluginJob struct {
 	Type    string
 	Factory JobHandlerFactory
+	Long    bool // 走长任务通道，执行再久也不阻塞其他后台任务
 }
 
 var pluginJobs []PluginJob
@@ -210,6 +211,11 @@ var pluginJobs []PluginJob
 // RegisterJob 供插件子包在 init() 中登记后台任务类型。
 func RegisterJob(jobType string, factory JobHandlerFactory) {
 	pluginJobs = append(pluginJobs, PluginJob{Type: jobType, Factory: factory})
+}
+
+// RegisterLongJob 同 RegisterJob，用于可能执行很久的任务（如整站采集）。
+func RegisterLongJob(jobType string, factory JobHandlerFactory) {
+	pluginJobs = append(pluginJobs, PluginJob{Type: jobType, Factory: factory, Long: true})
 }
 
 // Jobs 返回全部已登记的插件后台任务（登记顺序）。

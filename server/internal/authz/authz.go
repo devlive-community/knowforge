@@ -118,7 +118,7 @@ const (
 	ConfigManage Permission = "config:manage" // 管理任意系统配置键值对（仅管理员）
 	AuditRead    Permission = "audit:read"    // 查看管理员高风险操作审计日志（仅管理员）
 	TaskRead     Permission = "task:read"     // 查看异步任务状态与失败诊断（仅管理员）
-	TaskRetry    Permission = "task:retry"    // 重新排队失败的异步任务（仅管理员）
+	TaskRetry    Permission = "task:retry"    // 重新排队失败的异步任务、取消卡住的任务（仅管理员）
 
 	// 统计
 	StatsRead Permission = "stats:read" // 读取站点统计（含匿名访问）

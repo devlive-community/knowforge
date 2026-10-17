@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -308,5 +309,128 @@ func TestRunSiteCrawlJob(t *testing.T) {
 		if b := it.(map[string]any); b["crawling"] == true {
 			t.Fatalf("任务完成后不应再带 crawling 标记: %v", b)
 		}
+	}
+}
+
+// crawlFixture 建一个三页的整站采集任务；第二页（/slow）由 fetcher 决定行为。
+func crawlFixture(t *testing.T, e *testEnv, slug string) (models.Book, contentcollect.CrawlJob) {
+	t.Helper()
+	book := models.Book{Title: "采集书 " + slug, Slug: slug, UserID: e.owner.ID, Status: "draft"}
+	e.db.Create(&book)
+	job := contentcollect.CrawlJob{UserID: e.owner.ID, BookID: book.ID, Kind: "site", RootURL: "https://8.8.8.8/", RenderMode: "static", Status: "pending", Total: 3}
+	e.db.Create(&job)
+	e.db.Create(&[]contentcollect.CrawlPage{
+		{JobID: job.ID, URL: "https://8.8.8.8/first", Title: "First", SortOrder: 0, Status: "pending"},
+		{JobID: job.ID, URL: "https://8.8.8.8/slow", Title: "Slow", SortOrder: 1, Status: "pending"},
+		{JobID: job.ID, URL: "https://8.8.8.8/last", Title: "Last", SortOrder: 2, Status: "pending"},
+	})
+	return book, job
+}
+
+const crawlBody = `<main><h1>Page</h1><p>Page body with sufficient length to pass content extraction and produce a proper markdown chapter output here.</p></main>`
+
+// 某页一直不返回时按单页超时记为失败并继续采集后续页面，任务不会卡在执行中。
+func TestSiteCrawlPageTimeoutDoesNotHangJob(t *testing.T) {
+	e := newTestEnv(t)
+	contentcollect.SetCrawlPageTimeout(t, 200*time.Millisecond)
+	contentcollect.SetWebFetchers(t, func(ctx context.Context, target *url.URL) (contentcollect.WebPage, error) {
+		if target.Path == "/slow" {
+			<-ctx.Done()
+			return contentcollect.WebPage{}, ctx.Err()
+		}
+		return contentcollect.WebPage{HTML: `<html><body>` + crawlBody + `</body></html>`, FinalURL: target}, nil
+	}, nil)
+	_, job := crawlFixture(t, e, "crawl-timeout")
+
+	done := make(chan error, 1)
+	go func() { done <- contentcollect.RunSiteCrawlJob(e.app, job.ID) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("采集任务执行失败: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("单页超时后任务应继续并结束")
+	}
+	var got contentcollect.CrawlJob
+	e.db.First(&got, job.ID)
+	if got.Status != "partial" || got.Success != 2 || got.Failed != 1 {
+		t.Fatalf("应为部分成功（2 成功 1 失败），实际 status=%s success=%d failed=%d", got.Status, got.Success, got.Failed)
+	}
+	var slow contentcollect.CrawlPage
+	e.db.Where("job_id = ? AND url = ?", job.ID, "https://8.8.8.8/slow").First(&slow)
+	if slow.Status != "failed" || !strings.Contains(slow.Error, "超时") {
+		t.Fatalf("超时页应记为失败并说明超时，实际 status=%s error=%q", slow.Status, slow.Error)
+	}
+}
+
+// 停止执行中的采集：当前页立即中断，已采集的章节保留，重试后继续采集剩余页面。
+func TestCancelRunningSiteCrawlAndResume(t *testing.T) {
+	e := newTestEnv(t)
+	started := make(chan struct{}, 1)
+	var block atomic.Bool
+	block.Store(true)
+	contentcollect.SetWebFetchers(t, func(ctx context.Context, target *url.URL) (contentcollect.WebPage, error) {
+		if target.Path == "/slow" && block.Load() {
+			started <- struct{}{}
+			<-ctx.Done()
+			return contentcollect.WebPage{}, ctx.Err()
+		}
+		return contentcollect.WebPage{HTML: `<html><body>` + crawlBody + `</body></html>`, FinalURL: target}, nil
+	}, nil)
+	book, job := crawlFixture(t, e, "crawl-cancel")
+	jobPath := "/api/v1/collect/jobs/" + strconv.FormatUint(uint64(job.ID), 10)
+
+	done := make(chan error, 1)
+	go func() { done <- contentcollect.RunSiteCrawlJob(e.app, job.ID) }()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("采集未开始执行第二页")
+	}
+	if status, body := e.do(t, http.MethodPost, jobPath+"/retry", "", e.token); status != http.StatusConflict {
+		t.Fatalf("执行中的任务不应允许重试: %d %v", status, body)
+	}
+	if status, body := e.do(t, http.MethodPost, jobPath+"/cancel", "", e.token); status != http.StatusOK {
+		t.Fatalf("停止采集失败: %d %v", status, body)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("停止后任务应正常结束（不再重试），实际: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("停止后执行中的任务应立即结束")
+	}
+	var got contentcollect.CrawlJob
+	e.db.First(&got, job.ID)
+	if got.Status != "canceled" || got.FinishedAt == nil {
+		t.Fatalf("任务应为已停止，实际 %+v", got)
+	}
+	var pages []contentcollect.CrawlPage
+	e.db.Where("job_id = ?", job.ID).Order("sort_order").Find(&pages)
+	if pages[0].Status != "success" || pages[1].Status != "pending" || pages[2].Status != "pending" {
+		t.Fatalf("已采集页保留成功、其余保持待采集，实际 %s/%s/%s", pages[0].Status, pages[1].Status, pages[2].Status)
+	}
+	if status, _ := e.do(t, http.MethodPost, jobPath+"/cancel", "", e.token); status != http.StatusConflict {
+		t.Fatalf("已停止的任务不能再次停止，实际 %d", status)
+	}
+
+	// 继续：重试已停止的任务会采集剩余页面
+	block.Store(false)
+	if status, body := e.do(t, http.MethodPost, jobPath+"/retry", "", e.token); status != http.StatusOK {
+		t.Fatalf("继续采集失败: %d %v", status, body)
+	}
+	if err := contentcollect.RunSiteCrawlJob(e.app, job.ID); err != nil {
+		t.Fatalf("继续采集执行失败: %v", err)
+	}
+	e.db.First(&got, job.ID)
+	if got.Status != "succeeded" || got.Success != 3 {
+		t.Fatalf("继续后应全部成功，实际 status=%s success=%d", got.Status, got.Success)
+	}
+	var docs int64
+	e.db.Model(&models.Document{}).Where("book_id = ?", book.ID).Count(&docs)
+	if docs != 3 {
+		t.Fatalf("应共建 3 个章节（不重复采集），实际 %d", docs)
 	}
 }

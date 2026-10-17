@@ -981,10 +981,11 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | POST | `/collect/site` | JSON `{root_url,title?,render_mode?,content_selector?,pages:[...]}`；创建草稿书 + 采集任务 + 页面清单并投递后台采集，返回 `{job,book}`。单次页数上限为 `collect.site_max_pages` 权益（基础值 `collect_site_page_limit`，默认 200） | `collect:create` |
 | GET | `/books/:id/collect/jobs?kind=site\|chapter` | 本书采集历史（需对书有编辑权） | `collect:read` |
 | GET | `/collect/jobs/:id` | 采集任务详情 + 页面清单（按 `sort_order`，供按目录结构展示），仅任务所有者 | `collect:read` |
-| POST | `/collect/jobs/:id/retry` | 重试该任务全部失败页并重新入队 | `collect:manage` |
-| POST | `/collect/pages/:id/retry` | 重试单个失败页 | `collect:manage` |
+| POST | `/collect/jobs/:id/retry` | 重试该任务全部失败页并重新入队；已停止（canceled）的任务继续采集剩余页面。返回 `{retried,pending}`；执行中（pending/running）时 409 | `collect:manage` |
+| POST | `/collect/jobs/:id/cancel` | 停止等待中或执行中的整站采集：当前页立即中断（其他实例上执行时在下一页前停止），已采集的章节保留，未采集页保持 pending，可用 retry 继续。返回 `{id,status:"canceled"}`；其他状态 409 | `collect:manage` |
+| POST | `/collect/pages/:id/retry` | 重试单个失败页；任务执行中时 409 | `collect:manage` |
 
-> 采集在后台队列执行：逐页抓取→转 Markdown→按 `parent_url` 建章节层级；完成后按成功/失败计数置任务状态（succeeded/partial/failed）并通知用户。进行中（pending/running）的整站采集会让书籍列表卡片与详情页显示「采集中」。
+> 采集在后台队列的长任务通道执行（不阻塞邮件、通知等其他后台任务）：逐页抓取→转 Markdown→按 `parent_url` 建章节层级，单页（含浏览器渲染）超过 90 秒记为该页失败并继续下一页；完成后按成功/失败计数置任务状态（succeeded/partial/failed，用户停止为 canceled）并通知用户。进行中（pending/running）的整站采集会让书籍列表卡片与详情页显示「采集中」。
 
 > ZIP 验收标准：导出再导入内容无损（含嵌套章节、草稿状态、评论开关、标签、封面与正文图片）。
 
@@ -1039,9 +1040,10 @@ AI 为章节生成阅读前导读（一两段）与本章要点，为书籍生�
 | GET | `/admin/stats` | 管理后台完整统计，包含私有与未发布内容 | `stats:read` + 管理员 |
 | GET | `/admin/audit-logs?page=&page_size=&actor=&action=&resource_type=&from=&to=` | 分页查询管理员高风险操作；支持操作人、动作、资源类型与日期区间筛选，日期格式为 `YYYY-MM-DD` | `audit:read` |
 | GET | `/admin/audit-logs/facets` | 筛选项：已出现过的 `actions[]` 与 `resource_types[]`（前端按 `admin.audit.actions.*` / `admin.audit.resources.*` 本地化） | `audit:read` |
-| GET | `/admin/tasks?page=&page_size=&status=&type=` | 分页查询异步任务；状态支持 pending/running/retrying/succeeded/failed，类型包含 `email.send`、`content.import.pdf`、`content.import.zip`、`maintenance.cleanup`、`achievement.recalculate`，加密任务载荷永不返回 | `task:read` |
+| GET | `/admin/tasks?page=&page_size=&status=&type=` | 分页查询异步任务；状态支持 pending/running/retrying/succeeded/failed/canceled，类型包含 `email.send`、`content.import.pdf`、`content.import.zip`、`maintenance.cleanup`、`achievement.recalculate`，加密任务载荷永不返回 | `task:read` |
 | GET | `/admin/tasks/types` | 已注册的全部任务类型 `items[]`（含插件任务，前端按 `admin.tasks.types.*` 本地化） | `task:read` |
-| POST | `/admin/tasks/:id/retry` | 将最终失败任务清空旧错误和尝试次数后重新排队；重复操作返回 409 | `task:retry` |
+| POST | `/admin/tasks/:id/retry` | 将最终失败或已取消的任务清空旧错误和尝试次数后重新排队；重复操作返回 409 | `task:retry` |
+| POST | `/admin/tasks/:id/cancel` | 取消等待中、等待重试或执行中的任务（状态置为 canceled，不再重试）：本实例执行中的任务立即停止，其他实例上的由其心跳在约 1 分钟内停止；其他状态返回 409，记审计 `task.canceled` | `task:retry` |
 | GET | `/admin/reports?page=&page_size=&status=&target_type=&reason=&q=` | 举报队列与处理记录；`q` 匹配目标摘要、举报人用户名或邮箱；举报人身份仅此管理员接口返回；另返回全部可举报类型 `target_types` | `report:read` |
 | PUT | `/admin/reports/:id` | 处理待审举报：`{resolution:"reject"\|"takedown",note?}`；下架会将书籍转为私有归档、章节归档、评论隐藏，插件登记的用户内容由登记者隐藏（在事务之外执行，失败时举报回到待处理），并通知举报人 | `report:update` |
 | GET | `/admin/plugins` | 列出后台插件（`key/name/description/kind/builtin/installed/version/status/error`）。`kind=runtime` 为运行时依赖插件（下载二进制），`kind=feature` 为特性开关插件；`installed` 表示已安装/已启用 | `plugin:manage` |

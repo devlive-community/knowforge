@@ -10,7 +10,7 @@ import { useUrlPage } from '@/lib/use-url-page'
 
 const PAGE_SIZE = 20
 
-type TaskStatus = 'pending' | 'running' | 'retrying' | 'succeeded' | 'failed'
+type TaskStatus = 'pending' | 'running' | 'retrying' | 'succeeded' | 'failed' | 'canceled'
 
 interface BackgroundTask {
   id: number
@@ -28,7 +28,7 @@ interface BackgroundTask {
 
 export default function AdminTasks() {
   const { user } = useApp()
-  const { showToast } = useFeedback()
+  const { showToast, confirmAction } = useFeedback()
   const { t } = useTranslation()
   const isAdmin = user?.role === 'admin'
   const [items, setItems] = useState<BackgroundTask[]>([])
@@ -39,6 +39,7 @@ export default function AdminTasks() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [retryingID, setRetryingID] = useState<number | null>(null)
+  const [cancelingID, setCancelingID] = useState<number | null>(null)
 
   const statusOptions = [
     { value: '', label: t('admin.tasks.status.all') },
@@ -47,6 +48,7 @@ export default function AdminTasks() {
     { value: 'retrying', label: t('admin.tasks.status.retrying') },
     { value: 'succeeded', label: t('admin.tasks.status.succeeded') },
     { value: 'failed', label: t('admin.tasks.status.failed') },
+    { value: 'canceled', label: t('admin.tasks.status.canceled') },
   ]
 
   const statusMeta: Record<TaskStatus, { label: string; tone: 'slate' | 'primary' | 'amber' | 'emerald' | 'rose' }> = {
@@ -55,6 +57,7 @@ export default function AdminTasks() {
     retrying: { label: t('admin.tasks.status.retrying'), tone: 'amber' },
     succeeded: { label: t('admin.tasks.status.succeeded'), tone: 'emerald' },
     failed: { label: t('admin.tasks.status.failed'), tone: 'rose' },
+    canceled: { label: t('admin.tasks.status.canceled'), tone: 'slate' },
   }
 
   // 任务类型名称：admin.tasks.types.<类型>（核心与插件登记的类型），缺失时回退原始类型
@@ -103,6 +106,21 @@ export default function AdminTasks() {
       showToast({ title: t('admin.tasks.requeueFailed'), message: (requestError as Error).message, tone: 'error' })
     } finally {
       setRetryingID(null)
+    }
+  }
+
+  // 取消等待中或执行中的任务（如卡住的整站采集），执行中的任务会立即停止
+  async function cancel(task: BackgroundTask) {
+    if (!await confirmAction({ title: t('admin.tasks.cancel'), message: t('admin.tasks.cancelConfirm', { id: task.id }), confirmLabel: t('admin.tasks.cancel'), danger: true })) return
+    setCancelingID(task.id)
+    try {
+      await api(`/admin/tasks/${task.id}/cancel`, { method: 'POST' })
+      showToast(t('admin.tasks.canceled'))
+      await load(true)
+    } catch (requestError) {
+      showToast({ title: t('admin.tasks.cancelFailed'), message: (requestError as Error).message, tone: 'error' })
+    } finally {
+      setCancelingID(null)
     }
   }
 
@@ -163,13 +181,14 @@ export default function AdminTasks() {
                         <td className="whitespace-nowrap px-5 py-4 text-slate-500">{formatDate(task.created_at)}</td>
                         <td className="max-w-md px-5 py-4">
                           {task.last_error ? (
-                            <p className="max-h-24 overflow-auto break-words rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{task.last_error}</p>
+                            <p className={`max-h-24 overflow-auto break-words rounded-lg px-3 py-2 text-xs leading-5 ${task.status === 'canceled' ? 'bg-slate-50 text-slate-600' : 'bg-rose-50 text-rose-700'}`}>{task.last_error}</p>
                           ) : (
                             <span className="text-slate-400">{task.finished_at ? formatDate(task.finished_at) : t('admin.tasks.status.pending')}</span>
                           )}
                         </td>
                         <td className="px-5 py-4 text-right">
-                          {task.status === 'failed' && <Button size="sm" variant="outline" loading={retryingID === task.id} onClick={() => retry(task)}>{t('admin.tasks.retry')}</Button>}
+                          {(task.status === 'failed' || task.status === 'canceled') && <Button size="sm" variant="outline" loading={retryingID === task.id} onClick={() => retry(task)}>{t('admin.tasks.retry')}</Button>}
+                          {['pending', 'running', 'retrying'].includes(task.status) && <Button size="sm" variant="ghost" loading={cancelingID === task.id} onClick={() => cancel(task)}>{t('admin.tasks.cancel')}</Button>}
                         </td>
                       </tr>
                     )

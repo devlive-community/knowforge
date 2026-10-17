@@ -15,7 +15,7 @@ const userTaskKind = "siteCrawl"
 var crawlStatusesByTab = map[string][]string{
 	plugincore.UserTaskTabActive: {"pending", "running"},
 	plugincore.UserTaskTabDone:   {"succeeded", "partial"},
-	plugincore.UserTaskTabFailed: {"failed"},
+	plugincore.UserTaskTabFailed: {"failed", crawlCanceled},
 }
 
 func init() {
@@ -47,6 +47,8 @@ func crawlUserTask(core plugincore.Core, job *CrawlJob) plugincore.UserTask {
 		t.Status = plugincore.UserTaskDone
 	case "failed":
 		t.Status = plugincore.UserTaskFailed
+	case crawlCanceled:
+		t.Status = plugincore.UserTaskCanceled
 	default:
 		t.Status = plugincore.UserTaskQueued
 	}

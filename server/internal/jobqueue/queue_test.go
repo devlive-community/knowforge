@@ -235,3 +235,121 @@ func TestQueueHeartbeatKeepsLongJobClaimed(t *testing.T) {
 		t.Fatalf("任务应只执行一次并成功: %+v", job)
 	}
 }
+
+// blockingHandler 一直执行到 context 结束；started 在开始执行时收到信号。
+func blockingHandler(started chan<- struct{}, cause *error) Handler {
+	return func(ctx context.Context, _ json.RawMessage) error {
+		started <- struct{}{}
+		<-ctx.Done()
+		if cause != nil {
+			*cause = context.Cause(ctx)
+		}
+		return ctx.Err()
+	}
+}
+
+func TestQueueCancelStopsRunningJobWithoutRetry(t *testing.T) {
+	queue, db, _ := testQueue(t)
+	started := make(chan struct{}, 1)
+	var cause error
+	queue.Register("collect.site", blockingHandler(started, &cause))
+	job, err := queue.Enqueue(context.Background(), "collect.site", map[string]int{"job_id": 1}, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, err := queue.RunOnce(context.Background()); done <- err }()
+	<-started
+
+	if ok, err := queue.Cancel(context.Background(), job.ID, "已被管理员取消"); err != nil || !ok {
+		t.Fatalf("cancel running job: ok=%v err=%v", ok, err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("canceled job should not report a failure: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("canceled job handler did not stop")
+	}
+	if !errors.Is(cause, ErrCanceled) {
+		t.Fatalf("handler context cause = %v, want ErrCanceled", cause)
+	}
+	var stored models.BackgroundJob
+	db.First(&stored, job.ID)
+	if stored.Status != StatusCanceled || stored.LastError != "已被管理员取消" || stored.FinishedAt == nil || stored.LockedAt != nil {
+		t.Fatalf("canceled job must stay canceled and not be retried: %+v", stored)
+	}
+	if ok, _ := queue.Cancel(context.Background(), job.ID, ""); ok {
+		t.Fatal("a finished job cannot be canceled again")
+	}
+	if ok, err := queue.Retry(context.Background(), job.ID); err != nil || !ok {
+		t.Fatalf("canceled job should be retryable: ok=%v err=%v", ok, err)
+	}
+}
+
+// 其他实例上取消的任务：执行它的进程由心跳发现并停止。
+func TestQueueHeartbeatStopsJobCanceledElsewhere(t *testing.T) {
+	queue, db, _ := testQueue(t)
+	queue.heartbeatEvery = 10 * time.Millisecond
+	started := make(chan struct{}, 1)
+	var cause error
+	queue.Register("collect.site", blockingHandler(started, &cause))
+	job, err := queue.Enqueue(context.Background(), "collect.site", map[string]int{"job_id": 1}, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { _, _ = queue.RunOnce(context.Background()); close(done) }()
+	<-started
+	db.Model(&models.BackgroundJob{}).Where("id = ?", job.ID).Update("status", StatusCanceled)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("heartbeat should stop a job canceled by another instance")
+	}
+	if !errors.Is(cause, ErrCanceled) {
+		t.Fatalf("handler context cause = %v, want ErrCanceled", cause)
+	}
+	var stored models.BackgroundJob
+	db.First(&stored, job.ID)
+	if stored.Status != StatusCanceled {
+		t.Fatalf("status = %s, want canceled", stored.Status)
+	}
+}
+
+// 长任务通道：执行中的长任务（如卡住的整站采集）不阻塞其他任务。
+func TestQueueLongJobsDoNotBlockOtherJobs(t *testing.T) {
+	queue, db, _ := testQueue(t)
+	started := make(chan struct{}, 1)
+	queue.Register("collect.site", blockingHandler(started, nil))
+	queue.MarkLong("collect.site")
+	var sent atomic.Int32
+	queue.Register("email.send", func(context.Context, json.RawMessage) error { sent.Add(1); return nil })
+	if _, err := queue.Enqueue(context.Background(), "collect.site", map[string]int{"job_id": 1}, 3); err != nil {
+		t.Fatal(err)
+	}
+	email, err := queue.Enqueue(context.Background(), "email.send", map[string]string{"to": "a@example.com"}, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() { queue.Start(ctx); close(stopped) }()
+	<-started
+	deadline := time.Now().Add(5 * time.Second)
+	for sent.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	var stored models.BackgroundJob
+	db.First(&stored, email.ID)
+	if sent.Load() != 1 || stored.Status != StatusSucceeded {
+		t.Fatalf("email job should run while the long job is still running: sent=%d status=%s", sent.Load(), stored.Status)
+	}
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Start should return after all workers stop")
+	}
+}

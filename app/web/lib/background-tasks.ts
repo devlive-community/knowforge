@@ -1,7 +1,7 @@
 import { api } from './api'
 import { subscribeUserTasks } from './user-tasks'
 
-export type BackgroundTaskStatus = 'pending' | 'running' | 'retrying' | 'succeeded' | 'failed'
+export type BackgroundTaskStatus = 'pending' | 'running' | 'retrying' | 'succeeded' | 'failed' | 'canceled'
 
 export interface BackgroundTask<TResult = unknown> {
   id: number
@@ -34,7 +34,7 @@ export function waitForTask<TResult>(taskID: number): Promise<TResult> {
         const task = await api<BackgroundTask<TResult>>(`/tasks/${taskID}`)
         if (settled) return
         if (task.status === 'succeeded' && task.result !== undefined) { settled = true; off(); resolve(task.result) }
-        else if (task.status === 'failed') { settled = true; off(); reject(new Error(task.last_error || '后台任务执行失败')) }
+        else if (task.status === 'failed' || task.status === 'canceled') { settled = true; off(); reject(new Error(task.last_error || '后台任务执行失败')) }
       } catch (err) {
         settled = true
         off()
@@ -43,7 +43,7 @@ export function waitForTask<TResult>(taskID: number): Promise<TResult> {
     }
     const off = subscribeUserTasks((task) => {
       if (!task) { void check(); return }
-      if (CORE_TASK_KINDS.has(task.kind) && task.id === String(taskID) && (task.status === 'done' || task.status === 'failed')) void check()
+      if (CORE_TASK_KINDS.has(task.kind) && task.id === String(taskID) && (task.status === 'done' || task.status === 'failed' || task.status === 'canceled')) void check()
     })
     void check() // 订阅后先读一次，覆盖订阅前已结束的情况
   })

@@ -3,14 +3,17 @@ package contentcollect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"knowforge/server/internal/jobqueue"
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
@@ -19,7 +22,22 @@ import (
 	"golang.org/x/net/html"
 )
 
-const siteCrawlJobType = "collect.site"
+const (
+	siteCrawlJobType = "collect.site"
+	// crawlPageTimeout 单页采集（含浏览器渲染）的上限：超时记为该页失败并继续下一页，
+	// 避免某个页面一直不结束导致整个任务卡在「执行中」。
+	crawlPageTimeout = 90 * time.Second
+	crawlCanceled    = "canceled"
+)
+
+// errCrawlStopped 用户停止采集时作为执行中任务 context 的 cause。
+var errCrawlStopped = errors.New("采集已停止")
+
+// runningCrawls 本进程正在执行的整站采集：采集任务 ID → 取消函数（停止时立即中断当前页）。
+var runningCrawls sync.Map
+
+// crawlPageTimeoutFor 测试可缩短单页超时。
+var crawlPageTimeoutFor = func() time.Duration { return crawlPageTimeout }
 
 // crawlNode 整站采集推断出的一个目录节点。
 type crawlNode struct {
@@ -501,9 +519,17 @@ func (cc *behavior) runSiteCrawlJob(ctx context.Context, raw json.RawMessage) er
 	if err := cc.core.Gorm().First(&job, p.JobID).Error; err != nil {
 		return nil // 任务已删除，视为完成
 	}
-	if job.Status == "succeeded" || job.Status == "partial" || job.Status == "failed" {
-		return nil // 已完成，幂等
+	if job.Status == "succeeded" || job.Status == "partial" || job.Status == "failed" || job.Status == crawlCanceled {
+		return nil // 已完成或已停止，幂等
 	}
+	// 同一采集任务在本进程只执行一份（重试会再次入队）
+	runCtx, cancelRun := context.WithCancelCause(ctx)
+	defer cancelRun(nil)
+	if _, loaded := runningCrawls.LoadOrStore(job.ID, cancelRun); loaded {
+		return nil
+	}
+	defer runningCrawls.Delete(job.ID)
+	ctx = runCtx
 	var book models.Book
 	if err := cc.core.Gorm().First(&book, job.BookID).Error; err != nil {
 		cc.finishCrawlJob(&job, "failed", "目标书籍不存在")
@@ -530,12 +556,21 @@ func (cc *behavior) runSiteCrawlJob(ctx context.Context, raw json.RawMessage) er
 			success++
 			continue
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err() // 取消：保留 pending，下次重试
-		default:
+		if stopped, err := cc.crawlInterrupted(ctx, &job); stopped || err != nil {
+			return err
 		}
-		article, _, _, err := cc.collectWebArticle(ctx, webImportPayload{URL: page.URL, RenderMode: job.RenderMode})
+		pageCtx, cancelPage := context.WithTimeout(ctx, crawlPageTimeoutFor())
+		article, _, _, err := cc.collectWebArticle(pageCtx, webImportPayload{URL: page.URL, RenderMode: job.RenderMode})
+		timedOut := errors.Is(pageCtx.Err(), context.DeadlineExceeded)
+		cancelPage()
+		if err != nil && ctx.Err() != nil {
+			if stopped, err := cc.crawlInterrupted(ctx, &job); stopped || err != nil {
+				return err // 停止或进程退出：本页保持 pending
+			}
+		}
+		if err != nil && timedOut {
+			err = fmt.Errorf("采集超时（超过 %d 秒）", int(crawlPageTimeoutFor().Seconds()))
+		}
 		if err != nil {
 			failed++
 			cc.core.Gorm().Model(page).Updates(map[string]any{"status": "failed", "error": truncateText(err.Error(), 1000)})
@@ -589,6 +624,43 @@ func (cc *behavior) runSiteCrawlJob(ctx context.Context, raw json.RawMessage) er
 		"job_id": job.ID, "book_id": book.ID, "book_slug": book.Slug, "success": success, "failed": failed, "status": status,
 	})
 	return nil
+}
+
+// crawlInterrupted 每页开始前（及中途失败时）检查：用户已停止（本进程立即取消，或其他实例上停止后
+// 由数据库状态得知）或管理员取消了后台任务时结束任务并返回 stopped；进程退出时返回 ctx 错误，
+// 由队列稍后重试（已采集的页面不会重复）。
+func (cc *behavior) crawlInterrupted(ctx context.Context, job *CrawlJob) (bool, error) {
+	var current CrawlJob
+	if cc.core.Gorm().Select("id, status").First(&current, job.ID).Error == nil && current.Status == crawlCanceled {
+		return true, nil
+	}
+	if ctx.Err() == nil {
+		return false, nil
+	}
+	cause := context.Cause(ctx)
+	if errors.Is(cause, errCrawlStopped) {
+		return true, nil
+	}
+	if errors.Is(cause, jobqueue.ErrCanceled) {
+		cc.stopCrawlJob(job, "后台任务已被管理员取消")
+		return true, nil
+	}
+	return false, ctx.Err()
+}
+
+// stopCrawlJob 把采集任务标记为已停止（未采集的页面保持 pending，可在采集历史中继续）。
+func (cc *behavior) stopCrawlJob(job *CrawlJob, reason string) bool {
+	now := time.Now()
+	res := cc.core.Gorm().Model(&CrawlJob{}).Where("id = ? AND status IN ?", job.ID, []string{"pending", "running"}).
+		Updates(map[string]any{"status": crawlCanceled, "finished_at": &now, "last_error": truncateText(reason, 1000)})
+	if res.RowsAffected == 0 {
+		return false
+	}
+	if cancel, ok := runningCrawls.Load(job.ID); ok {
+		cancel.(context.CancelCauseFunc)(errCrawlStopped)
+	}
+	cc.publishCrawlTask(job.ID)
+	return true
 }
 
 func (cc *behavior) finishCrawlJob(job *CrawlJob, status, lastErr string) {
@@ -735,8 +807,15 @@ func (cc *behavior) RetryCrawlJob(c *gin.Context) {
 	if !ok2 {
 		return
 	}
+	if job.Status == "pending" || job.Status == "running" {
+		cc.core.Fail(c, http.StatusConflict, "采集任务正在执行，请等待完成或先停止")
+		return
+	}
 	res := cc.core.Gorm().Model(&CrawlPage{}).Where("job_id = ? AND status = ?", job.ID, "failed").Update("status", "pending")
-	if res.RowsAffected == 0 {
+	// 已停止的任务继续采集剩余（pending）页面
+	var remaining int64
+	cc.core.Gorm().Model(&CrawlPage{}).Where("job_id = ? AND status = ?", job.ID, "pending").Count(&remaining)
+	if remaining == 0 {
 		cc.core.Fail(c, http.StatusBadRequest, "没有需要重试的失败页面")
 		return
 	}
@@ -745,7 +824,21 @@ func (cc *behavior) RetryCrawlJob(c *gin.Context) {
 		_, _ = queue.Enqueue(context.Background(), siteCrawlJobType, siteCrawlJobPayload{JobID: job.ID}, 3)
 	}
 	cc.publishCrawlTask(job.ID)
-	cc.core.OK(c, gin.H{"retried": res.RowsAffected})
+	cc.core.OK(c, gin.H{"retried": res.RowsAffected, "pending": remaining})
+}
+
+// CancelCrawlJob POST /collect/jobs/:id/cancel 停止等待中或执行中的整站采集：当前页立即中断，
+// 已采集的章节保留，未采集的页面可稍后「重试」继续。
+func (cc *behavior) CancelCrawlJob(c *gin.Context) {
+	job, ok2 := cc.loadOwnedCrawlJob(c)
+	if !ok2 {
+		return
+	}
+	if !cc.stopCrawlJob(job, "已手动停止") {
+		cc.core.Fail(c, http.StatusConflict, "只能停止等待中或执行中的采集任务")
+		return
+	}
+	cc.core.OK(c, gin.H{"id": job.ID, "status": crawlCanceled})
 }
 
 // RetryCrawlPage POST /collect/pages/:id/retry 重试单个失败页。
@@ -768,6 +861,10 @@ func (cc *behavior) RetryCrawlPage(c *gin.Context) {
 	}
 	if job.UserID != u.ID {
 		cc.core.Fail(c, http.StatusForbidden, "无权操作")
+		return
+	}
+	if job.Status == "pending" || job.Status == "running" {
+		cc.core.Fail(c, http.StatusConflict, "采集任务正在执行，请等待完成或先停止")
 		return
 	}
 	cc.core.Gorm().Model(&page).Updates(map[string]any{"status": "pending", "error": ""})

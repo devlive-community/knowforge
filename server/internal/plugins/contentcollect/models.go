@@ -3,7 +3,7 @@ package contentcollect
 import "time"
 
 // CrawlJob 采集任务（整站/单页/单章）。由「内容采集」插件在启用时建表（表名 crawl_jobs 与迁移前一致）。
-// Status: preview（仅生成目录预览，待用户确认）| pending | running | succeeded | partial | failed。
+// Status: preview（仅生成目录预览，待用户确认）| pending | running | succeeded | partial | failed | canceled（用户停止）。
 type CrawlJob struct {
 	ID              uint       `gorm:"primaryKey" json:"id"`
 	UserID          uint       `gorm:"index;not null" json:"user_id"`

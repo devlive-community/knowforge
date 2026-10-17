@@ -229,6 +229,33 @@ func TestAdminBackgroundJobs(t *testing.T) {
 		t.Fatalf("retry audit missing: %v", err)
 	}
 
+	// 取消：等待中的任务可取消（刚重新排队的任务），已取消的不能再次取消，取消后可重新排队
+	cancelPath := "/api/v1/admin/tasks/" + strconv.FormatUint(uint64(job.ID), 10) + "/cancel"
+	if status, _ := request(http.MethodPost, cancelPath, nil, userToken); status != http.StatusForbidden {
+		t.Fatalf("regular user must not cancel tasks: %d", status)
+	}
+	if status, payload := request(http.MethodPost, cancelPath, nil, adminToken); status != http.StatusOK {
+		t.Fatalf("cancel task failed: %d %v", status, payload)
+	}
+	if status, _ := request(http.MethodPost, cancelPath, nil, adminToken); status != http.StatusConflict {
+		t.Fatalf("canceled task must not be canceled twice: %d", status)
+	}
+	if err := a.DB.First(&updated, job.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != jobqueue.StatusCanceled || updated.FinishedAt == nil {
+		t.Fatalf("unexpected canceled task: %+v", updated)
+	}
+	if err := a.DB.Where("action = ? AND resource_id = ?", "task.canceled", strconv.FormatUint(uint64(job.ID), 10)).First(&models.AuditLog{}).Error; err != nil {
+		t.Fatalf("cancel audit missing: %v", err)
+	}
+	if status, _ := request(http.MethodGet, "/api/v1/admin/tasks?status=canceled", nil, adminToken); status != http.StatusOK {
+		t.Fatalf("canceled status filter should be accepted: %d", status)
+	}
+	if status, payload := request(http.MethodPost, path, nil, adminToken); status != http.StatusOK {
+		t.Fatalf("canceled task should be retryable: %d %v", status, payload)
+	}
+
 	if status, _ := request(http.MethodGet, "/api/v1/admin/tasks?status=unknown", nil, adminToken); status != http.StatusBadRequest {
 		t.Fatalf("invalid task status should be 400: %d", status)
 	}

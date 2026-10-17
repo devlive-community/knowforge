@@ -66,7 +66,7 @@ func (a *App) GetBackgroundJob(c *gin.Context) {
 
 var backgroundJobStatuses = map[string]bool{
 	jobqueue.StatusPending: true, jobqueue.StatusRunning: true, jobqueue.StatusRetrying: true,
-	jobqueue.StatusSucceeded: true, jobqueue.StatusFailed: true,
+	jobqueue.StatusSucceeded: true, jobqueue.StatusFailed: true, jobqueue.StatusCanceled: true,
 }
 
 // AdminListBackgroundJobs GET /admin/tasks 管理员分页查看任务状态；加密 payload 永不返回。
@@ -96,7 +96,7 @@ func (a *App) AdminListBackgroundJobs(c *gin.Context) {
 	ok(c, PageResult{Items: items, Total: total, Page: page, PageSize: pageSize})
 }
 
-// AdminRetryBackgroundJob POST /admin/tasks/:id/retry 只允许重新排队最终失败的任务。
+// AdminRetryBackgroundJob POST /admin/tasks/:id/retry 只允许重新排队最终失败或已取消的任务。
 func (a *App) AdminRetryBackgroundJob(c *gin.Context) {
 	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || id64 == 0 {
@@ -114,11 +114,36 @@ func (a *App) AdminRetryBackgroundJob(c *gin.Context) {
 		return
 	}
 	if !retried {
-		fail(c, http.StatusConflict, "仅失败任务可以重新排队")
+		fail(c, http.StatusConflict, "仅失败或已取消的任务可以重新排队")
 		return
 	}
 	a.recordAudit(c, "task.retried", "task", strconv.FormatUint(id64, 10), "异步任务", map[string]any{"task_id": id64})
 	ok(c, gin.H{"id": id64, "status": jobqueue.StatusPending})
+}
+
+// AdminCancelBackgroundJob POST /admin/tasks/:id/cancel 取消等待中或执行中的任务（如卡住的整站采集）。
+func (a *App) AdminCancelBackgroundJob(c *gin.Context) {
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id64 == 0 {
+		fail(c, http.StatusBadRequest, "任务 ID 无效")
+		return
+	}
+	queue := a.jobQueue()
+	if queue == nil {
+		fail(c, http.StatusServiceUnavailable, "异步任务服务尚未就绪")
+		return
+	}
+	canceled, err := queue.Cancel(c.Request.Context(), uint(id64), "已被管理员取消")
+	if err != nil {
+		fail(c, http.StatusInternalServerError, "取消任务失败")
+		return
+	}
+	if !canceled {
+		fail(c, http.StatusConflict, "仅等待中或执行中的任务可以取消")
+		return
+	}
+	a.recordAudit(c, "task.canceled", "task", strconv.FormatUint(id64, 10), "异步任务", map[string]any{"task_id": id64})
+	ok(c, gin.H{"id": id64, "status": jobqueue.StatusCanceled})
 }
 
 // AdminBackgroundJobTypes GET /admin/tasks/types 已注册的任务类型（核心与插件），供管理端按类型筛选。

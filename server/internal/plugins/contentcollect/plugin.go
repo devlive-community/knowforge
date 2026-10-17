@@ -25,7 +25,7 @@ func init() {
 	i18ntext.Register("notify.collect.finished", map[string]string{"zh-CN": "《{book}》采集完成", "en": `Finished collecting "{book}"`})
 	plugincore.RegisterBehavior(instance)
 	// 整站采集 worker：任务队列由核心在每次创建时注册（队列可能在安装向导完成后才创建）
-	plugincore.RegisterJob(siteCrawlJobType, func(core plugincore.Core) func(context.Context, json.RawMessage) error {
+	plugincore.RegisterLongJob(siteCrawlJobType, func(core plugincore.Core) func(context.Context, json.RawMessage) error {
 		return (&behavior{core: core}).runSiteCrawlJob
 	})
 	// 书籍列表/详情回填「采集中」标记
@@ -68,6 +68,7 @@ func (cc *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	collect.POST("/site", cc.requireCollect(entCollectSite), core.RequirePermission(authz.CollectCreate), cc.StartSiteCrawl)
 	collect.GET("/jobs/:id", core.RequirePermission(authz.CollectRead), cc.GetCrawlJob)
 	collect.POST("/jobs/:id/retry", core.RequirePermission(authz.CollectManage), cc.RetryCrawlJob)
+	collect.POST("/jobs/:id/cancel", core.RequirePermission(authz.CollectManage), cc.CancelCrawlJob)
 	collect.POST("/pages/:id/retry", core.RequirePermission(authz.CollectManage), cc.RetryCrawlPage)
 	api.GET("/books/:id/collect/jobs", auth, feature, core.RequirePermission(authz.CollectRead), cc.ListBookCrawlJobs)
 

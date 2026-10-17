@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"testing"
+	"time"
 
 	"knowforge/server/internal/models"
 	"knowforge/server/internal/plugincore"
@@ -28,4 +29,11 @@ func CreateImportedWebDocument(core plugincore.Core, book *models.Book, u *model
 func RunSiteCrawlJob(core plugincore.Core, jobID uint) error {
 	raw, _ := json.Marshal(siteCrawlJobPayload{JobID: jobID})
 	return (&behavior{core: core}).runSiteCrawlJob(context.Background(), raw)
+}
+
+// SetCrawlPageTimeout 缩短整站采集的单页超时，测试结束自动还原。
+func SetCrawlPageTimeout(t testing.TB, d time.Duration) {
+	old := crawlPageTimeoutFor
+	crawlPageTimeoutFor = func() time.Duration { return d }
+	t.Cleanup(func() { crawlPageTimeoutFor = old })
 }

@@ -29,6 +29,7 @@ const (
 	StatusRetrying  = "retrying"
 	StatusSucceeded = "succeeded"
 	StatusFailed    = "failed"
+	StatusCanceled  = "canceled"
 
 	defaultMaxAttempts = 5
 	// staleJobAge 执行中的任务超过这段时间没有心跳，视为执行它的进程已退出（多实例时其他实例据此接手）
@@ -36,20 +37,29 @@ const (
 	defaultHeartbeat   = time.Minute
 	recoverEvery       = time.Minute
 	completedRetention = 30 * 24 * time.Hour
+	// longLaneWorkers 长任务通道的并发数；常规任务另有一个 worker，不会被长任务阻塞
+	longLaneWorkers = 2
 )
+
+// ErrCanceled 任务被取消时作为 handler context 的 cause（context.Cause），handler 可据此区分取消与进程退出。
+var ErrCanceled = errors.New("background job canceled")
 
 type Handler func(context.Context, json.RawMessage) error
 type ResultHandler func(context.Context, json.RawMessage) (any, error)
 
-// Queue stores encrypted payloads in the application database and executes one
-// claimed task at a time. Conditional status updates make claiming safe when
-// multiple application processes share the same database; running tasks refresh
-// locked_at as a heartbeat so that only tasks of exited processes are recovered.
+// Queue stores encrypted payloads in the application database. Start runs two
+// lanes: one worker for ordinary tasks and a small pool for long-running types
+// (see MarkLong), so a slow crawl or import never blocks notifications and other
+// short tasks. Conditional status updates make claiming safe when multiple
+// workers or processes share the same database; running tasks refresh locked_at
+// as a heartbeat so that only tasks of exited processes are recovered.
 type Queue struct {
 	db             *gorm.DB
 	aead           cipher.AEAD
 	handlers       map[string]Handler
 	resultHandlers map[string]ResultHandler
+	long           map[string]bool // 走长任务通道的类型
+	running        map[uint]context.CancelCauseFunc
 	mu             sync.RWMutex
 	now            func() time.Time
 	heartbeatEvery time.Duration // 执行中的任务刷新 locked_at 的间隔
@@ -101,7 +111,8 @@ func New(db *gorm.DB, secret string) (*Queue, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create job payload AEAD: %w", err)
 	}
-	return &Queue{db: db, aead: aead, handlers: map[string]Handler{}, resultHandlers: map[string]ResultHandler{}, now: time.Now}, nil
+	return &Queue{db: db, aead: aead, handlers: map[string]Handler{}, resultHandlers: map[string]ResultHandler{},
+		long: map[string]bool{}, running: map[uint]context.CancelCauseFunc{}, now: time.Now}, nil
 }
 
 func (q *Queue) RegisterResult(jobType string, handler ResultHandler) {
@@ -114,6 +125,26 @@ func (q *Queue) Register(jobType string, handler Handler) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.handlers[jobType] = handler
+}
+
+// MarkLong 把任务类型放入长任务通道（整站采集、导入、备份等可能执行很久的任务）。
+func (q *Queue) MarkLong(jobTypes ...string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for _, t := range jobTypes {
+		q.long[t] = true
+	}
+}
+
+func (q *Queue) longTypes() []string {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	out := make([]string, 0, len(q.long))
+	for t := range q.long {
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Types 已注册的任务类型（排序后），供管理端筛选与展示。
@@ -216,15 +247,36 @@ func (q *Queue) newJob(ownerID uint, jobType string, payload any, maxAttempts in
 	return job, nil
 }
 
-// RunOnce claims and runs the next available task. ran is false when no task
-// is currently available. A handler error is persisted for retry and returned
-// only for observability; callers should continue processing later tasks.
+// lane 限定 worker 领取的任务类型。
+type lane int
+
+const (
+	laneAll lane = iota
+	laneShort
+	laneLong
+)
+
+// RunOnce claims and runs the next available task of any type. ran is false
+// when no task is currently available. A handler error is persisted for retry
+// and returned only for observability; callers should continue processing.
 func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
+	return q.runOnce(ctx, laneAll)
+}
+
+func (q *Queue) runOnce(ctx context.Context, which lane) (ran bool, runErr error) {
 	now := q.now()
 	var candidate models.BackgroundJob
-	err := q.db.WithContext(ctx).
-		Where("status IN ? AND available_at <= ?", []string{StatusPending, StatusRetrying}, now).
-		Order("available_at ASC, id ASC").First(&candidate).Error
+	find := q.db.WithContext(ctx).
+		Where("status IN ? AND available_at <= ?", []string{StatusPending, StatusRetrying}, now)
+	if long := q.longTypes(); which == laneLong {
+		if len(long) == 0 {
+			return false, nil
+		}
+		find = find.Where("type IN ?", long)
+	} else if which == laneShort && len(long) > 0 {
+		find = find.Where("type NOT IN ?", long)
+	}
+	err := find.Order("available_at ASC, id ASC").First(&candidate).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -249,11 +301,22 @@ func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
 	}
 	q.changed(candidate.ID)
 	defer q.changed(candidate.ID) // 结束（成功/失败/等待重试）后推送最终状态
+	// handler 的 context：本进程 Cancel 或心跳发现任务已被取消（如其他实例上的管理员操作）时以 ErrCanceled 取消
+	runCtx, cancelRun := context.WithCancelCause(ctx)
+	q.mu.Lock()
+	q.running[candidate.ID] = cancelRun
+	q.mu.Unlock()
+	defer func() {
+		q.mu.Lock()
+		delete(q.running, candidate.ID)
+		q.mu.Unlock()
+		cancelRun(nil)
+	}()
 	hbCtx, stopHeartbeat := context.WithCancel(ctx)
 	hbDone := make(chan struct{})
 	go func() {
 		defer close(hbDone)
-		q.heartbeat(hbCtx, candidate.ID)
+		q.heartbeat(hbCtx, candidate.ID, cancelRun)
 	}()
 	defer func() { // 返回前等心跳停止，之后不再有写入
 		stopHeartbeat()
@@ -270,9 +333,12 @@ func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
 	payload, err := q.decrypt(candidate.Type, candidate.Payload)
 	var result any
 	if err == nil && resultHandler != nil {
-		result, err = resultHandler(ctx, payload)
+		result, err = resultHandler(runCtx, payload)
 	} else if err == nil {
-		err = handler(ctx, payload)
+		err = handler(runCtx, payload)
+	}
+	if errors.Is(context.Cause(runCtx), ErrCanceled) {
+		return true, nil // 已被取消：状态由 Cancel 写入，不再覆盖
 	}
 	if err != nil {
 		_ = q.finishFailure(ctx, &candidate, err)
@@ -290,15 +356,16 @@ func (q *Queue) RunOnce(ctx context.Context) (ran bool, runErr error) {
 			return true, q.finishFailure(ctx, &candidate, err)
 		}
 	}
-	err = q.db.WithContext(ctx).Model(&models.BackgroundJob{}).Where("id = ?", candidate.ID).Updates(map[string]any{
+	err = q.db.WithContext(ctx).Model(&models.BackgroundJob{}).Where("id = ? AND status = ?", candidate.ID, StatusRunning).Updates(map[string]any{
 		"status": StatusSucceeded, "finished_at": finished, "locked_at": nil,
 		"last_error": "", "result": sealedResult, "updated_at": finished,
 	}).Error
 	return true, err
 }
 
-// heartbeat 任务执行期间定期刷新 locked_at，避免长任务被其他进程当作中断而重复执行。
-func (q *Queue) heartbeat(ctx context.Context, id uint) {
+// heartbeat 任务执行期间定期刷新 locked_at，避免长任务被其他进程当作中断而重复执行；
+// 任务已不在执行中（被取消）时取消 handler。
+func (q *Queue) heartbeat(ctx context.Context, id uint, cancelRun context.CancelCauseFunc) {
 	every := q.heartbeatEvery
 	if every <= 0 {
 		every = defaultHeartbeat
@@ -310,7 +377,14 @@ func (q *Queue) heartbeat(ctx context.Context, id uint) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			q.db.Model(&models.BackgroundJob{}).Where("id = ? AND status = ?", id, StatusRunning).Update("locked_at", q.now())
+			res := q.db.Model(&models.BackgroundJob{}).Where("id = ? AND status = ?", id, StatusRunning).Update("locked_at", q.now())
+			if res.Error == nil && res.RowsAffected == 0 {
+				var job models.BackgroundJob
+				if q.db.Select("status").First(&job, id).Error != nil || job.Status == StatusCanceled {
+					cancelRun(ErrCanceled)
+					return
+				}
+			}
 		}
 	}
 }
@@ -336,7 +410,7 @@ func (q *Queue) finishFailure(ctx context.Context, job *models.BackgroundJob, ca
 		available = now
 		finished = now
 	}
-	if err := q.db.WithContext(ctx).Model(&models.BackgroundJob{}).Where("id = ?", job.ID).Updates(map[string]any{
+	if err := q.db.WithContext(ctx).Model(&models.BackgroundJob{}).Where("id = ? AND status = ?", job.ID, StatusRunning).Updates(map[string]any{
 		"status": status, "available_at": available, "finished_at": finished,
 		"locked_at": nil, "last_error": safeError(cause), "updated_at": now,
 	}).Error; err != nil {
@@ -377,10 +451,36 @@ func (q *Queue) RecoverStale(ctx context.Context) error {
 		}).Error
 }
 
+// Cancel 取消等待中或执行中的任务：标记为已取消，本进程正在执行时立即取消其 context，
+// 其他实例上执行的任务由其心跳在一分钟内发现并停止。
+func (q *Queue) Cancel(ctx context.Context, id uint, reason string) (bool, error) {
+	now := q.now()
+	if strings.TrimSpace(reason) == "" {
+		reason = "任务已取消"
+	}
+	result := q.db.WithContext(ctx).Model(&models.BackgroundJob{}).
+		Where("id = ? AND status IN ?", id, []string{StatusPending, StatusRetrying, StatusRunning}).
+		Updates(map[string]any{
+			"status": StatusCanceled, "finished_at": now, "locked_at": nil,
+			"last_error": safeError(errors.New(reason)), "updated_at": now,
+		})
+	if result.Error != nil || result.RowsAffected == 0 {
+		return false, result.Error
+	}
+	q.mu.RLock()
+	cancelRun := q.running[id]
+	q.mu.RUnlock()
+	if cancelRun != nil {
+		cancelRun(ErrCanceled)
+	}
+	q.changed(id)
+	return true, nil
+}
+
 func (q *Queue) Retry(ctx context.Context, id uint) (bool, error) {
 	now := q.now()
 	result := q.db.WithContext(ctx).Model(&models.BackgroundJob{}).
-		Where("id = ? AND status = ?", id, StatusFailed).
+		Where("id = ? AND status IN ?", id, []string{StatusFailed, StatusCanceled}).
 		Updates(map[string]any{
 			"status": StatusPending, "attempts": 0, "available_at": now,
 			"started_at": nil, "finished_at": nil, "locked_at": nil,
@@ -392,38 +492,66 @@ func (q *Queue) Retry(ctx context.Context, id uint) (bool, error) {
 	return result.RowsAffected > 0, result.Error
 }
 
+// Start 运行 worker 直到 ctx 结束：常规任务一个 worker，长任务通道 longLaneWorkers 个，
+// 长任务（可能执行数十分钟）不会阻塞其他后台任务；同时负责回收中断任务与清理过期记录。
 func (q *Queue) Start(ctx context.Context) {
 	if err := q.RecoverStale(ctx); err != nil {
 		log.Printf("[jobs] recover stale tasks failed: %v", err)
 	}
-	poll := time.NewTicker(2 * time.Second)
+	var wg sync.WaitGroup
+	defer wg.Wait() // 返回前等所有 worker 退出
+	for i := 0; i <= longLaneWorkers; i++ {
+		which := laneLong
+		if i == longLaneWorkers {
+			which = laneShort
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			q.work(ctx, which)
+		}()
+	}
 	cleanup := time.NewTicker(time.Hour)
 	recoverTick := time.NewTicker(recoverEvery) // 多实例：其他实例退出后遗留的任务由仍在运行的实例接手
-	defer poll.Stop()
 	defer cleanup.Stop()
 	defer recoverTick.Stop()
 	for {
-		ran, err := q.RunOnce(ctx)
-		if err != nil {
-			log.Printf("[jobs] task execution failed: %v", err)
-		}
-		if ran {
-			continue
-		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-poll.C:
 		case <-recoverTick.C:
 			if err := q.RecoverStale(ctx); err != nil {
 				log.Printf("[jobs] recover stale tasks failed: %v", err)
 			}
 		case <-cleanup.C:
 			cutoff := q.now().Add(-completedRetention)
-			if err := q.db.WithContext(ctx).Where("status IN ? AND finished_at < ?", []string{StatusSucceeded, StatusFailed}, cutoff).
+			if err := q.db.WithContext(ctx).Where("status IN ? AND finished_at < ?", []string{StatusSucceeded, StatusFailed, StatusCanceled}, cutoff).
 				Delete(&models.BackgroundJob{}).Error; err != nil {
 				log.Printf("[jobs] cleanup completed tasks failed: %v", err)
 			}
+		}
+	}
+}
+
+// work 一个 worker：持续领取并执行所属通道的任务，空闲时每 2 秒检查一次。
+func (q *Queue) work(ctx context.Context, which lane) {
+	poll := time.NewTicker(2 * time.Second)
+	defer poll.Stop()
+	for {
+		ran, err := q.runOnce(ctx, which)
+		if err != nil {
+			log.Printf("[jobs] task execution failed: %v", err)
+		}
+		if ran {
+			if ctx.Err() != nil {
+				return
+			}
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-poll.C:
 		}
 	}
 }

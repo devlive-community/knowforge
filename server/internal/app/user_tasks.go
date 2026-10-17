@@ -38,7 +38,7 @@ var coreUserTaskKinds = map[string]string{
 var coreJobStatusesByTab = map[string][]string{
 	plugincore.UserTaskTabActive: {jobqueue.StatusPending, jobqueue.StatusRetrying, jobqueue.StatusRunning},
 	plugincore.UserTaskTabDone:   {jobqueue.StatusSucceeded},
-	plugincore.UserTaskTabFailed: {jobqueue.StatusFailed},
+	plugincore.UserTaskTabFailed: {jobqueue.StatusFailed, jobqueue.StatusCanceled},
 }
 
 func init() {
@@ -81,6 +81,8 @@ func (a *App) coreUserTask(job *models.BackgroundJob) (plugincore.UserTask, bool
 		t.Error = ""
 	case jobqueue.StatusFailed:
 		t.Status = plugincore.UserTaskFailed
+	case jobqueue.StatusCanceled:
+		t.Status = plugincore.UserTaskCanceled
 	default:
 		t.Status = plugincore.UserTaskQueued
 	}

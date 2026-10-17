@@ -471,11 +471,11 @@ func renderDynamicWebPage(ctx context.Context, target *url.URL, browserPath stri
 	if err := os.MkdirAll(profileRoot, 0o700); err != nil {
 		return webPage{}, fmt.Errorf("无法准备 Chromium 配置目录: %w", err)
 	}
-	controlURL, profileDir, err := launchImportBrowser(ctx, browserPath, profileRoot)
+	controlURL, browserLauncher, err := launchImportBrowser(ctx, browserPath, profileRoot)
 	if err != nil {
 		return webPage{}, fmt.Errorf("无法启动 Chromium: %w", err)
 	}
-	defer os.RemoveAll(profileDir)
+	defer releaseImportBrowser(browserLauncher)
 	browser := rod.New().Context(ctx).ControlURL(controlURL)
 	if err := browser.Connect(); err != nil {
 		return webPage{}, err
@@ -547,12 +547,31 @@ func renderDynamicWebPage(ctx context.Context, target *url.URL, browserPath stri
 	return webPage{HTML: markup, FinalURL: finalURL}, nil
 }
 
-func launchImportBrowser(ctx context.Context, browserPath, profileRoot string) (string, string, error) {
+// releaseImportBrowser 渲染结束后确保 Chromium 进程退出并删除配置目录：超时或取消时 browser.Close
+// 因 context 已结束而无法发出，进程不会自行退出（未启用 leakless），等待片刻后强制结束。
+func releaseImportBrowser(l *launcher.Launcher) {
+	go func() {
+		exited := make(chan struct{})
+		go func() {
+			l.Cleanup() // 等进程退出后删除配置目录
+			close(exited)
+		}()
+		select {
+		case <-exited:
+		case <-time.After(5 * time.Second):
+			l.Kill()
+			<-exited
+		}
+	}()
+}
+
+func launchImportBrowser(ctx context.Context, browserPath, profileRoot string) (string, *launcher.Launcher, error) {
 	profileDir, err := os.MkdirTemp(profileRoot, "session-")
 	if err != nil {
-		return "", "", fmt.Errorf("无法准备 Chromium 配置目录: %w", err)
+		return "", nil, fmt.Errorf("无法准备 Chromium 配置目录: %w", err)
 	}
-	controlURL, err := launcher.New().
+	l := launcher.New()
+	controlURL, err := l.
 		Context(ctx).
 		Bin(browserPath).
 		UserDataDir(profileDir).
@@ -566,10 +585,11 @@ func launchImportBrowser(ctx context.Context, browserPath, profileRoot string) (
 		Set("no-default-browser-check").
 		Launch()
 	if err != nil {
+		l.Kill()
 		_ = os.RemoveAll(profileDir)
-		return "", "", err
+		return "", nil, err
 	}
-	return controlURL, profileDir, nil
+	return controlURL, l, nil
 }
 
 func shouldRenderSPA(markup, markdown string) bool {

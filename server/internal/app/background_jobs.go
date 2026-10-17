@@ -77,7 +77,12 @@ func (a *App) configureJobQueue() error {
 	// 插件登记的后台任务（如内容采集插件的整站采集）
 	for _, job := range plugincore.Jobs() {
 		queue.Register(job.Type, job.Factory(a))
+		if job.Long {
+			queue.MarkLong(job.Type)
+		}
 	}
+	// 导入、迁移、备份可能执行很久，放入长任务通道，避免阻塞邮件、通知等常规任务
+	queue.MarkLong(pdfImportJobType, zipImportJobType, imageLocalizeJobType, storageMigrateJobType, backupJobType)
 	a.jobsMu.Lock()
 	a.Jobs = queue
 	a.jobsMu.Unlock()
