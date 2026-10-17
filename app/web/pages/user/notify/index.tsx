@@ -17,6 +17,7 @@ interface Prefs {
   achievement: boolean
   book_update: boolean
   growth: boolean
+  social: boolean
   digest_mode: DigestMode
 }
 
@@ -37,6 +38,7 @@ const ITEMS: { key: keyof Prefs; labelKey: string; hintKey: string }[] = [
   { key: 'system', labelKey: 'notify.itemSystemLabel', hintKey: 'notify.itemSystemHint' },
   { key: 'achievement', labelKey: 'notify.itemAchievementLabel', hintKey: 'notify.itemAchievementHint' },
   { key: 'book_update', labelKey: 'notify.itemBookUpdateLabel', hintKey: 'notify.itemBookUpdateHint' },
+  { key: 'social', labelKey: 'notify.itemSocialLabel', hintKey: 'notify.itemSocialHint' },
   { key: 'growth', labelKey: 'notify.itemGrowthLabel', hintKey: 'notify.itemGrowthHint' },
 ]
 
@@ -54,16 +56,18 @@ export default function NotifyPrefs() {
   const achievementsEnabled = (site.feature_plugins || []).includes('achievements')
   const followEnabled = (site.feature_plugins || []).includes('book-follow')
   const growthEnabled = (site.feature_plugins || []).includes('growth')
+  const userFollowEnabled = (site.feature_plugins || []).includes('user-follow')
   const items = ITEMS.filter((it) =>
     (it.key !== 'achievement' || achievementsEnabled) &&
     (it.key !== 'book_update' || followEnabled) &&
+    (it.key !== 'social' || userFollowEnabled) &&
     (it.key !== 'growth' || growthEnabled))
 
   useEffect(() => {
     if (!user) return
     api<{ email_enabled: boolean; prefs: Prefs }>('/auth/notification-prefs')
       .then((d) => { setPrefs(d.prefs); setEmailEnabled(d.email_enabled) })
-      .catch(() => setPrefs({ comment: true, reaction: true, collaboration: true, moderation: true, system: true, achievement: true, book_update: true, growth: true, digest_mode: 'instant' }))
+      .catch(() => setPrefs({ comment: true, reaction: true, collaboration: true, moderation: true, system: true, achievement: true, book_update: true, growth: true, social: true, digest_mode: 'instant' }))
   }, [user])
 
   if (!user) return <Loading className="min-h-[60vh]" label={t('account.common.loadingInfo')} />

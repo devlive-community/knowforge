@@ -42,6 +42,8 @@ func (a *App) emailPrefFor(u *models.User, ntype string) bool {
 		return p.BookUpdate
 	case "growth":
 		return p.Growth
+	case "social":
+		return p.Social
 	}
 	return false
 }
@@ -99,6 +101,7 @@ type notificationPrefs struct {
 	Achievement   bool   `json:"achievement"`
 	BookUpdate    bool   `json:"book_update"`
 	Growth        bool   `json:"growth"`
+	Social        bool   `json:"social"`
 	DigestMode    string `json:"digest_mode"`
 }
 
@@ -111,6 +114,7 @@ type notificationPrefsUpdate struct {
 	Achievement   *bool   `json:"achievement"`
 	BookUpdate    *bool   `json:"book_update"`
 	Growth        *bool   `json:"growth"`
+	Social        *bool   `json:"social"`
 	DigestMode    *string `json:"digest_mode"` // instant | daily | weekly | off
 }
 
@@ -118,7 +122,7 @@ func prefsPayload(p models.UserNotificationPref) notificationPrefs {
 	return notificationPrefs{
 		Comment: p.Comment, Reaction: p.Reaction, Collaboration: p.Collaboration,
 		Moderation: p.Moderation, System: p.System, Achievement: p.Achievement, BookUpdate: p.BookUpdate, Growth: p.Growth,
-		DigestMode: p.DigestMode,
+		Social: p.Social, DigestMode: p.DigestMode,
 	}
 }
 
@@ -161,10 +165,14 @@ func (a *App) UpdateNotificationPrefs(c *gin.Context) {
 	if req.Growth != nil {
 		growth = *req.Growth
 	}
+	social := existing.Social
+	if req.Social != nil {
+		social = *req.Social
+	}
 	p := models.UserNotificationPref{
 		UserID: u.ID, Comment: req.Comment, Reaction: req.Reaction,
 		Collaboration: req.Collaboration, Moderation: req.Moderation, System: req.System,
-		Achievement: achievement, BookUpdate: bookUpdate, Growth: growth,
+		Achievement: achievement, BookUpdate: bookUpdate, Growth: growth, Social: social,
 		DigestMode: digestMode, LastDigestAt: existing.LastDigestAt,
 	}
 	if err := a.saveNotificationPref(p); err != nil {

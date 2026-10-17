@@ -24,6 +24,9 @@ import UserBookLists from '@/components/booklists/UserBookLists'
 import { bookListsEnabled } from '@/lib/booklists'
 import { displayName } from '@/lib/users'
 import { useUrlPage } from '@/lib/use-url-page'
+import { fetchFollowStats, userFollowEnabled, type FollowListKind, type FollowStats } from '@/lib/user-follow'
+import FollowUserButton from '@/components/user-follow/FollowUserButton'
+import FollowListDialog from '@/components/user-follow/FollowListDialog'
 
 interface UserProfile {
   id: number
@@ -107,9 +110,21 @@ function ProfileLevelBadge({ username }: { username: string }) {
   )
 }
 
+// useFollowStats 用户关注插件启用时读取关注数与关注状态（登录状态变化后重新读取）。
+function useFollowStats(username: string) {
+  const { site, user } = useApp()
+  const enabled = userFollowEnabled(site)
+  const [stats, setStats] = useState<FollowStats | null>(null)
+  const reload = () => { fetchFollowStats(username).then(setStats).catch(() => { /* 不影响主页 */ }) }
+  useEffect(() => { if (enabled) reload() }, [username, enabled, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  return { enabled, stats, setStats, reload }
+}
+
 function AuthorProfileCard({ profile, siteUrl, share, t }: { profile: UserProfile; siteUrl: string; share: () => void; t: (key: string, vars?: Record<string, string>) => string }) {
   const { site } = useApp()
   const feeds = feedsEnabled(site)
+  const follow = useFollowStats(profile.username)
+  const [followList, setFollowList] = useState<FollowListKind | null>(null)
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="grid items-center gap-5 px-5 py-6 sm:px-8 lg:grid-cols-[160px_1fr_300px] lg:gap-8">
@@ -135,8 +150,21 @@ function AuthorProfileCard({ profile, siteUrl, share, t }: { profile: UserProfil
             <span className="flex items-center gap-1.5"><BookIcon className="h-4 w-4" /> {t('user.home.publicBooks', { count: String(profile.public_book_count) })}</span>
             {profile.location && <span className="flex items-center gap-1.5"><i className="fa-solid fa-location-dot text-slate-400" aria-hidden="true" /> {profile.location}</span>}
             {profile.company && <span className="flex items-center gap-1.5"><i className="fa-solid fa-building text-slate-400" aria-hidden="true" /> {profile.company}</span>}
+            {follow.stats && (
+              <span className="flex items-center gap-3" data-testid="follow-stats">
+                <button type="button" onClick={() => setFollowList('followers')} className="hover:text-primary-600">
+                  <strong className="font-semibold text-slate-800">{formatNumber(follow.stats.followers)}</strong> {t('userFollow.followers')}
+                </button>
+                <button type="button" onClick={() => setFollowList('following')} className="hover:text-primary-600">
+                  <strong className="font-semibold text-slate-800">{formatNumber(follow.stats.following)}</strong> {t('userFollow.followingLabel')}
+                </button>
+              </span>
+            )}
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
+            {follow.stats && !follow.stats.is_me && (
+              <FollowUserButton username={profile.username} following={follow.stats.followed_by_me} followsMe={follow.stats.follows_me} onChange={follow.setStats} />
+            )}
             {profile.website && (
               <a href={profile.website} target="_blank" rel="noopener noreferrer nofollow"
                 className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400"
@@ -162,6 +190,10 @@ function AuthorProfileCard({ profile, siteUrl, share, t }: { profile: UserProfil
 
         <KnowledgeNetwork />
       </div>
+      {followList && follow.stats && (
+        <FollowListDialog username={profile.username} kind={followList} onKindChange={setFollowList} onClose={() => setFollowList(null)}
+          counts={{ followers: follow.stats.followers, following: follow.stats.following }} onChanged={follow.reload} />
+      )}
     </div>
   )
 }

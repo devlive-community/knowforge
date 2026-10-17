@@ -27,6 +27,7 @@ const (
 	KeyBookVersions     = "book-versions"
 	KeyWatermark        = "watermark"
 	KeyBookFollow       = "book-follow"
+	KeyUserFollow       = "user-follow"
 	KeyGrowth           = "growth"
 	KeyContentCollect   = "content-collect"
 	KeyTags             = "tags"

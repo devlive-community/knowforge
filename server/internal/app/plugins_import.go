@@ -27,6 +27,7 @@ import (
 	_ "knowforge/server/internal/plugins/tags"
 	_ "knowforge/server/internal/plugins/teams"
 	_ "knowforge/server/internal/plugins/templates"
+	_ "knowforge/server/internal/plugins/userfollow"
 	_ "knowforge/server/internal/plugins/watermark"
 	_ "knowforge/server/internal/plugins/webhooks"
 )

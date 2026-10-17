@@ -214,7 +214,7 @@ Authorization: Bearer kf_pat_…
 | POST | `/auth/email/resend` | 登录用户重发激活邮件 | 登录 |
 | GET/POST/DELETE | `/auth/invite-code` | 邀请码 opt-in：GET 返回 `{invite_code, enabled}`；POST 开启（首次可选自定义 `{code}`，4-20 位字母数字、全站唯一、只能设置一次，不传则自动生成）；DELETE 停用（保留邀请码，再开启仍是同一个）。仅启用中的邀请码可用于注册 | 登录 |
 | GET | `/auth/invited` | 我邀请的用户列表 `{items:[{username,avatar,created_at}],total}`（关闭邀请码后仍可查看） | 登录 |
-| GET/PUT | `/auth/notification-prefs` | 邮件通知偏好：GET 返回 `{email_enabled(站点总开关), prefs:{comment,reaction,collaboration,moderation,system,achievement,book_update,growth,digest_mode}}`；PUT 保存 `prefs`（缺省全开）；`digest_mode` 为 `instant`（每条即时发送，默认）/ `daily` / `weekly`（服务器时间每天 8 点汇总，每周摘要为周一）/ `off`（不发送邮件） | 登录 |
+| GET/PUT | `/auth/notification-prefs` | 邮件通知偏好：GET 返回 `{email_enabled(站点总开关), prefs:{comment,reaction,collaboration,moderation,system,achievement,book_update,growth,social,digest_mode}}`；PUT 保存 `prefs`（缺省全开）；`digest_mode` 为 `instant`（每条即时发送，默认）/ `daily` / `weekly`（服务器时间每天 8 点汇总，每周摘要为周一）/ `off`（不发送邮件） | 登录 |
 | POST | `/auth/notification-prefs/digest-preview` | 按最近 7 天的内容立即给自己发一封摘要；返回 `{sent, count}`，没有内容时不发送 | 登录 |
 | POST | `/email/unsubscribe` | 摘要邮件中的一键退订：`{u, token}`（签名链接），把邮件发送方式改为 `off` | 匿名 |
 | GET | `/auth/2fa` | 二次认证状态 `{enabled, operations:[login\|credentials\|delete\|unbind_export]}` | 登录 |
@@ -524,6 +524,21 @@ Authorization: Bearer kf_pat_…
 | GET | `/users/me/follows?page=&page_size=` | 我关注的书籍（分页，过滤已失去访问权的） | `follow:read` |
 
 - 关注者在被关注书籍**发布新章节**（草稿→已发布）时收到 `book_update` 站内通知（作者本人除外），受用户「关注更新」通知偏好（`book_update`）开关控制。
+
+## 用户关注（「用户关注」插件）
+
+> `user-follow` 为 feature 插件（默认启用）。禁用后本节端点返回 404，前端关注按钮、关注数、「我的关注」中的作者标签与通知偏好项隐藏，也不再发送关注动态通知。权限 `user-follow:create/delete` 由插件动态注册；关注数与关注列表公开。只计入、列出启用中的用户。
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| POST | `/users/:username/follow` | 关注该用户（幂等；不能关注自己，400）。首次关注时对方收到 `social` 通知。返回同 follow-stats | `user-follow:create` |
+| DELETE | `/users/:username/follow` | 取消关注，返回同 follow-stats | `user-follow:delete` |
+| GET | `/users/:username/follow-stats` | `{followers, following, followed_by_me, follows_me, is_me}`；未登录时后三项为 false | 公开 |
+| GET | `/users/:username/followers?page=&page_size=` | 关注该用户的人（最近关注在前，每页最多 50）：`items[{user:{id,username,nickname,display_name,avatar,bio}, followed_at, followed_by_me, is_me}]` | 公开 |
+| GET | `/users/:username/following?page=&page_size=` | 该用户关注的人，格式同上 | 公开 |
+| GET | `/users/me/followed-authors/books?page=&page_size=` | 我关注的作者的公开书籍（最近更新在前） | 登录 |
+
+- 被关注者的**公开书籍发布新章节**时，关注者收到 `social` 站内通知；已通过「书籍关注」关注该书的读者只收到书籍更新通知，不重复。受通知偏好 `social`（关注动态）开关控制。
 
 ## RSS 订阅（「RSS 订阅」插件，默认关闭）
 

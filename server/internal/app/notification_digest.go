@@ -36,7 +36,7 @@ const (
 var digestModes = map[string]bool{"instant": true, "daily": true, "weekly": true, "off": true}
 
 // 通知类型在摘要中的顺序
-var digestTypeOrder = []string{"collaboration", "comment", "book_update", "reaction", "moderation", "achievement", "growth", "system"}
+var digestTypeOrder = []string{"collaboration", "comment", "book_update", "social", "reaction", "moderation", "achievement", "growth", "system"}
 
 func init() {
 	for key, texts := range map[string][2]string{
@@ -51,6 +51,7 @@ func init() {
 		"email.digest.section.moderation":    {"审核", "Moderation"},
 		"email.digest.section.achievement":   {"成就", "Achievements"},
 		"email.digest.section.growth":        {"成长", "Growth"},
+		"email.digest.section.social":        {"关注动态", "People you follow"},
 		"email.digest.section.system":        {"系统", "System"},
 		"email.digest.section.other":         {"其他", "Other"},
 		"email.digest.section.activity":      {"协作动态", "Writing activity"},
@@ -71,7 +72,7 @@ func init() {
 }
 
 func (a *App) notificationPref(userID uint) models.UserNotificationPref {
-	p := models.UserNotificationPref{UserID: userID, Comment: true, Reaction: true, Collaboration: true, Moderation: true, System: true, Achievement: true, BookUpdate: true, Growth: true, DigestMode: "instant"}
+	p := models.UserNotificationPref{UserID: userID, Comment: true, Reaction: true, Collaboration: true, Moderation: true, System: true, Achievement: true, BookUpdate: true, Growth: true, Social: true, DigestMode: "instant"}
 	a.DB.Where("user_id = ?", userID).First(&p)
 	if !digestModes[p.DigestMode] {
 		p.DigestMode = "instant"
