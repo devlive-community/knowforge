@@ -540,6 +540,17 @@ Authorization: Bearer kf_pat_…
 
 - 被关注者的**公开书籍发布新章节**时，关注者收到 `social` 站内通知；已通过「书籍关注」关注该书的读者只收到书籍更新通知，不重复。受通知偏好 `social`（关注动态）开关控制。
 
+## 排行榜（「排行榜」插件）
+
+> `leaderboards` 为 feature 插件（默认启用）。榜单由插件经 `plugincore.RegisterLeaderboard` 登记：自带 `creators`（创作榜：公开书籍中已发布章节数，按章节作者，周期按章节创建时间）、`hot-books`（浏览量：累计取书籍浏览数，周期内按每日统计求和）、`liked-books`、`favorited-books`（点赞 / 收藏数）；成长等级插件提供 `xp`（经验榜，仅公开成长资料且达到最少上榜经验的用户），用户关注插件提供 `followers`（粉丝榜），书籍关注插件提供 `followed-books`（关注榜）。提供方插件未启用的榜单不开放。用户榜只列启用中的用户，书籍榜只列公开可读的书。周期：`all` 累计、`month` 近 30 天、`week` 近 7 天（周期内为新增量）。公开站点配置 `GET /site` 下发 `leaderboards`（当前开放的榜单 key，按管理员设置的顺序）；插件禁用时为空数组、本节接口 404。
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/leaderboards` | 当前开放的榜单 `items[{key,kind:user\|book,icon,periods[]}]` | 公开 |
+| GET | `/leaderboards/:key?period=&page=&page_size=` | 榜单分页（得分倒序，同分按 ID 升序；每页最多 50；不支持的周期回退为该榜第一个周期）：`{board, items[{rank,value,user?,book?,extra?}], total, page, page_size, period, me?}`。`user` 为 `{id,username,nickname,display_name,avatar}`，`book` 为书籍（含作者）；经验榜的 `extra.level` 为等级。用户榜登录时 `me` 为本人得分与名次 `{value, rank?, user, ...}`（名次 = 得分更高的人数 + 1；未上榜时无 `rank`；经验榜另带 `public`、`level`，隐藏成长资料的用户也能看到自己的名次）。未开放或不存在的榜单 404 | 公开 |
+| GET | `/admin/leaderboards` | 全部已登记的榜单（按设置顺序）：`items[{key,kind,icon,periods,plugin,plugin_enabled,enabled}]` | `leaderboards:manage` + 管理员 |
+| PUT | `/admin/leaderboards` | `{boards:[{key,enabled}]}` 按给定顺序保存榜单顺序与开关；未提交的榜单保持原开关并排在后面；未知或重复的 key 400。记审计 `leaderboards.updated` | `leaderboards:manage` + 管理员 |
+
 ## RSS 订阅（「RSS 订阅」插件，默认关闭）
 
 匿名可访问，返回 RSS 2.0（`application/rss+xml`，缓存 10 分钟）。只包含游客可读的公开书籍；每个订阅列出最近发布的 20 个章节（按首次发布时间，插件启用前发布的按创建时间），条目链接指向阅读页，摘要为正文前 300 字的纯文本；付费章节只给出与付费墙相同的试读摘要并标注「付费」分类。站点访问地址未设置时按请求推断。
@@ -641,7 +652,7 @@ Authorization: Bearer kf_pat_…
 | --- | --- | --- | --- |
 | GET | `/growth/settings` | 模块是否启用（不受插件守卫，禁用返回 `enabled:false`） | 公开 |
 | GET | `/growth/levels` | 等级阶梯（active） | 公开 |
-| GET | `/growth/leaderboard?period=all / week / month&page&page_size` | 经验排行榜：`all` 按累计经验，`week`/`month` 按近 7/30 天流水之和（含收回的负经验）；仅含公开成长资料、经验达到「最少上榜经验」的启用用户；管理员关闭排行榜时 404。响应 `{items:[{rank,xp,user,level}],total,page,page_size,period,min_xp,me?}`，登录时 `me` 为本人经验与名次（未公开也可见） | 公开 |
+| — | `/growth/leaderboard` | 已移除：经验榜并入「排行榜」插件，见 `/leaderboards/xp`（前端旧地址 `/growth/leaderboard` 跳转到 `/leaderboards?board=xp`） | — |
 | GET | `/users/me/checkin?month=YYYY-MM` | 签到状态：`{enabled,today,checked_today,streak,longest_streak,total_days,streak_bonus_days,next_bonus_in,month,days[]}` | `growth:read` |
 | POST | `/users/me/checkin` | 今日签到（幂等；同日重复返回 `already:true`）：发出 `checkin.created`，连续每满 N 天另发 `checkin.streak_milestone`（经验规则 `checkin.daily` / `checkin.streak_bonus`，成就指标 `checkin.*`）；响应含 `xp_awarded`、`milestone`；签到关闭时 404 | `growth:update` |
 | GET | `/users/:username/growth` | 用户公开等级（用户隐藏则 `public:false`） | 公开 |
@@ -654,7 +665,7 @@ Authorization: Bearer kf_pat_…
 | GET | `/admin/growth/rules` | 经验规则列表，附 `stats_7d{rule_key:{count,xp}}` 近 7 天发放统计（按代码内的经验触发器目录补建缺失规则：原有阅读章节/发布章节/发表评论默认启用，其余业务活动如阅读时长、标注、建书、点赞、收到评论、账号安全等默认停用） | `growth:manage` |
 | PUT | `/admin/growth/rules/:id` | 更新规则 `{base_xp,daily_cap,enabled}` | `growth:manage` |
 | GET | `/admin/growth/events?user_id&rule_key&page&page_size` | 全站经验流水（倒序），可按用户/规则筛选，条目附 `user{id,username,nickname,avatar}` | `growth:manage` |
-| GET/PUT | `/admin/growth/settings` | 成长设置 `{leaderboard_enabled, leaderboard_min_xp, checkin_enabled, checkin_streak_days}`（最少上榜经验 1–1000000，连续签到奖励周期 2–365 天；PUT 可只传部分字段）；公开站点配置 `GET /site` 同步下发 `growth_leaderboard_enabled` | `growth:manage` |
+| GET/PUT | `/admin/growth/settings` | 成长设置 `{leaderboard_min_xp, checkin_enabled, checkin_streak_days}`（经验榜最少上榜经验 1–1000000，连续签到奖励周期 2–365 天；PUT 可只传部分字段）。经验榜的开关在排行榜插件中；旧版的 `growth_leaderboard_enabled` 只决定升级后经验榜的默认开放状态 | `growth:manage` |
 
 - 成就定义新增 `reward_xp`（默认 0）：解锁时给作者奖励经验（每 user+achievement 只结算一次）。
 - **经验规则**（`ExperienceRule`）：固定事件（`reading.chapter`、`creation.chapter_published`、`community.comment`）的经验金额与**每人每日上限**由规则表配置，启用时种子默认规则；成就/管理员调整不走规则（金额分别为 reward_xp / 手工值）。

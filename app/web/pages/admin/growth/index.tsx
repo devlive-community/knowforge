@@ -8,7 +8,6 @@ import UserSearchSelect, { type UserLite } from '@/components/UserSearchSelect'
 import UserAvatar from '@/components/UserAvatar'
 import EntitlementEditor from '@/components/EntitlementEditor'
 import { api } from '@/lib/api'
-import { useApp } from '@/lib/auth'
 import { Badge, Button, Card, EmptyState, Field, Input, Loading, Modal, Pagination, Select, SegmentedTabs, Switch, useFeedback } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import { growthReasonLabel, growthRuleLabel } from '@/lib/growth'
@@ -281,13 +280,12 @@ function LedgerPanel({ rules }: { rules: Rule[] }) {
   )
 }
 
-interface GrowthSettings { leaderboard_enabled: boolean; leaderboard_min_xp: number; checkin_enabled: boolean; checkin_streak_days: number }
+interface GrowthSettings { leaderboard_min_xp: number; checkin_enabled: boolean; checkin_streak_days: number }
 
-// SettingsPanel 成长设置：经验排行榜（开关、最少上榜经验）与每日签到（开关、连续签到奖励周期）。
+// SettingsPanel 成长设置：经验榜的最少上榜经验（榜单开关在排行榜插件）与每日签到（开关、连续签到奖励周期）。
 function SettingsPanel() {
   const { t } = useTranslation()
   const { showToast } = useFeedback()
-  const { refreshSite } = useApp()
   const [form, setForm] = useState<GrowthSettings | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -301,7 +299,6 @@ function SettingsPanel() {
     setSaving(true)
     try {
       setForm(await api<GrowthSettings>('/admin/growth/settings', { method: 'PUT', body: form }))
-      await refreshSite() // 同步导航中的排行榜入口
       showToast({ message: t('admin.growth.settings.saved'), tone: 'success' })
     } catch (e) {
       showToast({ title: t('admin.growth.saveFailed'), message: (e as Error).message, tone: 'error' })
@@ -313,16 +310,9 @@ function SettingsPanel() {
     <Card className="mt-6 max-w-2xl p-5">
       <h2 className="font-bold text-slate-900">{t('admin.growth.settings.title')}</h2>
       <div className="mt-4 space-y-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-slate-900">{t('admin.growth.settings.leaderboardEnabled')}</div>
-            <p className="mt-1 text-xs text-slate-400">{t('admin.growth.settings.leaderboardEnabledHint')}</p>
-          </div>
-          <Switch ariaLabel={t('admin.growth.settings.leaderboardEnabled')} checked={form.leaderboard_enabled} onChange={(v) => setForm({ ...form, leaderboard_enabled: v })} />
-        </div>
         <Field label={t('admin.growth.settings.minXp')} hint={t('admin.growth.settings.minXpHint')}>
           <span className="block w-40">
-            <Input type="number" min={1} max={1000000} value={form.leaderboard_min_xp} disabled={!form.leaderboard_enabled}
+            <Input type="number" min={1} max={1000000} value={form.leaderboard_min_xp}
               onChange={(e) => setForm({ ...form, leaderboard_min_xp: Math.min(1000000, Math.max(1, Number(e.target.value) || 1)) })} trailing={<span className="text-xs text-slate-400">XP</span>} />
           </span>
         </Field>

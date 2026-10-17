@@ -30,7 +30,6 @@ func (b *behavior) RegisterRoutes(api *gin.RouterGroup, core plugincore.Core) {
 	api.GET("/growth/settings", core.OptionalAuth(), b.GrowthSettings)
 	api.GET("/growth/levels", core.OptionalAuth(), feat, b.GrowthLevels)
 	api.GET("/users/:username/growth", core.OptionalAuth(), feat, b.PublicUserGrowth)
-	api.GET("/growth/leaderboard", core.OptionalAuth(), feat, b.Leaderboard)
 	// 本人
 	api.GET("/users/me/growth", core.RequireAuth(), feat, core.RequirePermissionMiddleware(authz.GrowthRead), b.MyGrowth)
 	api.GET("/users/me/experience-events", core.RequireAuth(), feat, core.RequirePermissionMiddleware(authz.GrowthRead), b.MyExperienceEvents)

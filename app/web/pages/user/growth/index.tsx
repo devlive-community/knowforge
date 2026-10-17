@@ -83,7 +83,7 @@ function MyGrowthInner() {
               </div>
               <p className="mt-1 text-sm text-slate-500">{t('growth.subtitle')}</p>
             </div>
-            {site.growth_leaderboard_enabled && <ButtonLink href="/growth/leaderboard" variant="outline"><i className="fa-solid fa-ranking-star" aria-hidden="true" /> {t('growth.leaderboard.link')}</ButtonLink>}
+            {(site.leaderboards || []).includes('xp') && <ButtonLink href="/leaderboards?board=xp" variant="outline"><i className="fa-solid fa-ranking-star" aria-hidden="true" /> {t('growth.leaderboard.link')}</ButtonLink>}
           </div>
 
           {/* 当前等级 + 进度 */}

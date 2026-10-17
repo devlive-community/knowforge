@@ -6,6 +6,8 @@ package userfollow
 import (
 	"time"
 
+	"gorm.io/gorm"
+
 	"knowforge/server/internal/authz"
 	"knowforge/server/internal/i18ntext"
 	"knowforge/server/internal/plugincore"
@@ -51,4 +53,17 @@ func init() {
 	})
 	plugincore.RegisterBehavior(&behavior{})
 	plugincore.RegisterUserDataModels(&UserFollow{})
+	// 粉丝榜（排行榜插件）：累计为关注者数，周期内为新增关注者数；只计启用中的关注者
+	plugincore.RegisterLeaderboard(plugincore.Leaderboard{
+		Key: "followers", Plugin: pluginKey, Kind: plugincore.LeaderboardUsers, Icon: "fa-user-group", Order: 15,
+		Periods: []string{plugincore.LeaderboardAll, plugincore.LeaderboardMonth, plugincore.LeaderboardWeek},
+		Scores: func(core plugincore.Core, since *time.Time) *gorm.DB {
+			q := core.Gorm().Model(&UserFollow{}).Select("user_follows.followee_id AS subject_id, COUNT(*) AS value").
+				Joins("JOIN users f ON f.id = user_follows.user_id AND f.is_active = ?", true).Group("user_follows.followee_id")
+			if since != nil {
+				q = q.Where("user_follows.created_at >= ?", *since)
+			}
+			return q
+		},
+	})
 }

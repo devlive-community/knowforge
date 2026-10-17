@@ -179,8 +179,8 @@ export interface SiteConfig {
   collect_page_enabled?: boolean
   collect_site_enabled?: boolean
   book_versions_sort?: string
-  /** 经验排行榜是否开放（成长插件启用且管理员未关闭，由插件下发） */
-  growth_leaderboard_enabled?: boolean
+  /** 当前开放的榜单 key（排行榜插件启用时下发，按管理员设置的顺序） */
+  leaderboards?: string[]
   payment_channels?: string[] // 支付插件：当前可用的支付方式（仅支付插件自身页面使用）
   checkout_enabled?: boolean // 是否可在线购买（中性约定，见 lib/commerce.ts）
 }

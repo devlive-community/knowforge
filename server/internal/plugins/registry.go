@@ -29,6 +29,7 @@ const (
 	KeyBookFollow       = "book-follow"
 	KeyUserFollow       = "user-follow"
 	KeyGrowth           = "growth"
+	KeyLeaderboards     = "leaderboards"
 	KeyContentCollect   = "content-collect"
 	KeyTags             = "tags"
 	KeyMembership       = "membership"

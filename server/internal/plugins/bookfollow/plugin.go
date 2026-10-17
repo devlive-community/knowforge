@@ -1,8 +1,13 @@
 package bookfollow
 
 import (
+	"time"
+
+	"gorm.io/gorm"
+
 	"knowforge/server/internal/authz"
 	"knowforge/server/internal/i18ntext"
+	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
 )
 
@@ -19,5 +24,17 @@ func init() {
 		Models:      []any{&BookFollow{}},
 		Tables:      []string{"book_follows"},
 		UserPerms:   []authz.Permission{authz.FollowRead, authz.FollowCreate, authz.FollowDelete},
+	})
+	// 关注榜（排行榜插件）：累计为关注人数，周期内为新增关注人数
+	plugincore.RegisterLeaderboard(plugincore.Leaderboard{
+		Key: "followed-books", Plugin: plugins.KeyBookFollow, Kind: plugincore.LeaderboardBooks, Icon: "fa-bell", Order: 50,
+		Periods: []string{plugincore.LeaderboardAll, plugincore.LeaderboardMonth, plugincore.LeaderboardWeek},
+		Scores: func(core plugincore.Core, since *time.Time) *gorm.DB {
+			q := core.Gorm().Model(&BookFollow{}).Select("book_id AS subject_id, COUNT(*) AS value").Group("book_id")
+			if since != nil {
+				q = q.Where("created_at >= ?", *since)
+			}
+			return q
+		},
 	})
 }

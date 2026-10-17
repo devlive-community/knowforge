@@ -6,11 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"knowforge/server/internal/plugincore"
 	"knowforge/server/internal/plugins"
 )
 
-// 成长插件的站点级设置（站点配置键值）：排行榜是否开放、上榜所需最少经验。
+// 成长插件的站点级设置（站点配置键值）：经验榜上榜所需最少经验、签到。经验榜的开关在排行榜插件中；
+// cfgLeaderboardEnabled 为旧版开关，只用于决定升级后经验榜的默认开放状态。
 const (
 	cfgLeaderboardEnabled = "growth_leaderboard_enabled"
 	cfgLeaderboardMinXP   = "growth_leaderboard_min_xp"
@@ -23,26 +23,17 @@ const (
 )
 
 type growthSettings struct {
-	LeaderboardEnabled bool `json:"leaderboard_enabled"`
-	LeaderboardMinXP   int  `json:"leaderboard_min_xp"`
-	CheckinEnabled     bool `json:"checkin_enabled"`
+	LeaderboardMinXP int  `json:"leaderboard_min_xp"`
+	CheckinEnabled   bool `json:"checkin_enabled"`
 	// CheckinStreakDays 连续签到每满 N 天发一次「连续签到奖励」
 	CheckinStreakDays int `json:"checkin_streak_days"`
 }
 
-func init() {
-	// 公开站点配置：排行榜是否开放（插件启用且未关闭），前端据此显示导航/入口
-	plugincore.RegisterPublicSiteConfig(func(core plugincore.Core) map[string]any {
-		b := &behavior{core: core}
-		return map[string]any{cfgLeaderboardEnabled: core.PluginEnabled(plugins.KeyGrowth) && b.settings().LeaderboardEnabled}
-	})
-}
-
-// settings 读取成长设置：排行榜、签到默认开放；最少上榜经验默认 1（有经验即可上榜）；连续签到奖励默认每 7 天。
+// settings 读取成长设置：签到默认开放；最少上榜经验默认 1（有经验即可上榜）；连续签到奖励默认每 7 天。
 func (b *behavior) settings() growthSettings {
 	s := growthSettings{
-		LeaderboardEnabled: b.core.GetSetting(cfgLeaderboardEnabled) != "false", LeaderboardMinXP: 1,
-		CheckinEnabled: b.core.GetSetting(cfgCheckinEnabled) != "false", CheckinStreakDays: defaultStreakDays,
+		LeaderboardMinXP: 1,
+		CheckinEnabled:   b.core.GetSetting(cfgCheckinEnabled) != "false", CheckinStreakDays: defaultStreakDays,
 	}
 	if v := b.core.AtoiDefault(b.core.GetSetting(cfgLeaderboardMinXP), 1); v > 1 {
 		s.LeaderboardMinXP = v
@@ -56,7 +47,7 @@ func (b *behavior) settings() growthSettings {
 // AdminGetGrowthSettings GET /admin/growth/settings
 func (b *behavior) AdminGetGrowthSettings(c *gin.Context) { b.core.OK(c, b.settings()) }
 
-// AdminUpdateGrowthSettings PUT /admin/growth/settings {leaderboard_enabled, leaderboard_min_xp}
+// AdminUpdateGrowthSettings PUT /admin/growth/settings {leaderboard_min_xp, checkin_enabled, checkin_streak_days}
 func (b *behavior) AdminUpdateGrowthSettings(c *gin.Context) {
 	core := b.core
 	var req growthSettings
@@ -67,10 +58,6 @@ func (b *behavior) AdminUpdateGrowthSettings(c *gin.Context) {
 	}
 	if req.CheckinStreakDays < minStreakDays || req.CheckinStreakDays > maxStreakDays {
 		core.Fail(c, http.StatusBadRequest, "参数错误：连续签到奖励周期需为 2 到 365 天")
-		return
-	}
-	if err := core.SetSetting(cfgLeaderboardEnabled, strconv.FormatBool(req.LeaderboardEnabled), "成长：经验排行榜是否开放"); err != nil {
-		core.Fail(c, http.StatusInternalServerError, "保存失败")
 		return
 	}
 	if err := core.SetSetting(cfgLeaderboardMinXP, strconv.Itoa(req.LeaderboardMinXP), "成长：上榜所需最少经验"); err != nil {
@@ -86,7 +73,7 @@ func (b *behavior) AdminUpdateGrowthSettings(c *gin.Context) {
 			return
 		}
 	}
-	core.RecordAudit(c, "growth.settings_updated", "growth", "settings", "成长设置", changedFields("leaderboard_enabled", "leaderboard_min_xp", "checkin_enabled", "checkin_streak_days"))
+	core.RecordAudit(c, "growth.settings_updated", "growth", "settings", "成长设置", changedFields("leaderboard_min_xp", "checkin_enabled", "checkin_streak_days"))
 	core.OK(c, b.settings())
 }
 
@@ -94,5 +81,5 @@ func (b *behavior) AdminUpdateGrowthSettings(c *gin.Context) {
 func (b *behavior) publicSettings() gin.H {
 	enabled := b.core.PluginEnabled(plugins.KeyGrowth)
 	s := b.settings()
-	return gin.H{"enabled": enabled, "leaderboard_enabled": enabled && s.LeaderboardEnabled, "checkin_enabled": enabled && s.CheckinEnabled}
+	return gin.H{"enabled": enabled, "checkin_enabled": enabled && s.CheckinEnabled}
 }

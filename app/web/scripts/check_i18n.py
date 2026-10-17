@@ -75,9 +75,13 @@ DYNAMIC_KEY_SPACES: dict[str, list[str]] = {
     'admin.growth.ruleGroup.': ['checkin', 'reading', 'creation', 'community', 'account', 'other'],
     # CheckinCard: t(`growth.checkin.stat.${k}`)
     'growth.checkin.stat.': ['streak', 'total', 'longest'],
-    # growth: 经验流水系统原因码 t(`growth.reason.${reason}`)；排行榜周期 t(`growth.leaderboard.period.${p}`)
+    # growth: 经验流水系统原因码 t(`growth.reason.${reason}`)
     'growth.reason.': ['revoked', 'achievement_revoked'],
-    'growth.leaderboard.period.': ['all', 'month', 'week'],
+    # 排行榜：榜单名称 / 单位 / 说明 t(`leaderboards.name|unit|desc.${key}`)（key 连字符转驼峰，见 lib/leaderboards.ts LEADERBOARD_KEYS）与周期
+    'leaderboards.name.': ['xp', 'followers', 'creators', 'hotBooks', 'likedBooks', 'favoritedBooks', 'followedBooks'],
+    'leaderboards.unit.': ['xp', 'followers', 'creators', 'hotBooks', 'likedBooks', 'favoritedBooks', 'followedBooks'],
+    'leaderboards.desc.': ['xp', 'followers', 'creators', 'hotBooks', 'likedBooks', 'favoritedBooks', 'followedBooks'],
+    'leaderboards.period.': ['all', 'month', 'week'],
     # 权益：t(`entitlement.${key}.label|.hint`)（服务端 plugincore.RegisterEntitlement 登记的键）、
     # t(`entitlement.unit.${unit}`) / unitShort、t(`entitlement.source.${source}`)（权益来源键）
     'entitlement.': ['books.max', 'collaborators.max', 'upload.max_mb', 'collect.page', 'collect.site', 'collect.site_max_pages',

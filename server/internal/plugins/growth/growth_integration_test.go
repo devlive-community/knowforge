@@ -308,7 +308,7 @@ func TestDeletedContentRevokesExperience(t *testing.T) {
 	}
 }
 
-// 隐藏成长资料：无资料时隐藏也生效，且之后获得经验不会把资料改回公开；排行榜只列公开用户，本人仍可见自己的名次。
+// 隐藏成长资料：无资料时隐藏也生效，且之后获得经验不会把资料改回公开；经验榜只列公开用户，本人仍可见自己的名次。
 func TestLeaderboardAndPrivacy(t *testing.T) {
 	e := newTestEnv(t)
 	alice, bob, carol := e.user(t, "lb-alice"), e.user(t, "lb-bob"), e.user(t, "lb-carol")
@@ -323,23 +323,24 @@ func TestLeaderboardAndPrivacy(t *testing.T) {
 	}
 
 	for _, period := range []string{"all", "week", "month"} {
-		status, payload := e.do(t, http.MethodGet, "/api/v1/growth/leaderboard?period="+period, "")
+		status, payload := e.do(t, http.MethodGet, "/api/v1/leaderboards/xp?period="+period, "")
 		if status != http.StatusOK {
-			t.Fatalf("排行榜 %s 失败: %d %v", period, status, payload)
+			t.Fatalf("经验榜 %s 失败: %d %v", period, status, payload)
 		}
 		data := payload["data"].(map[string]any)
 		items := data["items"].([]any)
-		if int(data["total"].(float64)) != 2 || len(items) != 2 {
-			t.Fatalf("排行榜 %s 应只含 2 位公开用户: %v", period, data)
+		if int(data["total"].(float64)) != 2 || len(items) != 2 || data["period"] != period {
+			t.Fatalf("经验榜 %s 应只含 2 位公开用户: %v", period, data)
 		}
 		first := items[0].(map[string]any)
-		if first["user"].(map[string]any)["username"] != "lb-alice" || first["rank"].(float64) != 1 || first["xp"].(float64) != 100 || first["level"] == nil {
-			t.Fatalf("排行榜 %s 第一名应为 lb-alice(100) 并带等级: %v", period, first)
+		extra, _ := first["extra"].(map[string]any)
+		if first["user"].(map[string]any)["username"] != "lb-alice" || first["rank"].(float64) != 1 || first["value"].(float64) != 100 || extra["level"] == nil {
+			t.Fatalf("经验榜 %s 第一名应为 lb-alice(100) 并带等级: %v", period, first)
 		}
 	}
-	_, payload := e.doAs(t, carol, http.MethodGet, "/api/v1/growth/leaderboard", "")
+	_, payload := e.doAs(t, carol, http.MethodGet, "/api/v1/leaderboards/xp", "")
 	me := payload["data"].(map[string]any)["me"].(map[string]any)
-	if me["rank"].(float64) != 1 || me["public"] != false || me["xp"].(float64) != 300 {
+	if me["rank"].(float64) != 1 || me["public"] != false || me["value"].(float64) != 300 {
 		t.Fatalf("隐藏用户应能看到自己的名次: %v", me)
 	}
 
@@ -353,7 +354,7 @@ func TestLeaderboardAndPrivacy(t *testing.T) {
 	}
 }
 
-// 成长设置：排行榜开关（关闭后接口 404、公开站点配置同步为 false）、最少上榜经验（未达门槛不上榜、本人无名次）。
+// 经验榜设置：最少上榜经验（未达门槛不上榜、本人无名次）；成长插件禁用后经验榜不再开放。
 func TestLeaderboardSettings(t *testing.T) {
 	e := newTestEnv(t)
 	alice, bob := e.user(t, "set-alice"), e.user(t, "set-bob")
@@ -361,16 +362,16 @@ func TestLeaderboardSettings(t *testing.T) {
 	plugincore.RecordExperience(e.app, bob.ID, "test.grant", "x", "1", "set-b", 20, "")
 
 	_, site := e.do(t, http.MethodGet, "/api/v1/site", "")
-	if site["data"].(map[string]any)["growth_leaderboard_enabled"] != true {
-		t.Fatalf("默认应开放排行榜: %v", site["data"])
+	if boards, _ := site["data"].(map[string]any)["leaderboards"].([]any); len(boards) == 0 || boards[0] != "xp" {
+		t.Fatalf("默认应开放经验榜且排在最前: %v", site["data"].(map[string]any)["leaderboards"])
 	}
-	if status, payload := e.do(t, http.MethodPut, "/api/v1/admin/growth/settings", `{"leaderboard_enabled":true,"leaderboard_min_xp":50}`); status != http.StatusOK || payload["data"].(map[string]any)["leaderboard_min_xp"].(float64) != 50 {
+	if status, payload := e.do(t, http.MethodPut, "/api/v1/admin/growth/settings", `{"leaderboard_min_xp":50}`); status != http.StatusOK || payload["data"].(map[string]any)["leaderboard_min_xp"].(float64) != 50 {
 		t.Fatalf("保存成长设置失败: %d %v", status, payload)
 	}
-	if status, _ := e.do(t, http.MethodPut, "/api/v1/admin/growth/settings", `{"leaderboard_enabled":true,"leaderboard_min_xp":0}`); status != http.StatusBadRequest {
+	if status, _ := e.do(t, http.MethodPut, "/api/v1/admin/growth/settings", `{"leaderboard_min_xp":0}`); status != http.StatusBadRequest {
 		t.Fatalf("最少上榜经验 < 1 应 400，实际 %d", status)
 	}
-	_, payload := e.doAs(t, bob, http.MethodGet, "/api/v1/growth/leaderboard", "")
+	_, payload := e.doAs(t, bob, http.MethodGet, "/api/v1/leaderboards/xp", "")
 	data := payload["data"].(map[string]any)
 	if int(data["total"].(float64)) != 1 || data["items"].([]any)[0].(map[string]any)["user"].(map[string]any)["username"] != "set-alice" {
 		t.Fatalf("门槛 50 时只有 set-alice 上榜: %v", data)
@@ -379,14 +380,9 @@ func TestLeaderboardSettings(t *testing.T) {
 		t.Fatalf("未达门槛的本人不应有名次: %v", data["me"])
 	}
 
-	e.do(t, http.MethodPut, "/api/v1/admin/growth/settings", `{"leaderboard_enabled":false,"leaderboard_min_xp":1}`)
-	if status, _ := e.do(t, http.MethodGet, "/api/v1/growth/leaderboard", ""); status != http.StatusNotFound {
-		t.Fatalf("关闭排行榜后接口应 404，实际 %d", status)
-	}
-	_, site = e.do(t, http.MethodGet, "/api/v1/site", "")
-	_, settings := e.do(t, http.MethodGet, "/api/v1/growth/settings", "")
-	if site["data"].(map[string]any)["growth_leaderboard_enabled"] != false || settings["data"].(map[string]any)["leaderboard_enabled"] != false {
-		t.Fatalf("关闭后公开配置应为 false: site=%v settings=%v", site["data"], settings["data"])
+	e.setPlugin(t, false)
+	if status, _ := e.do(t, http.MethodGet, "/api/v1/leaderboards/xp", ""); status != http.StatusNotFound {
+		t.Fatalf("成长插件禁用后经验榜应 404，实际 %d", status)
 	}
 }
 
