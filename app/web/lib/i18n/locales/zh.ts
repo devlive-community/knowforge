@@ -6265,4 +6265,5 @@ export const zh: Record<string, string> = {
   'crawlHistory.stopFailed': '停止采集失败',
   'crawlHistory.resume': '继续采集',
   'crawlHistory.resumed': '已继续采集，剩余 {n} 页',
+  'detail.collect': '采集',
 }

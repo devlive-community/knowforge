@@ -6265,4 +6265,5 @@ export const en: Record<string, string> = {
   'crawlHistory.stopFailed': 'Couldn\'t stop the collection',
   'crawlHistory.resume': 'Resume',
   'crawlHistory.resumed': 'Resumed with {n} pages left',
+  'detail.collect': 'Collect',
 }

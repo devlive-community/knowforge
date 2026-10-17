@@ -8,6 +8,7 @@ import { useApp } from '@/lib/auth'
 import { useTranslation } from '@/lib/i18n'
 import { api } from '@/lib/api'
 import { getReadingProgress } from '@/lib/reading-progress'
+import { entitlementAllowed } from '@/lib/entitlements'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import { Button, ButtonLink, Tooltip, Loading, SegmentedTabs, useFeedback } from '@/components/ui'
@@ -130,6 +131,9 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
   const router = useRouter()
   // 标签插件禁用时隐藏详情页的标签入口（面包屑标签、标签 chip）
   const tagsEnabled = Array.isArray((site as Record<string, unknown>).feature_plugins) && ((site as Record<string, unknown>).feature_plugins as string[]).includes('tags')
+  // 整站采集到本书：内容采集插件启用、有整站采集权益且能编辑本书内容时显示（采集后追加为本书章节）
+  const collectEnabled = Array.isArray((site as Record<string, unknown>).feature_plugins) && ((site as Record<string, unknown>).feature_plugins as string[]).includes('content-collect')
+    && entitlementAllowed(user, 'collect.site', (site as Record<string, unknown>).collect_site_enabled !== false)
   const followEnabled = Array.isArray((site as Record<string, unknown>).feature_plugins) && ((site as Record<string, unknown>).feature_plugins as string[]).includes('book-follow')
   const slug = typeof router.query.slug === 'string' ? router.query.slug : ''
   // 目录 / 评价 / 问答 横向 Tab：由 URL 承载（?tab=reviews|qa，问答详情 &question=ID），浅路由切换，可分享可回退
@@ -569,6 +573,11 @@ export default function BookDetail({ site, siteUrl, book: ssrBook, tree: ssrTree
               {(canManage || canEdit) && (
                 <div className="grid min-w-0 grid-cols-2 gap-2 sm:contents">
                   {canEdit && <ButtonLink href={`/book/writer/${encodeURIComponent(book.slug)}`} variant="outline" className="w-full sm:w-auto">{t('detail.write')}</ButtonLink>}
+                  {canEdit && collectEnabled && (
+                    <ButtonLink href={`/books/collect?book_id=${book.id}&book=${encodeURIComponent(book.slug)}`} variant="outline" className="w-full sm:w-auto">
+                      <GlobeIcon className="h-4 w-4" /> {t('detail.collect')}
+                    </ButtonLink>
+                  )}
                   {canManage && (
                     <ButtonLink href={`/book/settings/${encodeURIComponent(book.slug)}`} variant="outline" className="w-full sm:w-auto">
                       <GearIcon className="h-4 w-4" /> {t('detail.settings')}
