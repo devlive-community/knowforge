@@ -1,6 +1,6 @@
 {
   "name": "knowforge-desktop",
-  "version": "2026.0.10",
+  "version": "2026.0.11",
   "private": true,
   "scripts": {
     "tauri": "tauri",
